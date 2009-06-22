@@ -31,6 +31,7 @@ keys = [
     'prec',       # Precission of calculation (Low, Normal, Accurate)
     'nbands',     # Number of bands
     'encut',      # Planewave cutoff
+    'enmax',      # Another energy cutoff, defaults derived from data in POTCAR
     'enaug',      # Density cutoff
     'ngx',        # FFT mesh for wavefunctions, x
     'ngy',        # FFT mesh for wavefunctions, y
