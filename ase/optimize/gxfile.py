@@ -24,6 +24,21 @@ def is_dummy(atnum):
 # for private use only:
 class EOF(Exception): pass
 
+def fromgx( file = "gxfile" ):
+    """Return a list of tuples (atnum, position) suitable for
+    feeding into Atom() class constructor of ASE:
+    E.g.:
+
+            atoms = [ Atom(*a) for a in fromgx() ]
+
+    Note tuple expansion *a in argument to the Atom() constructor.
+    """
+
+    atnums, positions, _, _, _, _, _, _ = gxread( file )
+
+    return zip( atnums, positions)
+#enddef
+
 def gxread( file='gxfile' ):
     """Read gxfile in following format, return a list of lists (columns)
     that is a table in the row-major order.
