@@ -214,7 +214,7 @@ def _tostr_grad(inum, grad):
 
     # concatenate tuples, the first one is a singleton:
     fields = (inum,) + grad
-    return ( "%5i      %16.12f %16.12f %16.12f\n" % fields )
+    return ( "%5i      %16.9e %16.9e %16.9e\n" % fields )
 #end def
 
 def _parse_geom(line):
