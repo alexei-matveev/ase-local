@@ -53,12 +53,12 @@ def gxread( file='gxfile' ):
 
     # a generator function:
     def parse(lines):
-	# iterator over lines in a file:
-	for line in lines:
-	    fields = _parse_geom(line)
-	    # stop iterations on negative atomic numbers:
-	    if fields[0] < 0:  return
-	    yield fields
+        # iterator over lines in a file:
+        for line in lines:
+            fields = _parse_geom(line)
+            # stop iterations on negative atomic numbers:
+            if fields[0] < 0:  return
+            yield fields
 
     # a generator for lines of the file:
     lines = open(file)
@@ -75,12 +75,12 @@ def gxread( file='gxfile' ):
 
     # helper funciton to convert a list of 3-vectors to Nx3 numpy array:
     def nx3(xyz):
-	# FIXME: how to convert a list of numpy arrays to numpy array?:
-	n = len(xyz)
-	arr = np.zeros((n, 3))
-	for i in xrange(n):
-	    arr[i,:] = xyz[i]
-	return arr
+        # FIXME: how to convert a list of numpy arrays to numpy array?:
+        n = len(xyz)
+        arr = np.zeros((n, 3))
+        for i in xrange(n):
+            arr[i,:] = xyz[i]
+        return arr
     #enddef
 
     # convert to 2D array:
@@ -104,15 +104,15 @@ def gxread( file='gxfile' ):
         # Third, read in forces:
         #
 
- 	# parse the rest of the file:
-	grads = [ _parse_grad(line) for line in lines ]
+         # parse the rest of the file:
+        grads = [ _parse_grad(line) for line in lines ]
 
-	# convert to 2D array:
-	grads = nx3(grads)
-	# print "grads=", grads
+        # convert to 2D array:
+        grads = nx3(grads)
+        # print "grads=", grads
     except EOF:
-	energy = None
-	grads = None
+        energy = None
+        grads = None
     #end try
 
     # return all columns and scalar energy:
@@ -176,8 +176,8 @@ def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=N
 
     # gradients:
     for inum, grad in enumerate(grads):
-	# enumerate starts from zero:
-	write( _tostr_grad(inum+1, grad) )
+        # enumerate starts from zero:
+        write( _tostr_grad(inum+1, grad) )
 #end def
 
 def _tostr_geom(atnum, pos, isym, inum, iconn, ivar):
@@ -188,16 +188,16 @@ def _tostr_geom(atnum, pos, isym, inum, iconn, ivar):
     # extract the fields from records:
 
     if is_dummy(atnum):
-	# gxfile convention for dummy atoms:
-	atnum = 99.0
+        # gxfile convention for dummy atoms:
+        atnum = 99.0
     else:
-	atnum = float(atnum)
+        atnum = float(atnum)
 
     # concatenate tuples, the first one is a singleton:
     fields = (atnum,) + tuple(pos) + (isym, inum) + tuple(iconn) + tuple(ivar)
 
     return ( "%5.2f %22.12f %22.12f %22.12f %3i %3i   %3i %3i %3i   %3i %3i %3i\n" \
-		 % fields )
+                 % fields )
 #end def
 
 def _tostr_grad(inum, grad):
@@ -232,9 +232,9 @@ def _parse_geom(line):
 
     # exit on negative charge:
     if atnum < 0:
-	# this is the only usefull field in this line,
-	# but there is no use for it here ...
-	return ( atnum, None, None, None, None, None )
+        # this is the only usefull field in this line,
+        # but there is no use for it here ...
+        return ( atnum, None, None, None, None, None )
 
     # 3D vector of atomic position:
     pos    = [ float(i) for i in fields[1:4] ] # yes, three fields 1 <= xyz < 4
