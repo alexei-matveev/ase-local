@@ -24,7 +24,8 @@ class GxOptimizer(Optimizer):
 
     def initialize(self):
         #raise NotImplementedError;
-        self.loop = 0
+        self._loop = 0
+        self._converged = False
 
     def read(self):
         raise NotImplementedError;
@@ -61,18 +62,26 @@ class GxOptimizer(Optimizer):
 	energy = self.atoms.get_potential_energy()
 
 	# for use in gxfile:
-	self.loop += 1
+	self._loop += 1
 
-	print "GxOptimizer: loop=\n", self.loop
+	print "GxOptimizer: loop=\n", self._loop
 	print "GxOptimizer: energy=\n", energy
 	print "GxOptimizer: positions=\n", positions
 	print "GxOptimizer: forces=\n", forces
 
         # write gxfile to disk, note that energy gradients == - forces (units?):
-        gxwrite(atnums, positions, isyms, inums, iconns, ivars, -forces, energy, file='gxfile', loop=self.loop)
+        gxwrite(atnums, positions, isyms, inums, iconns, ivars, -forces, energy, file='gxfile', loop=self._loop)
 
         # run external executable to update geometry:
-        exitcode = os.system('optimizer.exe')
+#       exitcode = os.system('optimizer.exe')
+        tty = os.popen("optimizer.exe","r")
+	for line in tty:
+	    print "PGOptimizer: ", line.rstrip("\n")
+
+	# the last line of the output should tell if optimizer thinks it is converged:
+	converged = line.strip("optimizer_main: converged= ").rstrip("\n")
+	self._converged = ( converged == "T" )
+	print "GxOptimizer: converged=", self._converged
 
         # read the updated geometry from the gxfile:
 	atnums, positions1, isyms, inums, iconns, ivars, grads, energy = gxread('gxfile')
@@ -81,6 +90,18 @@ class GxOptimizer(Optimizer):
 	print "GxOptimizer: step=\n", positions1 - positions
 
         self.atoms.set_positions(positions1)
+
+#   # this is the default class method of Optimizer (see __init__.py):
+#   def converged(self, forces=None):
+#       """Did the optimization converge?"""
+#       if forces is None:
+#           forces = self.atoms.get_forces()
+#       return (forces**2).sum(axis=1).max() < self.fmax**2
+
+    # we will use the return status of PG-optimizer:
+    def converged(self, forces=None):
+        """Did the optimization converge?"""
+        return self._converged
 
     def update(self, r, f):
         raise NotImplementedError;
