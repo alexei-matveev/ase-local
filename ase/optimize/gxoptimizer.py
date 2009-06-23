@@ -64,8 +64,8 @@ class GxOptimizer(Optimizer):
 	# for use in gxfile:
 	self._loop += 1
 
-	print "GxOptimizer: loop=\n", self._loop
-	print "GxOptimizer: energy=\n", energy
+	print "GxOptimizer: loop=", self._loop
+	print "GxOptimizer: energy=", energy
 	print "GxOptimizer: positions=\n", positions
 	print "GxOptimizer: forces=\n", forces
 
@@ -73,14 +73,22 @@ class GxOptimizer(Optimizer):
         gxwrite(atnums, positions, isyms, inums, iconns, ivars, -forces, energy, file='gxfile', loop=self._loop)
 
         # run external executable to update geometry:
-#       exitcode = os.system('optimizer.exe')
+	# exitcode = os.system('optimizer.exe')
         tty = os.popen("optimizer.exe","r")
 	for line in tty:
 	    print "PGOptimizer: ", line.rstrip("\n")
 
 	# the last line of the output should tell if optimizer thinks it is converged:
-	converged = line.strip("optimizer_main: converged= ").rstrip("\n")
-	self._converged = ( converged == "T" )
+	line = line.rstrip("\n")
+
+	if line.startswith(" optimizer_main: converged="):
+	  # in regular runs the last line should tell if convergence was reached:
+	  self._converged = line.endswith("T")
+	else:
+	  # on errors the last line could be anything, abort by faking convergence:
+	  print "GxOptimizer: ERROR! UNEXPECTED OUTPUT FROM EXTRENAL OPTIMIZER!"
+	  self._converged = True
+
 	print "GxOptimizer: converged=", self._converged
 
         # read the updated geometry from the gxfile:
