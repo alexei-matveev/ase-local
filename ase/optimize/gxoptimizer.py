@@ -6,7 +6,10 @@ import os
 from ase.optimize import Optimizer
 # from ase.data import atomic_numbers
 from gxfile import gxread, gxwrite
-
+# conversion factors to Anstrom and eV
+# for usage in the write and read routines for the gxfile
+EINEV=27.2113845
+LINA=0.529177
 
 class GxOptimizer(Optimizer):
     def __init__(self, atoms, restart=None, logfile='-', trajectory=None,
@@ -52,7 +55,7 @@ class GxOptimizer(Optimizer):
 	"""
 
 	# read the metadata from gxfile in columns:
-	atnums, positions, isyms, inums, iconns, ivars, grads, energy = gxread('gxfile')
+	atnums, positions, isyms, inums, iconns, ivars, grads, energy = gxread('gxfile', LINA, EINEV )
 
 	# use current positions as returned by the framework,
 	# in case the on-disk version is outdated (units?):
@@ -70,7 +73,7 @@ class GxOptimizer(Optimizer):
 	print "GxOptimizer: forces=\n", forces
 
         # write gxfile to disk, note that energy gradients == - forces (units?):
-        gxwrite(atnums, positions, isyms, inums, iconns, ivars, -forces, energy, file='gxfile', loop=self._loop)
+        gxwrite(atnums, positions, isyms, inums, iconns, ivars, -forces, energy, file='gxfile', loop=self._loop, lunit=LINA, eunit=EINEV)
 
         # run external executable to update geometry:
 	# exitcode = os.system('optimizer.exe')
@@ -92,7 +95,7 @@ class GxOptimizer(Optimizer):
 	print "GxOptimizer: converged=", self._converged
 
         # read the updated geometry from the gxfile:
-	atnums, positions1, isyms, inums, iconns, ivars, grads, energy = gxread('gxfile')
+	atnums, positions1, isyms, inums, iconns, ivars, grads, energy = gxread('gxfile', LINA, EINEV )
 
 	print "GxOptimizer: new positions=\n", positions1
 	print "GxOptimizer: step=\n", positions1 - positions
