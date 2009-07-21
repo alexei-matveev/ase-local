@@ -115,6 +115,9 @@ keys = [
     # 'NBLOCK' and KBLOCK       inner block; outer block
     # 'NPACO' and APACO         distance and nr. of slots for P.C.
     # 'WEIMIN, EBREAK, DEPER    special control tags
+    'weimin',
+    'ialgo',
+    'lmaxpaw'
 ]
 
 class Vasp:
