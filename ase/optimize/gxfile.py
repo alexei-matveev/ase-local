@@ -23,6 +23,10 @@ EUNIT = 1.0
 def is_dummy(atnum):
     return atnum == DUMMY
 
+#conversion factors from Angstrom and eV
+EINEV=27.2113845
+LINA=0.529177
+
 # for private use only:
 class EOF(Exception): pass
 
@@ -36,9 +40,8 @@ def fromgx( file = "gxfile" ):
     Note tuple expansion *a in argument to the Atom() constructor.
     """
 
-    atnums, positions, _, _, _, _, _, _ = gxread( file )
-
-    return zip( atnums, positions)
+    atnums, positions, isyms, inums, iconns, ivars, __, __ = gxread( file, lunit=LINA, eunit=EINEV )
+    return zip( atnums, positions )
 #enddef
 
 def gxread( file='gxfile' , lunit=LUNIT, eunit=EUNIT ):
