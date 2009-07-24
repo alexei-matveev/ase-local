@@ -1,0 +1,112 @@
+#!/usr/bin/python
+from ase.optimize.gxfile import gxread, gxwrite
+import os
+import sys
+from sys import stdout
+
+LUNIT = 1.0
+EUNIT = 1.0
+
+#conversion factors for special values
+#        energy (of bohr unit)
+EINX = { 'EV' : 27.2113834}
+#        length (of bohr unit)
+LINX = { 'A' : 0.529177}
+
+def firstgx(filein="gxfile", fileout="gxfile", lunitin=LUNIT, eunitin=EUNIT, lunitgx=LUNIT, eunitgx=EUNIT):
+     """reads in a gxfile and writes back a gxfile ready to start a optimizer calculation
+     there is also the possibility to converge the data in the bohr units as preferd by the 
+     optimizer
+     input variables:
+       filein: the draft of the gxfile, may be in convertable coordinates
+       fileout: the gxfile 
+       lunitgx, eunitgx conversion factors, default values are 1, used for unit conversion,
+           should be the value of the bohr units in the units of the draft gxfile
+     """
+     atnums, positions, isyms, inums, iconns, ivars, grads, energy   = gxread(filein, lunitin, eunitin )
+     if(energy == None) :
+       gxwrite(atnums, positions, isyms, inums, iconns, ivars, file=fileout, loop=1, lunit=lunitgx, eunit=eunitgx)
+     else :
+       gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads, energy, file=fileout, loop=1, lunit=lunitgx, eunit=eunitgx)     
+
+def helpfun():
+   print "     This Programme converts the units in gxfiles"
+   print ('     As it is more tolerant to different input formats')
+   print ('     it can also be used to transform a hand made gxfile to') 
+   print ('     a gxfile wich will be more likely accepted from the optimizer')
+   print ('     filenames must not start with -- ')
+   print ('     the programme takes the first filename for the input the second for the output')
+   print ('     write both filenames even if they are the same')
+   print ('     do not put any options between the files')
+   print ('     Options include:')
+   print ('       --LIN  xx    : searches argument xx in the LINX library and uses it for convert input')
+   print ('       --LOUT xx    : searches argument xx in the LINX library and uses it for convert output')
+   print ('       --EIN  xx    : searches argument xx in the EINX library and uses it for convert input')
+   print ('       --EOUT  xx   : searches argument xx in the EINX library and uses it for convert output')
+   print ('       --LINN  xx   :  uses xx for  convert input')
+   print ('       --LOUTN  xx  :  uses xx for  convert output')
+   print ('       --EINN  xx   :  uses xx for  convert input')
+   print ('       --EOUTN  xx  :  uses xx for  convert output')
+   print ('       --help       : Display this help')
+   sys.exit()
+
+#Main
+
+if len(sys.argv) < 2:
+  print "ERROR: More input required"
+  helpfun()
+else :
+  filein = None
+  fileout = None
+  option = None
+  einx = EUNIT
+  linx = LUNIT
+  einout = EUNIT
+  linout = LUNIT
+  endinput = (len(sys.argv)/2)
+  if endinput==0:
+     endinput=1
+  for num in range(1, (endinput+1)):
+     indize = num*2-1
+     if sys.argv[indize].startswith('--'):
+        option = sys.argv[indize][2:]
+        if option == 'help':
+          helpfun()
+        elif option == 'LIN':
+          linx = LINX[sys.argv[indize+1]]
+        elif option == 'LOUT':
+          linout = LINX[sys.argv[indize+1]]
+        elif option =='LINN' :
+          linx = float(sys.argv[indize+1])
+        elif option =='LOUTN' :
+          linout = float(sys.argv[indize+1])
+        elif option == 'EIN':
+          einx = EINX[sys.argv[indize+1]]
+        elif option == 'EOUT':
+          einout = EINX[sys.argv[indize+1]]
+        elif option =='EINN' :
+          einx = float(sys.argv[indize+1])
+        elif option =='EOUTN' :
+          einout = float(sys.argv[indize+1])
+        else :
+          print "ERROR: unknown option"
+          helpfun()
+     else :
+       filein = sys.argv[indize]
+       fileout = sys.argv[indize+1]
+
+  if filein == None:
+     print "ERROR: No input filename"
+     helpfun()
+  if fileout == None:
+     print "ERROR: no output filename"
+     helpfun()
+     
+  try:
+    open(filein)
+  except IOError: 
+    print "ERROR: Cannot open input file"
+    helpfun()
+  
+  firstgx(filein, fileout, linx, einx, linout, einout )
+
