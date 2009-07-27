@@ -4,10 +4,13 @@ import os
 import sys
 from sys import stdout
 
+# if the units should not be transformed at all use this one
 LUNIT = 1.0
 EUNIT = 1.0
 
 #conversion factors for special values
+# feel free to add more
+# they should give the values of a bohr in the transformation unit
 #        energy (of bohr unit)
 EINX = { 'EV' : 27.2113834}
 #        length (of bohr unit)
@@ -23,7 +26,9 @@ def firstgx(filein="gxfile", fileout="gxfile", lunitin=LUNIT, eunitin=EUNIT, lun
        lunitgx, eunitgx conversion factors, default values are 1, used for unit conversion,
            should be the value of the bohr units in the units of the draft gxfile
      """
+     # read in with possible unit transfomation
      atnums, positions, isyms, inums, iconns, ivars, grads, energy   = gxread(filein, lunitin, eunitin )
+     # write the values, possible transformed another time
      if(energy == None) :
        gxwrite(atnums, positions, isyms, inums, iconns, ivars, file=fileout, loop=1, lunit=lunitgx, eunit=eunitgx)
      else :
@@ -51,10 +56,14 @@ def helpfun():
 
 #Main
 
+# programm needs at least one argument (gxfile)
+# sys.argv[0] is the programme name itsself
 if len(sys.argv) < 2:
   print "ERROR: More input required"
   helpfun()
 else :
+  # as not all options have to be given in each run
+  # default values are needed, consider '-' for standard output
   filein = None
   fileout = '-'
   option = None
@@ -63,6 +72,7 @@ else :
   einout = EUNIT
   linout = LUNIT
   second = 0
+  # read in the arguments and set the options with it
   for num in range(1, len(sys.argv)):
      if second ==0 :
        if sys.argv[num].startswith('--'):
@@ -97,15 +107,18 @@ else :
      else :
        second = 0
 
+  # there is no sense in running without input
   if filein == None:
      print "ERROR: No input filename"
      helpfun()
 
+ # even if there is input it may not work
   try:
     open(filein)
   except IOError: 
     print "ERROR: Cannot open input file"
     helpfun()
   
+  # the main programme
   firstgx(filein, fileout, linx, einx, linout, einout )
 
