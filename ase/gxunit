@@ -35,9 +35,8 @@ def helpfun():
    print ('     it can also be used to transform a hand made gxfile to') 
    print ('     a gxfile wich will be more likely accepted from the optimizer')
    print ('     filenames must not start with -- ')
-   print ('     the programme takes the first filename for the input the second for the output')
-   print ('     write both filenames even if they are the same')
-   print ('     do not put any options between the files')
+   print ('     the programme takes the first filename for the input the last for the output')
+   print ('     when there is only one filename the output goes to the standard output')
    print ('     Options include:')
    print ('       --LIN  xx    : searches argument xx in the LINX library and uses it for convert input')
    print ('       --LOUT xx    : searches argument xx in the LINX library and uses it for convert output')
@@ -57,51 +56,51 @@ if len(sys.argv) < 2:
   helpfun()
 else :
   filein = None
-  fileout = None
+  fileout = '-'
   option = None
   einx = EUNIT
   linx = LUNIT
   einout = EUNIT
   linout = LUNIT
-  endinput = (len(sys.argv)/2)
-  if endinput==0:
-     endinput=1
-  for num in range(1, (endinput+1)):
-     indize = num*2-1
-     if sys.argv[indize].startswith('--'):
-        option = sys.argv[indize][2:]
-        if option == 'help':
-          helpfun()
-        elif option == 'LIN':
-          linx = LINX[sys.argv[indize+1]]
-        elif option == 'LOUT':
-          linout = LINX[sys.argv[indize+1]]
-        elif option =='LINN' :
-          linx = float(sys.argv[indize+1])
-        elif option =='LOUTN' :
-          linout = float(sys.argv[indize+1])
-        elif option == 'EIN':
-          einx = EINX[sys.argv[indize+1]]
-        elif option == 'EOUT':
-          einout = EINX[sys.argv[indize+1]]
-        elif option =='EINN' :
-          einx = float(sys.argv[indize+1])
-        elif option =='EOUTN' :
-          einout = float(sys.argv[indize+1])
-        else :
-          print "ERROR: unknown option"
-          helpfun()
+  second = 0
+  for num in range(1, len(sys.argv)):
+     if second ==0 :
+       if sys.argv[num].startswith('--'):
+          option = sys.argv[num][2:]
+          second = 1
+          if option == 'help':
+             helpfun()
+          elif option == 'LIN':
+             linx = LINX[sys.argv[num+1]]
+          elif option == 'LOUT':
+             linout = LINX[sys.argv[num+1]]
+          elif option =='LINN' :
+             linx = float(sys.argv[num+1])
+          elif option =='LOUTN' :
+             linout = float(sys.argv[num+1])
+          elif option == 'EIN':
+             einx = EINX[sys.argv[num+1]]
+          elif option == 'EOUT':
+             einout = EINX[sys.argv[num+1]]
+          elif option =='EINN' :
+             einx = float(sys.argv[num+1])
+          elif option =='EOUTN' :
+             einout = float(sys.argv[num+1])
+          else :
+             print "ERROR: unknown option"
+             helpfun()
+       else :
+          if(filein==None) :
+             filein = sys.argv[num]
+          else :
+             fileout = sys.argv[num]
      else :
-       filein = sys.argv[indize]
-       fileout = sys.argv[indize+1]
+       second = 0
 
   if filein == None:
      print "ERROR: No input filename"
      helpfun()
-  if fileout == None:
-     print "ERROR: no output filename"
-     helpfun()
-     
+
   try:
     open(filein)
   except IOError: 
