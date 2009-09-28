@@ -1,4 +1,12 @@
-import numpy as npy
+"""
+IO support for the Gaussian cube format.
+
+See the format specifications on:
+http://local.wasp.uwa.edu.au/~pbourke/dataformats/cube/
+"""
+
+
+import numpy as np
 
 from ase.atoms import Atoms
 from ase.units import Bohr
@@ -11,30 +19,31 @@ def write_cube(fileobj, atoms, data=None):
         
     if isinstance(atoms, list):
         if len(atoms) > 1:
-            raise ValueError('Can only write one configuration to a cube file!')
+            raise ValueError('Can only write one configuration '
+                             'to a cube file!')
         atoms = atoms[0]
 
     if data is None:
-        data = [[[1.0]]]
-    data = npy.asarray(data)
+        data = np.ones((2, 2, 2))
+    data = np.asarray(data)
 
     if data.dtype == complex:
-        data = npy.abs(data)
+        data = np.abs(data)
 
     fileobj.write('cube file from ase\n')
     fileobj.write('OUTER LOOP: X, MIDDLE LOOP: Y, INNER LOOP: Z\n')
 
     cell = atoms.get_cell()
-    shape = npy.array(data.shape)
+    shape = np.array(data.shape)
 
-    corner = npy.zeros(3)
+    corner = np.zeros(3)
     for i in range(3):
         if shape[i] % 2 == 1:
             shape[i] += 1
             corner += cell[i] / shape[i] / Bohr
 
-    fileobj.write('%5d%12.6f%12.6f%12.6f\n' % (len(atoms),
-                                               corner[0], corner[1], corner[2]))
+    fileobj.write('%5d%12.6f%12.6f%12.6f\n' % (len(atoms), corner[0],
+                                               corner[1], corner[2]))
 
     for i in range(3):
         n = data.shape[i]
@@ -60,17 +69,17 @@ def read_cube(fileobj, index=-1, read_data=False):
     natoms = int(line[0])
     corner = [Bohr * float(x) for x in line[1:]]
 
-    cell = npy.empty((3, 3))
+    cell = np.empty((3, 3))
     shape = []
     for i in range(3):
         n, x, y, z = [float(s) for s in readline().split()]
         shape.append(n)
         if n % 2 == 1:
             n += 1
-        cell[i] = n * Bohr * npy.array([x, y, z])
+        cell[i] = n * Bohr * np.array([x, y, z])
         
-    numbers = npy.empty(natoms, int)
-    positions = npy.empty((natoms, 3))
+    numbers = np.empty(natoms, int)
+    positions = np.empty((natoms, 3))
     for i in range(natoms):
         line = readline().split()
         numbers[i] = int(line[0])
@@ -80,8 +89,8 @@ def read_cube(fileobj, index=-1, read_data=False):
     atoms = Atoms(numbers=numbers, positions=positions, cell=cell)
 
     if read_data:
-        data = npy.array([float(s)
-                          for s in fileobj.read().split()]).reshape(shape)
+        data = np.array([float(s)
+                         for s in fileobj.read().split()]).reshape(shape)
         if axes != [0, 1, 2]:
             data = data.transpose(axes).copy()
         return data, atoms

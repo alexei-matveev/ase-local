@@ -11,12 +11,14 @@ from ase.neb import NEB
 class PickleTrajectory:
     "Reads/writes Atoms objects into a .traj file."
     # Per default, write these quantities
-    write_energy=True
-    write_forces=True
-    write_stress=True
-    write_momenta=True
+    write_energy = True
+    write_forces = True
+    write_stress = True
+    write_magmoms = True
+    write_momenta = True
+    
     def __init__(self, filename, mode='r', atoms=None, master=None,
-                 write_first_image=True):
+                 backup=True):
         """A PickleTrajectory can be created in read, write or append mode.
 
         Parameters:
@@ -47,26 +49,17 @@ class PickleTrajectory:
             default is that process number 0 does this.  If this
             argument is given, processes where it is True will write.
 
-        write_first_image=True:
-        
-            If this argument is True and atoms is specified, the atoms
-            are written to the file immediately.  This is intended to
-            write the initial configuration in a simulation.  Note
-            that in append mode you probably want to set this to
-            False, as the first configuration is likely to already be
-            in the file.
-        
+        backup=True:
+            Use backup=False to disable renaming of an existing file.
         """
         self.offsets = []
         if master is None:
             master = (rank == 0)
         self.master = master
+        self.backup = backup
         self.set_atoms(atoms)
         self.open(filename, mode)
 
-        if write_first_image and atoms is not None:
-            self.write()
-        
     def open(self, filename, mode):
         """Opens the file.
 
@@ -78,13 +71,16 @@ class PickleTrajectory:
                 self.fd = open(filename, mode + 'b')
             self.read_header()
         elif mode == 'a':
+            exists = True
             if isinstance(filename, str):
+                exists = os.path.isfile(filename)
                 self.fd = open(filename, mode + 'b+')
-            self.read_header()
+            if exists:
+                self.read_header()
         elif mode == 'w':
             if self.master:
                 if isinstance(filename, str):
-                    if os.path.isfile(filename):
+                    if self.backup and os.path.isfile(filename):
                         os.rename(filename, filename + '.bak')
                     self.fd = open(filename, 'wb')
             else:
@@ -123,8 +119,13 @@ class PickleTrajectory:
         if atoms is None:
             atoms = self.atoms
 
-        if isinstance(atoms, NEB):
+        if hasattr(atoms, 'interpolate'):
+            # seems to be a NEB
             neb = atoms
+            try:
+                neb.get_energies_and_forces(all=True)
+            except AttributeError:
+                pass
             for image in neb.images:
                 self.write(image)
             return
@@ -141,25 +142,28 @@ class PickleTrajectory:
              'cell': atoms.get_cell(),
              'momenta': momenta}
 
-
         if atoms.get_calculator() is not None:
             if self.write_energy:
                 d['energy'] = atoms.get_potential_energy()
             if self.write_forces:
-                assert(self.write_energy)
-                d['forces'] = atoms.get_forces(apply_constraint=False)
+                assert self.write_energy
+                try:
+                    d['forces'] = atoms.get_forces(apply_constraint=False)
+                except NotImplementedError:
+                    pass
             if self.write_stress:
-                assert(self.write_energy)
+                assert self.write_energy
                 try:
                     d['stress'] = atoms.get_stress()
                 except NotImplementedError:
                     pass
 
-            try:
-                if atoms.calc.get_spin_polarized():
-                    d['magmoms'] = atoms.get_magnetic_moments()
-            except (NotImplementedError, AttributeError):
-                pass
+            if self.write_magmoms:
+                try:
+                    if atoms.calc.get_spin_polarized():
+                        d['magmoms'] = atoms.get_magnetic_moments()
+                except (NotImplementedError, AttributeError):
+                    pass
 
         if 'magmoms' not in d and atoms.has('magmoms'):
             d['magmoms'] = atoms.get_initial_magnetic_moments()
@@ -270,13 +274,21 @@ def write_trajectory(filename, images):
     for atoms in images:
         # Avoid potentially expensive calculations:
         calc = atoms.get_calculator()
-        if (calc is not None and
-            (not hasattr(calc, 'calculation_required') or
-             calc.calculation_required(atoms,
-                                       ['energy', 'forces', 'stress']))):
-            traj.write_energy=False
-            traj.write_forces=False
-            traj.write_stress=False
-        
+        if calc is not None:
+            if  hasattr(calc, 'calculation_required'):
+                if calc.calculation_required(atoms, ['energy']):
+                    traj.write_energy = False
+                if calc.calculation_required(atoms, ['forces']):
+                    traj.write_forces = False
+                if calc.calculation_required(atoms, ['stress']):
+                    traj.write_stress = False
+                if calc.calculation_required(atoms, ['magmoms']):
+                    traj.write_magmoms = False
+        else:
+            traj.write_energy = False
+            traj.write_forces = False
+            traj.write_stress = False
+            traj.write_magmoms = False
+            
         traj.write(atoms)
     traj.close()

@@ -1,4 +1,4 @@
-import numpy as npy
+import numpy as np
 
 from ase.calculators import SinglePointCalculator
 from ase.atom import Atom
@@ -11,8 +11,8 @@ def read_dacapo_text(fileobj):
 
     lines = fileobj.readlines()
     i = lines.index(' Structure:             A1           A2            A3\n')
-    cell = npy.array([[float(w) for w in line.split()[2:5]]
-                      for line in lines[i + 1:i + 4]]).transpose()
+    cell = np.array([[float(w) for w in line.split()[2:5]]
+                     for line in lines[i + 1:i + 4]]).transpose()
     i = lines.index(' Structure:  >>         Ionic positions/velocities ' +
                     'in cartesian coordinates       <<\n')
     atoms = []
@@ -73,9 +73,13 @@ def read_dacapo(filename):
                   tags=tags,
                   pbc=True)
 
-#    calc = SinglePointCalculator(vars['TotalEnergy'].getValue(),
-    calc = SinglePointCalculator(vars['TotalEnergy'][-1],
-                                 vars['DynamicAtomForces'][-1], None, None, atoms) ### Fixme magmoms
+    try:
+        energy = vars['TotalEnergy'][-1] 
+        force = vars['DynamicAtomForces'][-1] 
+    except KeyError: 
+        energy = None 
+        force = None 
+    calc = SinglePointCalculator(energy,force,None, None, atoms)  ### Fixme magmoms
     atoms.set_calculator(calc)
         
     return atoms

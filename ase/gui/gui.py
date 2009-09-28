@@ -19,7 +19,7 @@
 import os
 import sys
 
-import numpy as npy
+import numpy as np
 
 import gtk
 from ase.gui.view import View
@@ -230,6 +230,7 @@ class GUI(View, Status):
         vbox.show()
         #self.window.set_events(gtk.gdk.BUTTON_PRESS_MASK)
         self.window.connect('key-press-event', self.scroll)
+        self.window.connect('scroll_event', self.scroll_event)
         self.window.show()
         self.graphs = []
         self.movie_window = None
@@ -241,7 +242,7 @@ class GUI(View, Status):
         if self.images.nimages > 1:
             self.movie()
 
-        if expr is None and not npy.isnan(self.images.E[0]):
+        if expr is None and not np.isnan(self.images.E[0]):
             expr = 'i, e - E[-1]'
             
         if expr is not None and expr != '' and self.images.nimages > 1:
@@ -259,24 +260,42 @@ class GUI(View, Status):
         if self.movie_window is not None:
             self.movie_window.frame_number.value = i
             
-    def zoom(self, action):
-        x = {'ZoomIn': 1.2, 'ZoomOut':1 / 1.2}[action.get_name()]
+    def _do_zoom(self, x):
+        """Utility method for zooming"""
         self.scale *= x
         center = (0.5 * self.width, 0.5 * self.height, 0)
         self.offset = x * (self.offset + center) - center
         self.draw()
+        
+    def zoom(self, action):
+        """Zoom in/out on keypress or clicking menu item"""
+        x = {'ZoomIn': 1.2, 'ZoomOut':1 / 1.2}[action.get_name()]
+        self._do_zoom(x)
+
+    def scroll_event(self, window, event):
+        """Zoom in/out when using mouse wheel"""
+        if event.direction == gtk.gdk.SCROLL_UP:
+            x = 1.2
+        elif event.direction == gtk.gdk.SCROLL_DOWN:
+            x = 1 / 1.2
+        self._do_zoom(x)
 
     def settings(self, menuitem):
         Settings(self)
         
     def scroll(self, window, event):
-        dxdy = {gtk.keysyms.Up:    ( 0, -1),
+        dxdy = {gtk.keysyms.KP_Add: ('zoom', 1.2),
+                gtk.keysyms.KP_Subtract: ('zoom', 1 / 1.2),
+                gtk.keysyms.Up:    ( 0, -1),
                 gtk.keysyms.Down:  ( 0, +1),
                 gtk.keysyms.Right: (+1,  0),
                 gtk.keysyms.Left:  (-1,  0)}.get(event.keyval, None)
         if dxdy is None:
             return
         dx, dy = dxdy
+        if dx == 'zoom':
+            self._do_zoom(dy)
+            return
         d = self.scale * 0.1
         self.offset -= (dx * d, dy * d, 0)
         self.draw()
@@ -417,7 +436,7 @@ class GUI(View, Status):
         
         chooser.destroy()
 
-        bbox = npy.empty(4)
+        bbox = np.empty(4)
         bbox[:2] = self.offset[:2]
         bbox[2:] = bbox[:2] + (self.width, self.height)
         bbox /= self.scale

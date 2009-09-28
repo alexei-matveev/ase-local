@@ -14,26 +14,26 @@ from ase.atoms import Atoms
 from ase.data import reference_states, atomic_numbers
 
 
-def fcc100(symbol, size, a=None, vacuum=0.0):
+def fcc100(symbol, size, a=None, vacuum=None):
     """FCC(100) surface.
  
     Supported special adsorption sites: 'ontop', 'bridge', 'hollow'."""
     return surface(symbol, 'fcc', '100', size, a, None, vacuum)
 
-def fcc110(symbol, size, a=None, vacuum=0.0):
+def fcc110(symbol, size, a=None, vacuum=None):
     """FCC(110) surface.
  
     Supported special adsorption sites: 'ontop', 'longbridge',
     'shortbridge','hollow'."""
     return surface(symbol, 'fcc', '110', size, a, None, vacuum)
 
-def bcc100(symbol, size, a=None, vacuum=0.0):
+def bcc100(symbol, size, a=None, vacuum=None):
     """BCC(100) surface.
  
     Supported special adsorption sites: 'ontop', 'bridge', 'hollow'."""
     return surface(symbol, 'bcc', '100', size, a, None, vacuum)
 
-def bcc110(symbol, size, a=None, vacuum=0.0, orthogonal=False):
+def bcc110(symbol, size, a=None, vacuum=None, orthogonal=False):
     """BCC(110) surface.
  
     Supported special adsorption sites: 'ontop', 'longbridge',
@@ -43,7 +43,7 @@ def bcc110(symbol, size, a=None, vacuum=0.0, orthogonal=False):
     for size=(i,j,k) with j even."""
     return surface(symbol, 'bcc', '110', size, a, None, vacuum, orthogonal)
 
-def bcc111(symbol, size, a=None, vacuum=0.0, orthogonal=False):
+def bcc111(symbol, size, a=None, vacuum=None, orthogonal=False):
     """BCC(111) surface.
  
     Supported special adsorption sites: 'ontop'.
@@ -52,7 +52,7 @@ def bcc111(symbol, size, a=None, vacuum=0.0, orthogonal=False):
     for size=(i,j,k) with j even."""
     return surface(symbol, 'bcc', '111', size, a, None, vacuum, orthogonal)
 
-def fcc111(symbol, size, a=None, vacuum=0.0, orthogonal=False):
+def fcc111(symbol, size, a=None, vacuum=None, orthogonal=False):
     """FCC(111) surface.
  
     Supported special adsorption sites: 'ontop', 'bridge', 'fcc' and 'hcp'.
@@ -61,7 +61,7 @@ def fcc111(symbol, size, a=None, vacuum=0.0, orthogonal=False):
     for size=(i,j,k) with j even."""
     return surface(symbol, 'fcc', '111', size, a, None, vacuum, orthogonal)
 
-def hcp0001(symbol, size, a=None, c=None, vacuum=0.0, orthogonal=False):
+def hcp0001(symbol, size, a=None, c=None, vacuum=None, orthogonal=False):
     """HCP(0001) surface.
  
     Supported special adsorption sites: 'ontop', 'bridge', 'fcc' and 'hcp'.
@@ -71,7 +71,8 @@ def hcp0001(symbol, size, a=None, c=None, vacuum=0.0, orthogonal=False):
     return surface(symbol, 'hcp', '0001', size, a, c, vacuum, orthogonal)
 
     
-def add_adsorbate(slab, adsorbate, height, position=(0, 0), offset=None):
+def add_adsorbate(slab, adsorbate, height, position=(0, 0), offset=None,
+                  mol_index=0):
     """Add an adsorbate to a surface.
 
     This function adds an adsorbate to a slab.  If the slab is
@@ -80,9 +81,10 @@ def add_adsorbate(slab, adsorbate, height, position=(0, 0), offset=None):
     (the supported keywords depend on which function was used to
     create the slab).
 
-    If the adsorbate is a molecule, the first atom (number 0) is
-    adsorbed to the surface, and it is the responsability of the user
-    to orient the adsorbate in a sensible way.
+    If the adsorbate is a molecule, the atom indexed by the mol_index
+    optional argument is positioned on top of the adsorption position
+    on the surface, and it is the responsibility of the user to orient
+    the adsorbate in a sensible way.
 
     This function can be called multiple times to add more than one
     adsorbate.
@@ -104,6 +106,10 @@ def add_adsorbate(slab, adsorbate, height, position=(0, 0), offset=None):
 
     offset (default: None): Offsets the adsorbate by a number of unit
         cells. Mostly useful when adding more than one adsorbate.
+
+    mol_index (default: 0): If the adsorbate is a molecule, index of
+        the atom to be positioned above the location specified by the
+        position argument.
 
     Note *position* is given in absolute xy coordinates (or as
     a keyword), whereas offset is specified in unit cells.  This
@@ -153,7 +159,7 @@ def add_adsorbate(slab, adsorbate, height, position=(0, 0), offset=None):
     z = slab.positions[a, 2] + height
 
     # Move adsorbate into position
-    ads.translate([pos[0], pos[1], z] - ads.positions[0])
+    ads.translate([pos[0], pos[1], z] - ads.positions[mol_index])
 
     # Attach the adsorbate
     slab.extend(ads)
@@ -275,11 +281,13 @@ def surface(symbol, structure, face, size, a, c, vacuum, orthogonal=True):
 
     slab.set_cell([a * v * n for v, n in zip(cell, size)], scale_atoms=True)
 
-    slab.cell[2, 2] += vacuum
+    if vacuum is not None:
+        slab.center(vacuum=vacuum, axis=2)
     
     slab.adsorbate_info['cell'] = surface_cell
     slab.adsorbate_info['sites'] = sites
     
     return slab
 
-
+    
+        

@@ -1,7 +1,7 @@
 '''
 python module for ASE2 and Numeric free dacapo
 
-`John Kitchin <mailto::jkitchin@andrew.cmu.edu>`_ December 25, 2008
+U{John Kitchin<mailto:jkitchin@andrew.cmu.edu>} December 25, 2008
 
 This module supports numpy directly.
 
@@ -9,15 +9,13 @@ This module supports numpy directly.
 
  - this is the first version to use numpy by default.
 
-no support for stayalive yet.
-
 see https://wiki.fysik.dtu.dk/stuff/nc/ for dacapo netcdf variable
 documentation
 '''
 
 __docformat__ = 'restructuredtext'
 
-import exceptions, glob, os, string, time
+import exceptions, glob, os, pickle, string, time
 from Scientific.IO.NetCDF import NetCDFFile as netCDF
 import numpy as np
 import subprocess as sp
@@ -56,7 +54,7 @@ class Jacapo:
                  symmetry=None,
                  stress=None,
                  dipole=None,
-                 stay_alive=False,
+                 stay_alive=None,
                  debug=0):
         '''
         Initialize the Jacapo calculator
@@ -180,9 +178,6 @@ class Jacapo:
             
             if not os.path.exists(nc):
                 raise Exception('you asked for %s, and did not define any parameters, but %s does not exist.' % (nc,nc))
-
-
-
         
         self.set_nc(nc)
         
@@ -195,6 +190,9 @@ class Jacapo:
         # atoms are written. Eventually this has to be revisited when
         # there are multiple xc databases to choose from.
         self.set_psp_database()
+
+        # need to set a default value for stay_alive
+        self.stay_alive = False
         
         # Jacapo('out.nc') should return a calculator with atoms in
         # out.nc attached or initialize out.nc
@@ -208,11 +206,12 @@ class Jacapo:
             #delete the bad file
 
             self._set_frame_number()
-            self.set_atoms(self.read_only_atoms(nc))
 
-            # we already have atoms, energy, and forces in nc file. If we change atoms from here, we need to append.
-            self._increment_frame()
-            
+            #we are reading atoms in, so there is no reason to write them back out.
+            #we do not use self.set_atoms() to avoid writing the atoms back out.
+            self.atoms = self.read_only_atoms(nc)
+            #self.set_atoms(self.read_only_atoms(nc))
+
             #assume here if you read atoms in, it is ready.
             #later when calculation required is checked
             # a calculation will be run if required.
@@ -244,7 +243,7 @@ class Jacapo:
         if dipole: self.set_dipole()
         if symmetry: self.set_symmetry(symmetry)
         if stress: self.set_stress(stress)
-        self.set_stay_alive(stay_alive)
+        if stay_alive: self.set_stay_alive(stay_alive)
         
         
     def initnc(self,ncfile):
@@ -266,6 +265,10 @@ class Jacapo:
         ncf.history = 'Dacapo'
         ncf.close()
         
+        # Setting some default values to maintain consistency with ASE2 
+        self.set_convergence()	# automatically sets the ASE2 default values
+        self.set_ft(0.1) 	# default value from ASE2
+        self.set_xc('PW91')	# default xc functional
         self.ready = False
         self._frame = 0
         self.set_nc(ncfile)
@@ -305,7 +308,7 @@ class Jacapo:
         
         energy = nc.variables.get('TotalEnergy',None)
         
-        if energy:
+        if energy and energy[:][-1] < 1E36:   # missing values get returned at 9.3E36
             s.append('  Energy = %1.6f eV' % energy[:][-1])
         else:
             s.append('  Energy = None')
@@ -351,8 +354,11 @@ class Jacapo:
                 sym = atom.get_symbol()
                 pos = atom.get_position()
                 tag = atom.get_tag()
-                if forces is not None:
+                if forces is not None and (forces[:][-1][i] < 1E36).all():
                     f = forces[:][-1][i]
+                    # Lars Grabow: this seems to work right for some reason,
+                    # but I would expect this to be the right index order f=forces[-1][i][:]
+                    # frame,atom,direction
                     rmsforce = (np.sum(f**2))**0.5
                 else:
                     rmsforce = None
@@ -386,6 +392,7 @@ class Jacapo:
         s.append('  Kpoint grid         = %s' % str(self.get_kpts()))
         s.append('  Spin-polarized      = %s' % self.get_spin_polarized())
         s.append('  Dipole correction   = %s' % self.get_dipole())
+        s.append('  Constraints         = %s' % str(atoms._get_constraints()))
         s.append('  ---------------------------------')
         nc.close()
         return string.join(s,'\n')            
@@ -435,14 +442,38 @@ class Jacapo:
 
         self.psp = defaultpseudopotentials
 
+        #update teh pspdatabase from the ncfile if it exists
+        if os.path.exists(self.nc):
+            nc = netCDF(self.nc,'r')
+            sym = nc.variables['DynamicAtomSpecies'][:]
+            symbols = [x.tostring().strip() for x in sym]
+            for sym in symbols:
+                vn = 'AtomProperty_%s' % sym
+                if vn in nc.variables:
+                    var = nc.variables[vn]
+                    pspfile = var.PspotFile
+
+                    self.psp[sym] = pspfile
+            nc.close()
+
     def _set_frame_number(self,frame=None):
         if frame is None:
             nc = netCDF(self.nc,'r')
-            if 'DynamicAtomPositions' in nc.variables:
-                frame = nc.variables['DynamicAtomPositions'].shape[0]
+            if 'TotalEnergy' in nc.variables:
+                frame = nc.variables['TotalEnergy'].shape[0]
+                # make sure the last energy is reasonable. Sometime the field is empty if the
+                # calculation ran out of walltime for example. Empty values get returned as 9.6E36.
+                # Dacapos energies should always be negative, so if the energy is > 1E36, there is
+                # definitely something wrong and a restart is required.
+                if nc.variables.get('TotalEnergy',None)[-1] > 1E36:
+                    if self.debug > 1:
+                        print "NC file is incomplete. Restart required"
+                    self.restart()
             else:
                 frame = 1
             nc.close()
+            if self.debug > 1:
+                print "Current frame number is: ",frame-1
         self._frame = frame-1  #netCDF starts counting with 1
 
     def _increment_frame(self):
@@ -595,11 +626,8 @@ class Jacapo:
 
         :Parameters:
 
-         kpts : (n1,n2,n3)
-           Creates an n1 x n2 x n3 monkhorst-pack grid
-
-         kpts : [k1,k2,k3,...]
-           Creates a kpt-grid based on the kpoints in k1,k2,k3,...
+         kpts : (n1,n2,n3) or [k1,k2,k3,...] 
+           (n1,n2,n3) creates an n1 x n2 x n3 monkhorst-pack grid, [k1,k2,k3,...] creates a kpt-grid based on the kpoints in k1,k2,k3,... 
         
         eventually I would like to support::
 
@@ -668,8 +696,48 @@ class Jacapo:
             ASE.Atoms instance
           
         '''
+        if hasattr(self,'atoms') and self.atoms is not None:
+            #return if the atoms are the same. no change needs to be made
+            #i am not sure if new constraints would make atoms unequal
+            if atoms == self.atoms:
+                return
+            # some atoms already exist. Test if new atoms are different from old atoms.
+            if atoms != self.atoms:
+                # the new atoms are different from the old ones. Start a new frame.
+                self._increment_frame()
         self.atoms = atoms.copy()
-        self.write_nc(atoms=atoms)
+        self.write_nc(atoms=atoms) #this makes sure teh ncfile is up to date
+
+        #store constraints if they exist
+        constraints = atoms._get_constraints()
+        if constraints != []:
+            nc = netCDF(self.get_nc(),'a')
+            if 'constraints' not in nc.variables:
+                if 'dim1' not in nc.dimensions:
+                    nc.createDimension('dim1',1)
+                c = nc.createVariable('constraints','c',('dim1',))
+            else:
+                c = nc.variables['constraints']
+            #we store the pickle string as an attribute of a netcdf variable
+            #because that way we do not have to know how long the string is.
+            #with a character variable you have to specify the dimension of the
+            #string ahead of time.
+            c.data = pickle.dumps(constraints)
+            nc.close()
+        else:
+            # getting here means there where no constraints on the atoms just written
+            #we should check if there are any old constraints left in the ncfile
+            #from a previous atoms, and delete them if so
+            delete_constraints = False
+            nc = netCDF(self.get_nc())
+            if 'constraints' in nc.variables:
+                delete_constraints = True
+            nc.close()
+
+            if delete_constraints:
+                print 'deleting old constraints'
+                self.delete_ncattdimvar(self.nc,
+                                        ncvars=['constraints'])
         
     def set_ft(self,ft):
         '''set the Fermi temperature for occupation smearing
@@ -1335,8 +1403,9 @@ class Jacapo:
                 soft.append(nc.dimensions[sd])
                 hard.append(nc.dimensions[hd])
 
+        nc.close()
         return (soft,hard)
-        
+
     def get_kpts(self):
         'return the kpt grid, not the kpts'
         nc = netCDF(self.nc,'r')
@@ -1344,11 +1413,14 @@ class Jacapo:
         if 'BZKpoints' in nc.variables:
             bv = nc.variables['BZKpoints']
             if hasattr(bv,'grid'):
-                return (bv.grid)
+                kpts = (bv.grid)
             else:
-                return len(bv[:])
+                kpts = len(bv[:])
         else:
-            return (1,1,1) #default used in Dacapo
+            kpts = (1,1,1) #default used in Dacapo
+
+        nc.close()
+        return kpts
         
     def get_nbands(self):
         'return the number of bands used in the calculation'
@@ -1498,14 +1570,17 @@ class Jacapo:
         'Return True if calculate is spin-polarized or False if not'
         #self.calculate() #causes recursion error with get_magnetic_moments
         nc = netCDF(self.nc,'r')
-        v = nc.variables['ElectronicBands']
-        if hasattr(v,'SpinPolarization'):
-            if v.SpinPolarization==1:
+        if 'ElectronicBands' in nc.variables:
+            v = nc.variables['ElectronicBands']
+            if hasattr(v,'SpinPolarization'):
+                if v.SpinPolarization==1:
+                    spinpol = False
+                elif v.SpinPolarization==2:
+                    spinpol = True
+            else:
                 spinpol = False
-            elif v.SpinPolarization==2:
-                spinpol = True
         else:
-            spinpol = False
+            spinpol = 'Not defined'
 
         nc.close()
         return spinpol
@@ -1568,7 +1643,14 @@ class Jacapo:
     def get_valence(self,atoms=None):
         '''return the total number of valence electrons for the
         atoms. valence electrons are read directly from the
-        pseudopotentials.'''
+        pseudopotentials.
+
+        the psp filenames are stored in the ncfile. They may be just
+        the name of the file, in which case the psp may exist in the
+        same directory as the ncfile, or in $DACAPOPATH, or the psp
+        may be defined by an absolute or relative path. This function
+        deals with all these possibilities.
+        '''
         from struct import unpack
         
         #do not use get_atoms() or recursion occurs
@@ -1582,7 +1664,23 @@ class Jacapo:
         totval = 0.0
         for sym in atoms.get_chemical_symbols():
             psp = self.get_psp(sym)
-            fullpsp = os.path.join(dacapopath,psp)
+            
+            if os.path.exists(psp):
+                #the pspfile may be in the current directory
+                #or defined by an absolute path
+                fullpsp = psp
+
+            #let's also see if we can construct an absolute path to a
+            #local or relative path psp.
+            abs_path_to_nc = os.path.abspath(self.get_nc())
+            base,ncfile = os.path.split(abs_path_to_nc)
+            possible_path_to_psp = os.path.join(base,psp)
+            if os.path.exists(possible_path_to_psp):
+                fullpsp = possible_path_to_psp
+                
+            else:
+                #or, it is in the default psp path
+                fullpsp = os.path.join(dacapopath,psp)
             if os.path.exists(fullpsp.strip()):
                 f = open(fullpsp)
                 # read past version numbers and text information
@@ -1607,6 +1705,10 @@ class Jacapo:
 
         quantities is here because of the ase interface.
         '''
+        #provide a way to make no calculation get run
+        if os.environ.get('DACAPO_DRYRUN',None) is not None:
+            return False
+        
         # first, compare if the atoms is the same as the stored atoms
         # if anything has changed, we need to run a calculation
         if self.debug > 0: print 'running calculation_required'
@@ -1674,6 +1776,24 @@ class Jacapo:
         if self.debug > 0: print 'default calculation required'
         return True
 
+    def get_scratch(self):
+        '''finds an appropriate scratch directory for the calculation'''
+        import getpass
+        username=getpass.getuser()
+
+        scratch_dirs = []
+        if os.environ.has_key('SCRATCH'):
+            scratch_dirs.append(os.environ['SCRATCH'])
+        if os.environ.has_key('SCR'):
+            scratch_dirs.append(os.environ['SCR'])
+        scratch_dirs.append('/scratch/'+username)
+        scratch_dirs.append('/scratch/')
+        scratch_dirs.append(os.curdir)
+        for scratch_dir in scratch_dirs:
+            if os.access(scratch_dir,os.W_OK):
+                return scratch_dir
+        raise IOError,"No suitable scratch directory and no write access to current dir"
+
     def calculate(self):
         '''run a calculation.
 
@@ -1686,6 +1806,7 @@ class Jacapo:
 
         nc = self.get_nc()
         txt= self.get_txt()
+        scratch = self.get_scratch()
 
         #check that the bands get set
         if self.get_nbands() is None: self.set_nbands() 
@@ -1696,8 +1817,7 @@ class Jacapo:
             self.set_status('finished')
 
         else:
-            cmd = 'dacapo.run  %(innc)s -out %(txt)s' % {'innc':nc,
-                                                     'txt':txt}
+            cmd = 'dacapo.run  %(innc)s -out %(txt)s -scratch %(scratch)s' % {'innc':nc,'txt':txt, 'scratch':scratch}
 
             if self.debug > 0: print cmd
             # using subprocess instead of commands
@@ -1715,13 +1835,14 @@ class Jacapo:
                 print output
                 self.ready = False
             del self._dacapo
-        self._increment_frame()
         # directory cleanup has been moved to self.__del__()
 
     def execute_external_dynamics(self,nc=None,txt=None,stoppfile='stop',stopprogram=None):
-        """ Implementation of the stay alive functionality with socket communication between dacapo and python.
-            Known limitations: It is not possible to start 2 independent Dacapo calculators from the same python process,
-                               since the python PID is used as identifier for the script[PID].py file."""
+        '''
+        Implementation of the stay alive functionality with socket communication between dacapo and python.
+        Known limitations: It is not possible to start 2 independent Dacapo calculators from the same python process,
+        since the python PID is used as identifier for the script[PID].py file.
+        '''
         from socket import socket,AF_INET,SOCK_STREAM,timeout
         import tempfile
         import os
@@ -1735,6 +1856,7 @@ class Jacapo:
 
         if not nc: nc = self.get_nc()
         if not txt: txt = self.get_txt()
+        tempfile.tempdir=os.curdir
 
         if stopprogram:
                 # write stop file
@@ -1750,7 +1872,8 @@ class Jacapo:
                 # Wait for dacapo to acknowledge that netcdf file has been updated, and analysis part of the code
                 # has been terminated. Dacapo sends a signal at the end of call clexit().
                 print "waiting for dacapo to exit..."
-                self.s.settimeout(5.0)  # if dacapo exits with an error, self.s.accept() should time out
+                self.s.settimeout(1200.0)  # if dacapo exits with an error, self.s.accept() should time out,
+                                          # but we need to give it enough time to write the wave function to the nc file.
                 try:
                     self._client,self._addr = self.s.accept() # Last mumble before Dacapo dies.
                     os.system("sleep 5")                     # 5 seconds of silence mourning dacapo.
@@ -1838,7 +1961,8 @@ s.recv(14)
             scratch_in_nc = tempfile.mktemp()
             os.system('mv '+nc+' '+scratch_in_nc)
             os.system('rm -f '+stoppfile)
-            cmd = 'dacapo.run  %(innc)s %(outnc)s -out %(txt)s' % {'innc':scratch_in_nc,'outnc':nc,'txt':txt}
+            scratch = self.get_scratch()
+            cmd = 'dacapo.run  %(innc)s %(outnc)s -out %(txt)s -scratch %(scratch)s' % {'innc':scratch_in_nc,'outnc':nc,'txt':txt, 'scratch':scratch}
 
             if self.debug > 0: print cmd
             self._dacapo = sp.Popen(cmd,stdout=sp.PIPE,stderr=sp.PIPE,shell=True)
@@ -1907,7 +2031,7 @@ s.recv(14)
                     dnatoms = ncf.createDimension('number_of_dynamic_atoms',
                                                   len(atoms)) 
                     dionsteps = ncf.createDimension('number_ionic_steps',None)
-                    self._set_frame_number(1)
+                    self._set_frame_number(0)
                     ncf.close() #nc file must be closed for restart to work correctly
                     self.restart()
                     ncf = netCDF(nc,'a')
@@ -1950,7 +2074,7 @@ s.recv(14)
             else:
                 tags = ncf.variables['AtomTags']
 
-            tags[:] = atoms.get_tags()
+            tags[:] = np.array(atoms.get_tags(),np.int32)
 
             if 'InitialAtomicMagneticMoment' not in ncf.variables:
                 mom = ncf.createVariable('InitialAtomicMagneticMoment',
@@ -2040,24 +2164,13 @@ s.recv(14)
             mom = nc.variables['InitialAtomicMagneticMoment'][:]
             atoms.set_initial_magnetic_moments(mom)
 
-        #save the status here, so it can be reset after the psp changes
-        if hasattr(nc,'status'):
-            status = nc.status
-        else:
-            status = None
-        #pseudopotentials
-        for sym in symbols:
-            vn = 'AtomProperty_%s' % sym
-            if vn in nc.variables:
-                var = nc.variables[vn]
-                #this will reset the calculator
-                pspfile = var.PspotFile
-                self.set_psp(sym,psp=pspfile)
+        #get constraints if they exist
+        c = nc.variables.get('constraints',None)
+        if c is not None:
+            constraints = pickle.loads(c.data)
+            atoms.set_constraint(constraints)
                     
         nc.close()
-
-        if status is not None:
-            self.set_status(status) # reset status
         
         return atoms
         
@@ -2128,10 +2241,10 @@ s.recv(14)
             try:
                 ncvar2[:] = ncvar[:]
             except TypeError:
-                #this exception seems to occur for character variables
-                #that only store their data as attributes
+                #this exception occurs for scalar variables
+                #use getValue and assignValue instead
                 if self.debug > 0: print 'EXCEPTION HAPPENED in delete_NCATTR'
-                pass
+                ncvar2.assignValue(ncvar.getValue())
 
             #and variable attributes
             #print dir(ncvar)
@@ -2628,12 +2741,10 @@ s.recv(14)
             
         nc = netCDF(self.get_nc(),'r')
         efp = np.transpose(nc.variables['EffectivePotential'][:][spin])
-        h1 = nc.dimensions['hardgrid_dim1']
-        h2 = nc.dimensions['hardgrid_dim2']
-        h3 = nc.dimensions['hardgrid_dim3']
         nc.close()
+        (softgrid,hardgrid) = self.get_fftgrid()
 
-        x,y,z = self.get_ucgrid((h1,h2,h3))
+        x,y,z = self.get_ucgrid(hardgrid)
         return (x,y,z,efp)
         
     def get_electrostatic_potential(self,spin=0):
@@ -2655,13 +2766,10 @@ s.recv(14)
             
         nc = netCDF(self.get_nc(),'r')
         esp = np.transpose(nc.variables['ElectrostaticPotential'][:][spin])
-        
-        h1 = nc.dimensions['hardgrid_dim1']
-        h2 = nc.dimensions['hardgrid_dim2']
-        h3 = nc.dimensions['hardgrid_dim3']
         nc.close()
+        (softgrid,hardgrid) = self.get_fftgrid()
 
-        x,y,z = self.get_ucgrid((h1,h2,h3))
+        x,y,z = self.get_ucgrid(hardgrid)
         
         return (x,y,z,esp)
     
@@ -2692,13 +2800,10 @@ s.recv(14)
         #it does give units of electrons/ang**3
         vol = self.get_atoms().get_volume()
         cd /= vol
-        
-        h1 = nc.dimensions['hardgrid_dim1']
-        h2 = nc.dimensions['hardgrid_dim2']
-        h3 = nc.dimensions['hardgrid_dim3']
         nc.close()
+        (softgrid,hardgrid) = self.get_fftgrid()
 
-        x,y,z = self.get_ucgrid((h1,h2,h3))
+        x,y,z = self.get_ucgrid(hardgrid)
         return x,y,z,cd
 
     def get_ucgrid(self,dims):
@@ -2734,54 +2839,54 @@ s.recv(14)
         RZ = np.reshape(real[:,2],(n0,n1,n2))
         return (RX, RY, RZ)
 
-    ###Wannier function code, uses legacyASE2
     def get_number_of_grid_points(self):
-        #this is clunky. I think it should be the fft grid shape
-        return np.array(self.get_pseudo_wave_function(0, 0, 0).shape)
+        # needed by ase.dft.wannier
+        (softgrid,hardgrid) = self.get_fftgrid()
+        return np.array(softgrid)
     
-    def get_pseudo_wave_function(self,
-                                 band=0,
-                                 kpt=0,
-                                 spin=0,
-                                 pad=True):
-        '''
-        ase requires the get_pseudo-wave_function method for wannier
-        analysis. I am not sure how this is different than get_wf
-        '''
-        
-        if self.calculation_required():
-            self.calculate()
-
-        from legacyASE2 import get_pseudo_wave_function
-        pwf = get_pseudo_wave_function(self.nc,band,kpt,spin,pad)
-        return pwf
-
     def get_wannier_localization_matrix(self, nbands, dirG, kpoint,
                                         nextkpoint, G_I, spin):
-        
+
         if self.calculation_required():
             self.calculate()
 
-        from legacyASE2 import get_wannier_localization_matrix
-        locmat = get_wannier_localization_matrix(self.nc,nbands, dirG, kpoint,
-                                        nextkpoint, G_I, spin)
+        if not hasattr(self,'wannier'):
+            from utils.wannier import Wannier
+            self.wannier = Wannier(self)
+            self.wannier.set_bands(nbands)
+            self.wannier.set_spin(spin)
+        locmat = self.wannier.get_zi_bloch_matrix(dirG,kpoint,nextkpoint,G_I)
         return locmat
 
-    def initial_wannier(self, initialwannier, kpointgrid, fixedstates,
-                        edf, spin):
-        
+    def initial_wannier(self,
+                        initialwannier,
+                        kpointgrid,
+                        fixedstates,
+                        edf,
+                        spin):
+
         if self.calculation_required():
             self.calculate()
-            
-        from legacyASE2 import initial_wannier
 
-        c,U = initial_wannier(self.nc,
-                              initialwannier,
-                              kpointgrid,
-                              fixedstates,
-                              edf,
-                              spin)
-        return c,U
+        if not hasattr(self,'wannier'):
+            from utils.wannier import Wannier
+            self.wannier = Wannier(self)
+
+        self.wannier.set_data(initialwannier)
+        self.wannier.set_k_point_grid(kpointgrid)
+        self.wannier.set_spin(spin)
+
+        waves = [[self.get_reciprocal_bloch_function(band=band,kpt=kpt,spin=spin)
+                  for band in range(self.get_nbands())]
+                  for kpt in range(len(self.get_ibz_k_points()))]
+
+        self.wannier.setup_m_matrix(waves,self.get_bz_k_points())
+        c, U = self.wannier.get_list_of_coefficients_and_rotation_matrices((self.get_nbands(), fixedstates, edf))
+
+        U = np.array(U)
+        for k in range(len(c)):
+            c[k] = np.array(c[k])
+        return c, U
 
     def get_dipole_moment(self):
         '''
@@ -2812,115 +2917,92 @@ s.recv(14)
         
         raise NotImplementedError
     
-        
-    def get_wave_function(self,
-               band=0,
-               kpt=0,
-               spin=0):
-        '''
-        return the wavefunction'''
+    def get_reciprocal_bloch_function(self,band=0,kpt=0,spin=0):
+        '''return the reciprocal bloch function. Need for Jacapo Wannier class.'''
         if self.calculation_required():
             self.calculate()
 
-        ### leftover ASE2 code!!!
-        # this is very complicated code I haven't figured out yet
-        from legacyASE2 import get_wf
-        wf = np.asarray(get_wf(self.nc,band,kpt,spin))
+        nc = netCDF(self.get_nc(),'r')
 
-        nc = netCDF(self.nc,'r')
+        # read reciprocal bloch function
+        npw = nc.variables['NumberPlaneWavesKpoint'][:]
+        bf = nc.variables['WaveFunction'][kpt,spin,band]
+        wflist = np.zeros(npw[kpt],np.complex)
+        wflist.real = bf[0:npw[kpt],1]
+        wflist.imag = bf[0:npw[kpt],0]
 
-        n1 = nc.dimensions['softgrid_dim1']
-        n2 = nc.dimensions['softgrid_dim2']
-        n3 = nc.dimensions['softgrid_dim3']
+        nc.close()
 
-        x,y,z = self.get_ucgrid((n1,n2,n3))
-        return x,y,z,wf
+        return wflist
 
-###########################################################################
-#### do not delete - I started writing this, but have not finished it #####
-###########################################################################
-##    def get_wf(self,
-##               band=0,
-##               kpt=0,
-##               spin=0):
-##        '''
-##        return the data for a wave function of a single eigenstate
+    def get_reciprocal_fft_index(self,kpt=0):
+        '''return the Wave Function FFT Index'''
+        nc = netCDF(self.get_nc(),'r')
+        recind = nc.variables['WaveFunctionFFTindex'][kpt,:,:]
+        nc.close()
+        return recind
 
-##        kpt is the index of the IBZkpoints
-##        spin is 0 or 1
+    def get_pseudo_wave_function(self,band=0,kpt=0,spin=0,pad=True):
 
-##        the old Dacapo pseudocode is:
+        '''return the pseudo wavefunction'''
+        # pad=True does nothing here.
+        if self.calculation_required():
+            self.calculate()
 
-##        wf = Dacapo.WaveFunction(calc)
-##          read unit cell
-##          get kpoint coordinates from ibzkpoints
-##        wf.ReadFromNetCDFFile()
-##          read number of planewaves
-##          ReadBlochFunction
-##            read ReciprocalBlochFunction
-##              get ncWaveFunction
-##              separate real and imaginary parts in wflist
-##              get softgrid dimensions
-##              get ncWaveFunctionFFTindex
-##            getReciprocalBlochFunctionGrid
-##            SetGridValues(FFT(reciprocalgrid))
-              
-##          get reciprocalblochfunctiongrid
-##        wf.set(band,kpt,spin)
-##        wf.GetReciprocalBlochFunction()
-##        '''
-##        self.calculate()
-##        nc = netCDF(self.get_nc(),'r')
+        ibz = self.get_ibz_kpoints()
 
-##        ibz = self.get_ibzkpoints()
+        #get the reciprocal bloch function
+        wflist = self.get_reciprocal_bloch_function(band=band,kpt=kpt,spin=spin)
+        # wflist == Reciprocal Bloch Function
+ 
+        recind = self. get_reciprocal_fft_index(kpt)
+        (softgrid,hardgrid) = self.get_fftgrid() 
 
-##        #read bloch function
-##        #first read reciprocal bloch function
-##        rbf = nc.variables['WaveFunction'][:][kpt,spin,band]
-##        npw = nc.variables['NumberPlaneWavesKpoint'][:]
+        # GetReciprocalBlochFunctionGrid
+        wfrec = np.zeros((softgrid),np.complex) 
+
+        for i in xrange(len(wflist)):
+            wfrec[recind[0,i]-1,
+                  recind[1,i]-1,
+                  recind[2,i]-1] = wflist[i]
+
+        # calculate Bloch Function
+        wf = wfrec.copy() 
+        dim=wf.shape
+        for i in range(len(dim)):
+            wf=np.fft.fft(wf,dim[i],axis=i)
+
+        #now the phase function to get the bloch phase
+        basis = self.get_atoms().get_cell()
+        kpoint = np.dot(ibz[kpt],basis) #coordinates of relevant kpoint in cartesian coordinates
+        def phasefunction(coor):
+            pf = np.exp(1.0j*np.dot(kpoint,coor))
+            return pf
+
+        # Calculating the Bloch phase at the origin (0,0,0) of the grid
+        origin = np.array([0.,0.,0.])
+        blochphase=phasefunction(origin)
+        spatialshape = wf.shape[-len(basis):]
+        gridunitvectors=np.array(map(lambda unitvector,shape:unitvector/shape,basis,spatialshape))
+
+        for dim in range(len(spatialshape)):
+            # Multiplying with the phase at the origin
+            deltaphase=phasefunction(gridunitvectors[dim])
+            # and calculating phase difference between each point
+            newphase=np.fromfunction(lambda i,phase=deltaphase:phase**i,(spatialshape[dim],))
+            blochphase=np.multiply.outer(blochphase,newphase)
+
+        return blochphase*wf
+
+    def get_wave_function(self,band=0,kpt=0,spin=0):
+        '''return the wave function. This is the pseudo wave function divided by volume.'''
         
-##        wflist = np.zeros(npw[kpt],np.complex)
-##        wflist.real = bf[0:npw[kpt],1]
-##        wflist.imag = bf[0:npw[kpt],0]
+        pwf = self.get_pseudo_wave_function(band=band,kpt=kpt,spin=spin,pad=True)
+        vol = self.get_atoms().get_volume()
+        (softgrid,hardgrid) = self.get_fftgrid()
+        x,y,z = self.get_ucgrid((softgrid))
 
-##        N1 = len(nc.dimensions['softgrid_dim1'])
-##        N2 = len(nc.dimensions['softgrid_dim2'])
-##        N3 = len(nc.dimensions['softgrid_dim3'])
-
-##        wfrec = np.zeros([N1,N2,N3],np.complex)
-
-##        recind = nc.variables['WaveFunctionFFTindex'][:][kpt,:,:]
-##        #ReadBlochFunction line 3
-##        #reciprocal = self.GetReciprocalBlochFunctionGrid()
-
-##        for i in range(len(wflist)):
-##            wfrec[recind[0,i]-1,
-##                  recind[1,i]-1,
-##                  recind[2,i]-1] = wflist[i]
-        
-##        #ReadBlochFunction line 4
-##        #self.SetGridValues(ArrayTools.FFT(reciprocal))
-##        #FFT is a Numeric function
-##        wf = np.fft(wfrec)
-
-##        #now the phase function to get the bloch phase
-##        kpoint = ibz[kpt] #coordinates of relevant kpoint
-##        def phasefunction(coor):
-##            pf = np.exp(1.0j*np.dot(coor,kpoint))
-##            return pf
-
-##        #i am lost here. it is complicate code in WaveFunction.py
-##        #I am pretty sure the origin is always (0,0,0)
-
-##        atoms = self.get_atoms()
-##        vol = atoms.get_volume()
-##        #eventually I want to return data that can be plotted
-##        #in vtk
-##        #return blochphase*blochfunction/sqrt(vol)
-        
-##        nc.close()
-
-
+        return x,y,z,pwf/np.sqrt(vol)
 
     def strip(self):
         '''remove all large memory nc variables not needed for

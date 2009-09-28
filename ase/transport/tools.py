@@ -1,30 +1,41 @@
-import numpy as npy
+import numpy as np
 from math import sqrt, exp
 
-def tri2full(M, UL='L'):
-    """UP='L' => fill upper triangle from lower triangle
-       such that M=M^d"""
-    nbf = len(M)
-    if UL == 'L':
-        for i in range(nbf - 1):
-            M[i, i:] = M[i:, i].conj()
-    elif UL == 'U':
-        for i in range(nbf - 1):
-            M[i:, i] = M[i, i:].conj()
+def tri2full(H_nn, UL='L'):
+    """Fill in values of hermitian matrix.
+
+    Fill values in lower or upper triangle of H_nn based on the opposite
+    triangle, such that the resulting matrix is symmetric/hermitian.
+
+    UL='U' will copy (conjugated) values from upper triangle into the
+    lower triangle.
+
+    UL='L' will copy (conjugated) values from lower triangle into the
+    upper triangle.
+    """
+    N, tmp = H_nn.shape
+    assert N == tmp, 'Matrix must be square'
+    #assert np.isreal(H_nn.diagonal()).all(), 'Diagonal should be real'
+    if UL != 'L':
+        H_nn = H_nn.T
+
+    for n in range(N - 1):
+        H_nn[n, n + 1:] = H_nn[n + 1:, n].conj()
 
 def dagger(matrix):
-    return npy.conj(matrix.T)
+    return np.conj(matrix.T)
 
 def rotate_matrix(h, u):
-    return npy.dot(u.T.conj(), npy.dot(h, u))
+    return np.dot(u.T.conj(), np.dot(h, u))
 
 def get_subspace(matrix, index):
     """Get the subspace spanned by the basis function listed in index"""
+    assert matrix.ndim == 2 and matrix.shape[0] == matrix.shape[1]
     return matrix.take(index, 0).take(index, 1)   
 
 permute_matrix = get_subspace
 
-def normalize_rot(matrix, S=None):
+def normalize(matrix, S=None):
     """Normalize column vectors.
 
     ::
@@ -34,23 +45,23 @@ def normalize_rot(matrix, S=None):
     """
     for col in matrix.T:
         if S is None:
-            col /= npy.linalg.norm(col)
+            col /= np.linalg.norm(col)
         else:
-            col /= npy.sqrt(npy.dot(col.conj(), npy.dot(S, col)))
+            col /= np.sqrt(np.dot(col.conj(), np.dot(S, col)))
 
 def subdiagonalize(h_ii, s_ii, index_j):
     nb = h_ii.shape[0]
     nb_sub = len(index_j)
     h_sub_jj = get_subspace(h_ii, index_j)
     s_sub_jj = get_subspace(s_ii, index_j)
-    e_j, v_jj = npy.linalg.eig(npy.linalg.solve(s_sub_jj, h_sub_jj))
-    normalize_rot(v_jj, s_sub_jj) # normalize: <v_j|s|v_j> = 1
-    permute_list = npy.argsort(e_j.real)
-    e_j = npy.take(e_j, permute_list)
-    v_jj = npy.take(v_jj, permute_list, axis=1)
+    e_j, v_jj = np.linalg.eig(np.linalg.solve(s_sub_jj, h_sub_jj))
+    normalize(v_jj, s_sub_jj) # normalize: <v_j|s|v_j> = 1
+    permute_list = np.argsort(e_j.real)
+    e_j = np.take(e_j, permute_list)
+    v_jj = np.take(v_jj, permute_list, axis=1)
     
     #setup transformation matrix
-    c_ii = npy.identity(nb, complex)
+    c_ii = np.identity(nb, complex)
     for i in xrange(nb_sub):
         for j in xrange(nb_sub):
             c_ii[index_j[i], index_j[j]] = v_jj[i, j]
@@ -72,7 +83,7 @@ def cutcoupling(h, s, index_n):
 
 def fermidistribution(energy, kt):
     #fermi level is fixed to zero
-    return 1.0 / (1.0 + npy.exp(energy / kt) )
+    return 1.0 / (1.0 + np.exp(energy / kt) )
 
 def fliplr(a):
     length=len(a)
@@ -83,7 +94,7 @@ def fliplr(a):
 
 def plot_path(energy):
     import pylab
-    pylab.plot(npy.real(energy), npy.imag(energy), 'b--o')
+    pylab.plot(np.real(energy), np.imag(energy), 'b--o')
     pylab.show()
     
 
@@ -152,8 +163,8 @@ def function_integral(function, calcutype):
 
     path_type = []
     for i in range(len(intrange) - 1):
-        rs = npy.abs(dZ[0][i] - origin)
-        re = npy.abs(dZ[1][i] - origin)
+        rs = np.abs(dZ[0][i] - origin)
+        re = np.abs(dZ[1][i] - origin)
         if abs(rs - radius) < 1.0e-8 and abs(re - radius) < 1.0e-8:
             path_type.append('half_circle')
         else:
@@ -162,15 +173,15 @@ def function_integral(function, calcutype):
     for i in range(len(dZ[1])):
         if path_type[i] == 'half_circle':
             dZ[0][i] = 0
-            dZ[1][i] = npy.pi
+            dZ[1][i] = np.pi
     for i in range(len(dZ[1])):
         dZ[1][i] = dZ[1][i] - dZ[0][i]
         hmin[i] = realmin / 1024 * abs(dZ[1][i])
 
 
-    temp = npy.array([[1] * 13, x0]).transpose()
+    temp = np.array([[1] * 13, x0]).transpose()
     
-    Zx = npy.dot(temp, npy.array(dZ))
+    Zx = np.dot(temp, np.array(dZ))
       
     Zxx = []
     for i in range(len(intrange) - 1):
@@ -182,8 +193,8 @@ def function_integral(function, calcutype):
     if path_type[0] == 'line':
         yns = function.calgfunc(Zxx[ns], calcutype)
     elif path_type[0] == 'half_circle':
-        energy = origin + radius * npy.exp((npy.pi - Zxx[ns + i]) * 1.j)
-        yns = -1.j * radius * npy.exp(-1.j* Zxx[ns +i])* function.calgfunc(energy, calcutype)        
+        energy = origin + radius * np.exp((np.pi - Zxx[ns + i]) * 1.j)
+        yns = -1.j * radius * np.exp(-1.j* Zxx[ns +i])* function.calgfunc(energy, calcutype)        
     fcnt = 0
     
 
@@ -196,15 +207,15 @@ def function_integral(function, calcutype):
             if path_type[n] == 'line':
                 yne = function.calgfunc(Zxx[ns + i], calcutype)
             elif path_type[n] == 'half_circle':
-                energy = origin + radius * npy.exp((npy.pi -Zxx[ns + i]) * 1.j)
-                yne = -1.j * radius * npy.exp(-1.j * Zxx[ns + i])* function.calgfunc(energy, calcutype)
+                energy = origin + radius * np.exp((np.pi -Zxx[ns + i]) * 1.j)
+                yne = -1.j * radius * np.exp(-1.j * Zxx[ns + i])* function.calgfunc(energy, calcutype)
             Q1pQ0 += yne * (w1[i] - w0[i])
             Q2pQ0 += yne * (w2[i] - w0[i])
 
         # Increase the tolerance if refinement appears to be effective
-        r = npy.abs(Q2pQ0) / npy.abs(Q1pQ0 + realmin)
-        dim = npy.product(r.shape)
-        r = npy.sum(r) / dim
+        r = np.abs(Q2pQ0) / np.abs(Q1pQ0 + realmin)
+        dim = np.product(r.shape)
+        r = np.sum(r) / dim
         if r > 0 and r < 1:
             thistol = tol / r
         else:
@@ -212,8 +223,8 @@ def function_integral(function, calcutype):
         if path_type[n] == 'line':
             yne = function.calgfunc(Zxx[ne], calcutype)
         elif path_type[n] == 'half_circle':
-            energy = origin + radius * npy.exp((npy.pi -Zxx[ne]) * 1.j)
-            yne = -1.j * radius * npy.exp(-1.j * Zxx[ne])* function.calgfunc(energy, calcutype)
+            energy = origin + radius * np.exp((np.pi -Zxx[ne]) * 1.j)
+            yne = -1.j * radius * np.exp(-1.j * Zxx[ne])* function.calgfunc(energy, calcutype)
         #Call the recursive core integrator
        
         Qk, xpk, wpk, fcnt, warn = quadlstep(function, Zxx[ns],
@@ -222,7 +233,7 @@ def function_integral(function, calcutype):
                                             hmin[n], calcutype, path_type[n],
                                             origin, radius)
         if n == 0:
-            Q = npy.copy(Qk)
+            Q = np.copy(Qk)
             Xp = xpk[:]
             Wp = wpk[:]
         else:
@@ -240,7 +251,7 @@ def function_integral(function, calcutype):
         
         ns += 13
         ne += 13
-        yns = npy.copy(yne)
+        yns = np.copy(yne)
       
     return Q,Xp,Wp,fcnt
 
@@ -271,8 +282,8 @@ def quadlstep(f, Za, Zb, fa, fb, tol, trace, fcnt, hmin, calcutype,
         if path_type == 'line':
             Xp = [Za, Zb]
         elif path_type == 'half_circle':
-            Xp = [origin + radius * npy.exp((npy.pi - Za) * 1.j),
-                                      origin + radius * npy.exp((npy.pi - Zb) * 1.j)]
+            Xp = [origin + radius * np.exp((np.pi - Za) * 1.j),
+                                      origin + radius * np.exp((np.pi - Zb) * 1.j)]
         Wp = [Zh, Zh]
         warn = 1
         return Q, Xp, Wp, fcnt, warn
@@ -283,8 +294,8 @@ def quadlstep(f, Za, Zb, fa, fb, tol, trace, fcnt, hmin, calcutype,
         if path_type == 'line':
             Xp = [Za, Zb]
         elif path_type == 'half_circle':
-            Xp = [origin + radius * npy.exp((npy.pi - Za) * 1.j),
-                                      origin + radius * npy.exp((npy.pi - Zb) * 1.j)]
+            Xp = [origin + radius * np.exp((np.pi - Za) * 1.j),
+                                      origin + radius * np.exp((np.pi - Zb) * 1.j)]
         Wp = [Zh, Zh]
         warn = 2
         return Q, Xp, Wp, fcnt, warn
@@ -298,7 +309,7 @@ def quadlstep(f, Za, Zb, fa, fb, tol, trace, fcnt, hmin, calcutype,
         if path_type == 'line':
             y[i] = f.calgfunc(Zx[i], calcutype)
         elif path_type == 'half_circle':
-            energy = origin + radius * npy.exp((npy.pi - Zx[i]) * 1.j)
+            energy = origin + radius * np.exp((np.pi - Zx[i]) * 1.j)
             y[i] = f.calgfunc(energy, calcutype)
     #Four point Lobatto quadrature
     s1 = [1.0, 0.0, 5.0, 0.0, 5.0, 0.0, 1.0]
@@ -313,22 +324,22 @@ def quadlstep(f, Za, Zb, fa, fb, tol, trace, fcnt, hmin, calcutype,
     elif path_type == 'half_circle':
         Xp = [Za] + Zx + [Zb] 
         for i in range(7):
-            factor = -1.j * radius * npy.exp(1.j * (npy.pi - Xp[i]))
+            factor = -1.j * radius * np.exp(1.j * (np.pi - Xp[i]))
             Wk[i] *= factor
             Wp[i] *= factor
-            Xp[i] = origin + radius * npy.exp((npy.pi - Xp[i]) * 1.j)
+            Xp[i] = origin + radius * np.exp((np.pi - Xp[i]) * 1.j)
     Qk = fa * Wk[0] + fb * Wk[6]
     Q = fa * Wp[0] + fb * Wp[6]
     for i in range(1, 6):
         Qk += y[i-1] * Wk[i]
         Q  += y[i-1] * Wp[i]
-    if npy.isinf(npy.max(npy.abs(Q))):
+    if np.isinf(np.max(np.abs(Q))):
         Q = Zh * (fa + fb)
         if path_type == 'line':
             Xp = [Za, Zb]
         elif path_type == 'half_circle':
-            Xp = [origin + radius * npy.exp((npy.pi - Za) * 1.j),
-                                      origin + radius * npy.exp((npy.pi - Zb) * 1.j)]
+            Xp = [origin + radius * np.exp((np.pi - Za) * 1.j),
+                                      origin + radius * np.exp((np.pi - Zb) * 1.j)]
         Wp = [Zh, Zh]
         warn = 3
         return Qk, Xp, Wp, fcnt, warn
@@ -340,7 +351,7 @@ def quadlstep(f, Za, Zb, fa, fb, tol, trace, fcnt, hmin, calcutype,
     XXk = [Xp[0], Xp[2], Xp[4], Xp[6]]
     WWk = [Wk[0], Wk[2], Wk[4], Wk[6]]
     YYk = [fa, y[1], y[3], fb]
-    if npy.max(npy.abs(Qk - Q)) <= tol:
+    if np.max(np.abs(Qk - Q)) <= tol:
         warn = 0
         return Q, XXk, WWk, fcnt, warn
     #Subdivide into six subintevals
@@ -378,7 +389,7 @@ def mytextread0(filename):
             dim = line.strip().split(' ')
             row = int(dim[0])
             col = int(dim[1])
-            mat = npy.empty([row, col])
+            mat = np.empty([row, col])
         else:
             data = line.strip().split(' ')
             if len(data) == 0 or len(data)== 1:
@@ -401,7 +412,7 @@ def mytextread1(filename):
         else:
             break
     dim = int(sqrt(len(data)))
-    mat = npy.empty([dim, dim])
+    mat = np.empty([dim, dim])
     for i in range(dim):
         for j in range(dim):
             mat[i, j] = data[num]

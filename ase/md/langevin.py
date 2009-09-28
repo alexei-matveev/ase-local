@@ -1,10 +1,17 @@
-import numpy as npy
-from numpy.random import standard_normal
-
-from ase.md import MolecularDynamics
-
 """Langevin dynamics class."""
 
+
+import sys
+import numpy as np
+from numpy.random import standard_normal
+from ase.md import MolecularDynamics
+
+# For parallel GPAW simulations, the random forces should be distributed.
+if '_gpaw' in sys.modules:
+    # http://wiki.fysik.dtu.dk/gpaw
+    from gpaw.mpi import world as gpaw_world
+else:
+    gpaw_world = None
 
 class Langevin(MolecularDynamics):
     """Langevin (constant N, V, T) molecular dynamics.
@@ -33,11 +40,14 @@ class Langevin(MolecularDynamics):
     This dynamics accesses the atoms using Cartesian coordinates."""
     
     def __init__(self, atoms, timestep, temperature, friction, fixcm=True,
-                 trajectory=None):
-        MolecularDynamics.__init__(self, atoms, timestep, trajectory)
+                 trajectory=None, logfile=None, loginterval=1,
+                 communicator=gpaw_world):
+        MolecularDynamics.__init__(self, atoms, timestep, trajectory,
+                                   logfile, loginterval)
         self.temp = temperature
         self.frict = friction
         self.fixcm = fixcm  # will the center of mass be held fixed?
+        self.communicator = communicator
         self.updatevars()
         
     def set_temperature(self, temperature):
@@ -58,12 +68,12 @@ class Langevin(MolecularDynamics):
         self._localfrict = hasattr(self.frict, 'shape')
         lt = self.frict * dt
         masses = self.masses
-        sdpos = dt * npy.sqrt(self.temp / masses * (2.0/3.0 - 0.5 * lt) * lt)
+        sdpos = dt * np.sqrt(self.temp / masses * (2.0/3.0 - 0.5 * lt) * lt)
         sdpos.shape = (-1, 1)
-        sdmom = npy.sqrt(self.temp * masses * 2.0 * (1.0 - lt) * lt)
+        sdmom = np.sqrt(self.temp * masses * 2.0 * (1.0 - lt) * lt)
         sdmom.shape = (-1, 1)
-        pmcor = npy.sqrt(3.0)/2.0 * (1.0 - 0.125 * lt)
-        cnst = npy.sqrt((1.0 - pmcor) * (1.0 + pmcor))
+        pmcor = np.sqrt(3.0)/2.0 * (1.0 - 0.125 * lt)
+        cnst = np.sqrt((1.0 - pmcor) * (1.0 + pmcor))
 
         act0 = 1.0 - lt + 0.5 * lt * lt
         act1 = (1.0 - 0.5 * lt + (1.0/6.0) * lt * lt)
@@ -98,17 +108,21 @@ class Langevin(MolecularDynamics):
 
         random1 = standard_normal(size=(len(atoms), 3))
         random2 = standard_normal(size=(len(atoms), 3))
+
+        if self.communicator is not None:
+            self.communicator.broadcast(random1, 0)
+            self.communicator.broadcast(random2, 0)
         
         rrnd = self.sdpos * random1
         prnd = (self.sdmom * self.pmcor * random1 +
                 self.sdmom * self.cnst * random2)
 
         if self.fixcm:
-            rrnd = rrnd - npy.sum(rrnd, 0) / len(atoms)
-            prnd = prnd - npy.sum(prnd, 0) / len(atoms)
+            rrnd = rrnd - np.sum(rrnd, 0) / len(atoms)
+            prnd = prnd - np.sum(prnd, 0) / len(atoms)
             n = len(atoms)
-            rrnd *= n / (n - 1.0)
-            prnd *= n / (n - 1.0)
+            rrnd *= np.sqrt(n / (n - 1.0))
+            prnd *= np.sqrt(n / (n - 1.0))
 
         atoms.set_positions(atoms.get_positions() +
                             self.c1 * p +

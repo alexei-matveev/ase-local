@@ -6,8 +6,9 @@ import pickle
 from math import sin, pi, sqrt
 from os import remove
 from os.path import isfile
+import sys
 
-import numpy as npy
+import numpy as np
 
 import ase.units as units
 from ase.io.trajectory import PickleTrajectory
@@ -77,7 +78,7 @@ class Vibrations:
 	self.atoms = atoms
         if indices is None:
             indices = range(len(atoms))
-        self.indices = npy.asarray(indices)
+        self.indices = np.asarray(indices)
         self.name = name
         self.delta = delta
         self.nfree = nfree
@@ -93,20 +94,24 @@ class Vibrations:
         produce an empty file (ending with .pckl), which must be deleted
         before restarting the job. Otherwise the forces will not be
         calculated for that displacement."""
-
-        if not isfile(self.name + '.eq.pckl'):
+        filename = self.name + '.eq.pckl'
+        if not isfile(filename):
             barrier()
             if rank == 0:
-                fd = open(self.name + '.eq.pckl', 'w')
+                fd = open(filename, 'w')
             forces = self.atoms.get_forces()
             if self.ir:
                 dipole = self.calc.get_dipole_moment(self.atoms)
             if rank == 0:
                 if self.ir:
                     pickle.dump([forces, dipole], fd)
+                    sys.stdout.write('Writing %s, dipole moment = (%.6f %.6f %.6f)\n' % 
+                                             (filename, dipole[0], dipole[1], dipole[2]))
                 else:
                     pickle.dump(forces, fd)
+                    sys.stdout.write('Writing %s\n' % filename)
                 fd.close()
+            sys.stdout.flush()
         
         p = self.atoms.positions.copy()
         for a in self.indices:
@@ -115,22 +120,26 @@ class Vibrations:
                     for ndis in range(1, self.nfree/2+1):
                         filename = '%s.%d%s%s.pckl' % (self.name, a,
                                                        'xyz'[i], ndis*' +-'[sign])
-                    if isfile(filename):
-                        continue
-                    barrier()
-                    if rank == 0:
-                        fd = open(filename, 'w')
-                    self.atoms.positions[a, i] = p[a, i] + ndis * sign * self.delta
-                    forces = self.atoms.get_forces()
-                    if self.ir:
-                        dipole = self.calc.get_dipole_moment(self.atoms)
-                    if rank == 0:
+                        if isfile(filename):
+                            continue
+                        barrier()
+                        if rank == 0:
+                            fd = open(filename, 'w')
+                        self.atoms.positions[a, i] = p[a, i] + ndis * sign * self.delta
+                        forces = self.atoms.get_forces()
                         if self.ir:
-                            pickle.dump([forces, dipole], fd)
-                        else:
-                            pickle.dump(forces, fd)
-                        fd.close()
-                    self.atoms.positions[a, i] = p[a, i]
+                            dipole = self.calc.get_dipole_moment(self.atoms)
+                        if rank == 0:
+                            if self.ir:
+                                pickle.dump([forces, dipole], fd)
+                                sys.stdout.write('Writing %s, dipole moment = (%.6f %.6f %.6f)\n' % 
+                                                 (filename, dipole[0], dipole[1], dipole[2]))
+                            else:
+                                pickle.dump(forces, fd)
+                                sys.stdout.write('Writing %s\n' % filename)
+                            fd.close()
+                        sys.stdout.flush()
+                        self.atoms.positions[a, i] = p[a, i]
         self.atoms.set_positions(p)
 
     def clean(self):
@@ -152,7 +161,7 @@ class Vibrations:
         assert self.direction in ['central', 'forward', 'backward']
         
         n = 3 * len(self.indices)
-        H = npy.empty((n, n))
+        H = np.empty((n, n))
         r = 0
         if direction != 'central':
             feq = pickle.load(open(self.name + '.eq.pckl'))
@@ -184,8 +193,8 @@ class Vibrations:
         H += H.copy().T
         self.H = H
         m = self.atoms.get_masses()
-        self.im = npy.repeat(m[self.indices]**-0.5, 3)
-        omega2, modes = npy.linalg.eigh(self.im[:, None] * H * self.im)
+        self.im = np.repeat(m[self.indices]**-0.5, 3)
+        omega2, modes = np.linalg.eigh(self.im[:, None] * H * self.im)
         self.modes = modes.T.copy()
 
         # Conversion factor:
@@ -225,7 +234,7 @@ class Vibrations:
         return 0.5 * self.hnu.real.sum()
 
     def get_mode(self, n):
-        mode = npy.zeros((len(self.atoms), 3))
+        mode = np.zeros((len(self.atoms), 3))
         mode[self.indices] = (self.modes[n] * self.im).reshape((-1, 3))
         return mode
 
@@ -237,7 +246,7 @@ class Vibrations:
         traj = PickleTrajectory('%s.%d.traj' % (self.name, n), 'w')
         calc = self.atoms.get_calculator()
         self.atoms.set_calculator()
-        for x in npy.linspace(0, 2 * pi, nimages, endpoint=False):
+        for x in np.linspace(0, 2 * pi, nimages, endpoint=False):
             self.atoms.set_positions(p + sin(x) * mode)
             traj.write(self.atoms)
         self.atoms.set_positions(p)

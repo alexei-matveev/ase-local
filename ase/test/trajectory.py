@@ -1,3 +1,4 @@
+import os
 from ase import *
 
 co = Atoms([Atom('C', (0, 0, 0)),
@@ -22,4 +23,13 @@ co.positions[:] += 1
 t.write(co)
 for a in t:
     print 2, a.positions[-1,2]
-assert len(t) == 8
+assert len(t) == 7
+
+# append to a nonexisting file
+fname = '2.traj'
+if os.path.isfile(fname):
+    os.remove(fname)
+t = PickleTrajectory(fname, 'a', co)
+del(t)
+os.remove(fname)
+

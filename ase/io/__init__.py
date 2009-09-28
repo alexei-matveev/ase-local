@@ -1,4 +1,5 @@
 import sys
+import os
 from os.path import basename
 from tarfile import is_tarfile
 from zipfile import is_zipfile
@@ -38,17 +39,24 @@ def read(filename, index=-1, format=None):
     XYZ-file                   xyz
     VASP POSCAR/CONTCAR file   vasp
     Protein Data Bank          pdb
+    FHI-aims geometry file     aims
+    VTK XML Image Data         vti
+    VTK XML Structured Grid    vts
+    VTK XML Unstructured Grid  vtu
     =========================  ===========
 
     """
     p = filename.rfind('@')
     if p != -1:
         try:
-            index = string2index(filename[p + 1:])
+            index = filename[p + 1:]
         except ValueError:
             pass
         else:
             filename = filename[:p]
+
+    if isinstance(index, str):
+        index = string2index(index)
 
     if format is None:
         format = filetype(filename)
@@ -126,6 +134,30 @@ def read(filename, index=-1, format=None):
         from ase.io.babel import read_babel
         return read_babel(filename, index=index)
 
+    if format == 'vti':
+        from ase.io.vtkxml import read_vti
+        return read_vti(filename)
+
+    if format == 'vts':
+        from ase.io.vtkxml import read_vts
+        return read_vts(filename)
+
+    if format == 'vtu':
+        from ase.io.vtkxml import read_vtu
+        return read_vtu(filename)
+
+    if format == 'aims':
+        from ase.io.aims import read_aims
+        return read_aims(filename)
+
+    if format == 'iwm':
+        from ase.io.iwm import read_iwm
+        return read_iwm(filename)
+
+    if format == 'Cmdft':
+        from ase.io.cmdft import read_I_info
+        return read_I_info(filename)
+
     raise RuntimeError('That can *not* happen!')
 
 
@@ -151,12 +183,16 @@ def write(filename, images, format=None, **kwargs):
     XYZ-file                   xyz
     VASP POSCAR/CONTCAR file   vasp
     Protein Data Bank          pdb
-    XCrySDen Structure File    xsf  
+    XCrySDen Structure File    xsf
+    FHI-aims geometry file     aims
     gOpenMol .plt file         plt  
     Python script              py
     Encapsulated Postscript    eps
     Portable Network Graphics  png
     Persistance of Vision      pov
+    VTK XML Image Data         vti
+    VTK XML Structured Grid    vts
+    VTK XML Unstructured Grid  vtu
     =========================  ===========
   
     The use of additional keywords is format specific.
@@ -170,7 +206,15 @@ def write(filename, images, format=None, **kwargs):
   
       rotation='', show_unit_cell=0, radii=None, bbox=None, colors=None,
       scale=20
-  
+
+    The ``vti``, ``vts`` and ``vtu`` formats are all specifically directed
+    for use with MayaVi, and the latter is designated for visualization of
+    the atoms whereas the two others are intended for volume data. Further,
+    it should be noted that the ``vti`` format is intended for orthogonal
+    unit cells as only the grid-spacing is stored, whereas the ``vts`` format
+    additionally stores the coordinates of each grid point, thus making it
+    useful for volume date in more general unit cells.
+
     rotation: str
       The rotation angles, e.g. '45x,70y,90z'.
     show_unit_cell: int
@@ -186,21 +230,24 @@ def write(filename, images, format=None, **kwargs):
     scale: int
       Number of pixels per Angstrom.
       
-    The ``pov`` accepts the additional keywords:
-    
-    XXX
-  
-    For ``pov`` the elements of the color array can also be strings, or 4,
-    and 5 vectors.
-  
-    XXX
+    The ``pov`` format accepts the additional keywords:
 
+    ``run_povray``, ``display``, ``pause``, ``transparent``,
+    ``canvas_width``, ``canvas_height``, ``camera_dist``,
+    ``image_plane``, ``camera_type``, ``point_lights``,
+    ``area_light``, ``background``, ``textures``, ``celllinewidth``
+
+    For ``pov`` the elements of the color array can also be strings, or 4,
+    and 5 vectors for named colors, rgb + filter, and rgb + filter + transmit
+    specification.
     """
     
     if format is None:
         if filename == '-':
             format = 'xyz'
             filename = sys.stdout
+        elif 'POSCAR' in filename or 'CONTCAR' in filename:
+            format = 'vasp'
         else:
             suffix = filename.split('.')[-1]
             format = {}.get(suffix, suffix)
@@ -209,9 +256,18 @@ def write(filename, images, format=None, **kwargs):
         from ase.io.xyz import write_xyz
         write_xyz(filename, images)
         return
+    elif format == 'in':
+        format = 'aims'
 
     format = {'traj': 'trajectory', 'nc': 'netcdf'}.get(format, format)
     name = 'write_' + format
+
+    if format in ['vti', 'vts', 'vtu']:
+        format = 'vtkxml'
+
+    if format is None:
+        format = filetype(filename)
+
     try:
         write = getattr(__import__('ase.io.%s' % format, {}, {}, [name]), name)
     except ImportError:
@@ -260,6 +316,18 @@ def filetype(filename):
             return 'dacapo'
         raise IOError('Unknown netCDF file!')
 
+    if s3 == '<?x':
+        from ase.io.vtkxml import probe_vtkxml
+        xmltype = probe_vtkxml(filename)
+        if xmltype == 'ImageData':
+            return 'vti'
+        elif xmltype == 'StructuredGrid':
+            return 'vts'
+        elif xmltype == 'UnstructuredGrid':
+            return 'vtu'
+        elif xmltype is not None:
+            raise IOError('Unknown VTK XML file!')
+
     if is_zipfile(filename):
         return 'vnl'
 
@@ -295,5 +363,14 @@ def filetype(filename):
 
     if filename.lower().endswith('.cif'):
         return 'cif'
+
+    if filename.lower().endswith('.in'):
+        return 'aims'
+
+    if os.path.split(filename)[1] == 'atoms.dat':
+        return 'iwm'
+
+    if filename.endswith('I_info'):
+        return 'Cmdft'
 
     return 'xyz'

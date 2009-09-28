@@ -1,7 +1,5 @@
 from math import pi, cos, sin, sqrt, acos
 
-import numpy as npy
-
 from ase.atoms import Atoms
 from ase.parallel import paropen
 
@@ -18,7 +16,7 @@ def read_xyz(fileobj, index=-1):
     else:
         natoms = len(lines)
     images = []
-    while len(lines) > 0:
+    while len(lines) >= natoms:
         positions = []
         symbols = []
         for line in lines[:natoms]:

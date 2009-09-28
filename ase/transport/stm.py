@@ -72,21 +72,20 @@ class STM:
         #coupling betwen per. and non. per part of the surface
         h2_im = np.zeros((pl2, nbf2), complex)
         s2_im = np.zeros((pl2, nbf2), complex) 
-        h2_im[-pl2:, -pl2:], s1_im[-pl2:, -pl2:] = hs2_dij
+        h2_im[-pl2:, -pl2:], s2_im[-pl2:, -pl2:] = hs2_dij
         hs2_dim = [h2_im, s2_im]
 
         #tip and surface greenfunction 
         self.selfenergy1 = LeadSelfEnergy(hs1_dii, hs1_dij, hs1_dim, self.eta1)
         self.selfenergy2 = LeadSelfEnergy(hs2_dii, hs2_dij, hs2_dim, self.eta2)
-
-        self.greenfunction1 = GreenFunction(self.h1, self.s1, 
+        self.greenfunction1 = GreenFunction(self.h1-self.bias*self.w*self.s1, self.s1, 
                                             [self.selfenergy1], self.eta1)
-        self.greenfunction2 = GreenFunction(self.h2, self.s2, 
+        self.greenfunction2 = GreenFunction(self.h2-self.bias*(self.w-1)*self.s2, self.s2, 
                                             [self.selfenergy2], self.eta2)
         
         #Shift the bands due to the bias.
-        bias_shift1 = bias * self.w
-        bias_shift2 = bias * (self.w - 1)
+        bias_shift1 = -bias * self.w
+        bias_shift2 = -bias * (self.w - 1)
         self.selfenergy1.set_bias(bias_shift1)
         self.selfenergy2.set_bias(bias_shift2)
         
@@ -99,10 +98,10 @@ class STM:
         self.gft2_emm = np.zeros((nenergies, nbf2_small, nbf2_small), complex)
  
         for e, energy in enumerate(self.energies):
-            gft1_mm = self.greenfunction1(energy)[coupling_list1]
+            gft1_mm = self.greenfunction1.retarded(energy)[coupling_list1]
             gft1_mm = np.take(gft1_mm, coupling_list1, axis=1)
 
-            gft2_mm = self.greenfunction2(energy)[coupling_list2]
+            gft2_mm = self.greenfunction2.retarded(energy)[coupling_list2]
             gft2_mm = np.take(gft2_mm, coupling_list2, axis=1)
  
             self.gft1_emm[e] = gft1_mm
@@ -120,7 +119,10 @@ class STM:
             corretion to "on-site" surface elements due to he
             tip (eq.17). Is only included to first order.
         """
-        
+
+        dim0 = v_12.shape[0]
+        dim1 = v_12.shape[1]
+
         nenergies = len(self.energies)
         T_e = np.empty(nenergies,float)
         v_21 = dagger(v_12)
@@ -141,12 +143,19 @@ class STM:
             
             a1 = (gf1 - dagger(gf1))
             a2 = (gf2 - dagger(gf2))
-            v12_a2 = np.dot(v_12, a2)
-            v21_a1 = np.dot(v_21, a1)
-            T = -np.trace(np.dot(v12_a2, v21_a1)) #eq. 11
+            self.v_12 = v_12
+            self.a2 = a2
+            self.v_21 = v_21
+            self.a1 = a1
+            v12_a2 = np.dot(v_12, a2[:dim1])
+            v21_a1 = np.dot(v_21, a1[-dim0:])
+            self.v12_a2 = v12_a2
+            self.v21_a1 = v21_a1
+            T = -np.trace(np.dot(v12_a2[:,:dim1], v21_a1[:,-dim0:])) #eq. 11
             T_e[e] = T
             self.T_e = T_e
         return T_e
+
 
     def get_current(self, bias, v_12, v_11_2=None, v_22_1=None):
         """Very simple function to calculate the current.
@@ -168,14 +177,22 @@ class STM:
         """
         energies = self.energies
         T_e = self.get_transmission(v_12, v_11_2, v_22_1)
-        bias_window = np.array([bias * self.w, bias * (self.w - 1)])
-        print 'bias window', np.around(bias_window,3)
-        print 'Shift of tip lead do to the bias:', self.selfenergy1.bias
-        print 'Shift of surface lead do to the bias:', self.selfenergy2.bias
+        bias_window = -np.array([bias * self.w, bias * (self.w - 1)])
+        bias_window.sort()
+        self.bias_window = bias_window
+        #print 'bias window', np.around(bias_window,3)
+        #print 'Shift of tip lead do to the bias:', self.selfenergy1.bias
+        #print 'Shift of surface lead do to the bias:', self.selfenergy2.bias
         i1 = sum(energies < bias_window[0]) 
         i2 = sum(energies < bias_window[1])
         step = 1 
         if i2 < i1:
             step = -1
         
-        return -np.trapz(x=energies[i1:i2:step], y=T_e[i1:i2:step])
+        return np.sign(bias)*np.trapz(x=energies[i1:i2:step], y=T_e[i1:i2:step])
+
+
+
+
+
+

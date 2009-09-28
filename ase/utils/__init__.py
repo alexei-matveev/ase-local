@@ -1,6 +1,6 @@
 from math import sin, cos, radians, atan2, degrees
 
-import numpy as npy
+import numpy as np
 
 
 class DevNull:
@@ -12,7 +12,7 @@ class DevNull:
 devnull = DevNull()
 
 
-def rotate(rotations, rotation=npy.diag([1.0, -1, 1])):
+def rotate(rotations, rotation=np.diag([1.0, -1, 1])):
     """Convert string of format '50x,-10y,120z' to a rotation matrix.
 
     Note that the order of rotation matters, i.e. '50x,40z' is different
@@ -26,15 +26,15 @@ def rotate(rotations, rotation=npy.diag([1.0, -1, 1])):
         s = sin(a)
         c = cos(a)
         if i == 0:
-            rotation = npy.dot(rotation, [( 1,  0,  0),
+            rotation = np.dot(rotation, [( 1,  0,  0),
                                           ( 0,  c, -s),
                                           ( 0,  s,  c)])
         elif i == 1:
-            rotation = npy.dot(rotation, [( c,  0, -s),
+            rotation = np.dot(rotation, [( c,  0, -s),
                                           ( 0,  1,  0),
                                           ( s,  0,  c)])
         else:
-            rotation = npy.dot(rotation, [( c, -s,  0),
+            rotation = np.dot(rotation, [( c, -s,  0),
                                           ( s,  c,  0),
                                           ( 0,  0,  1)])
     return rotation
@@ -67,9 +67,9 @@ def givens(a, b):
     return c, s, r
 
 
-def irotate(rotation, initial=npy.diag([1.0, -1, 1])):
+def irotate(rotation, initial=np.diag([1.0, -1, 1])):
     """Determine x, y, z rotation angles from rotation matrix."""
-    a = npy.dot(initial, rotation)
+    a = np.dot(initial, rotation)
     cx, sx, rx = givens(a[2, 2], a[1, 2])
     cy, sy, ry = givens(rx, a[0, 2])
     cz, sz, rz = givens(cx * a[1, 1] - sx * a[2, 1],
@@ -78,3 +78,53 @@ def irotate(rotation, initial=npy.diag([1.0, -1, 1])):
     y = degrees(atan2(-sy, cy))
     z = degrees(atan2(-sz, cz))
     return x, y, z
+
+
+def hsv2rgb(h, s, v):
+    """http://en.wikipedia.org/wiki/HSL_and_HSV
+
+    h (hue) in [0, 360[
+    s (saturation) in [0, 1]
+    v (value) in [0, 1]
+
+    return rgb in range [0, 1]
+    """
+    if v == 0:
+        return 0, 0, 0
+    if s == 0:
+        return v, v, v
+
+    i, f = divmod(h / 60., 1)
+    p = v * (1 - s)
+    q = v * (1 - s * f)
+    t = v * (1 - s * (1 - f))
+
+    if i == 0:
+        return v, t, p
+    elif i == 1:
+        return q, v, p
+    elif i == 2:
+        return p, v, t
+    elif i == 3:
+        return p, q, v
+    elif i == 4:
+        return t, p, v
+    elif i == 5:
+        return v, p, q
+    else:
+        raise RuntimeError, 'h must be in [0, 360]'
+
+
+def hsv(array, s=.9, v=.9):
+    array = (array + array.min()) * 359. / (array.max() - array.min())
+    result = np.empty((len(array.flat), 3))
+    for rgb, h in zip(result, array.flat):
+        rgb[:] = hsv2rgb(h, s, v)
+    return np.reshape(result, array.shape + (3,))
+
+## This code does the same, but requires pylab
+## def cmap(array, name='hsv'):
+##     import pylab
+##     a = (array + array.min()) / array.ptp()
+##     rgba = getattr(pylab.cm, name)(a)
+##     return rgba[:-1] # return rgb only (not alpha) 
