@@ -2,10 +2,9 @@
 
 import sys
 import pickle
+import time
 from math import sqrt
 from os.path import isfile
-
-import numpy as npy
 
 from ase.parallel import rank, barrier
 from ase.io.trajectory import PickleTrajectory
@@ -48,6 +47,13 @@ class Dynamics:
 
     def get_number_of_steps(self):
         return self.nsteps
+
+    def insert_observer(self, function, position=0, interval=1, 
+                        *args, **kwargs):
+        """Insert an observer."""
+        if not callable(function):
+            function = function.write
+        self.observers.insert(position, (function, interval, args, kwargs))
 
     def attach(self, function, interval=1, *args, **kwargs):
         """Attach callback function.
@@ -100,16 +106,15 @@ class Optimizer(Dynamics):
 
         self.fmax = fmax
         step = 0
-        f = self.atoms.get_forces()
         while step < steps:
+            f = self.atoms.get_forces()
             self.log(f)
+            self.call_observers()
             if self.converged(f):
                 return
             self.step(f)
             self.nsteps += 1
             step += 1
-            f = self.atoms.get_forces()
-            self.call_observers()
 
     def converged(self, forces=None):
         """Did the optimization converge?"""
@@ -120,10 +125,11 @@ class Optimizer(Dynamics):
     def log(self, forces):
         fmax = sqrt((forces**2).sum(axis=1).max())
         e = self.atoms.get_potential_energy()
+        T = time.localtime()
         if self.logfile is not None:
             name = self.__class__.__name__
-            self.logfile.write('%s: %3d %15.6f %12.4f\n' %
-                               (name, self.nsteps, e, fmax))
+            self.logfile.write('%s: %3d  %02d:%02d:%02d %15.6f %12.4f\n' %
+                               (name, self.nsteps, T[3], T[4], T[5], e, fmax))
             self.logfile.flush()
         
     def dump(self, data):

@@ -1,7 +1,3 @@
-"""An experimental package for making plots during a simulation.
-
-A VTKPlotter can plot a list of atoms and most types of volume data.
-"""
 
 import numpy as np
 
@@ -13,9 +9,34 @@ from ase.visualize.vtk.cell import vtkUnitCellModule, vtkAxesModule
 from ase.visualize.vtk.grid import vtkAtomicPositions
 from ase.visualize.vtk.module import vtkModuleAnchor, vtkGlyphModule
 
-class vtkAtoms(vtkModuleAnchor, vtkAtomicPositions):
-    def __init__(self, atoms, scale=1):
+# -------------------------------------------------------------------
 
+class vtkAtoms(vtkModuleAnchor, vtkAtomicPositions):
+    """Provides fundamental representation for ``Atoms``-specific data in VTK.
+
+    The ``vtkAtoms`` class plots atoms during simulations, extracting the
+    relevant information from the list of atoms. It is created using
+    the list of atoms as an argument to the constructor. Then one or more
+    visualization modules can be attached using add_module(name, module).
+
+    Example:
+
+    >>> va = vtkAtoms(atoms)
+    >>> va.add_forces()
+    >>> va.add_axes()
+    >>> XXX va.add_to_renderer(vtk_ren)
+
+    """
+    def __init__(self, atoms, scale=1):
+        """Construct a fundamental VTK-representation of atoms.
+
+        atoms: Atoms object or list of Atoms objects
+            The atoms to be plotted.
+
+        scale = 1: float or int
+            Relative scaling of all Atoms-specific visualization.
+
+        """
         assert isinstance(atoms, Atoms)
         self.atoms = atoms
 
@@ -35,7 +56,7 @@ class vtkAtoms(vtkModuleAnchor, vtkAtomicPositions):
             if mask.all():
                 subset = None
             else:
-                subset = np.argwhere(mask)
+                subset = np.argwhere(mask).ravel()
 
             # Get relevant VTK unstructured grid
             vtk_ugd = self.get_unstructured_grid(subset)
@@ -52,26 +73,26 @@ class vtkAtoms(vtkModuleAnchor, vtkAtomicPositions):
     def has_velocities(self):
         return self.velocity is not None
 
-    """
-    def get_glyph_source(self, symbol):
-        return self.glyph_sources[symbol]
-
-    def get_point_collection(self, symbol):
-        return self.point_collections[symbol]
-    """
-
     def add_cell(self):
+        """Add a box outline of the cell using atoms.get_cell(). The existing
+        ``vtkUnitCellModule`` is added to the module anchor under ``cell``."""
         self.add_module('cell', self.cell)
 
     def add_axes(self):
+        """Add an orientation indicator for the cartesian axes. An appropriate
+        ``vtkAxesModule`` is added to the module anchor under ``axes``."""
         self.add_module('axes', vtkAxesModule(self.cell))
 
     def add_forces(self):
+        """Add force vectors for the atoms using atoms.get_forces(). A
+        ``vtkGlyphModule`` is added to the module anchor under ``force``."""
         if self.has_forces():
             raise RuntimeError('Forces already present.')
+        elif self.has_velocities():
+            raise NotImplementedError('Can\'t add forces due to velocities.')
 
         # Add forces to VTK unstructured grid as vector data
-        vtk_fda = self.add_vector_data(self.atoms.get_forces(), 'force')
+        vtk_fda = self.add_vector_property(self.atoms.get_forces(), 'force')
 
         # Calculate max norm of the forces
         fmax = vtk_fda.GetMaxNorm()
@@ -84,11 +105,15 @@ class vtkAtoms(vtkModuleAnchor, vtkAtomicPositions):
         self.add_module('force', self.force)
 
     def add_velocities(self):
+        """Add velocity vectors for the atoms using atoms.get_velocities(). A
+        ``vtkGlyphModule`` is added to the module anchor under ``velocity``."""
         if self.has_velocities():
             raise RuntimeError('Velocities already present.')
+        elif self.has_forces():
+            raise NotImplementedError('Can\'t add velocities due to forces.')
 
         # Add velocities to VTK unstructured grid as vector data
-        vtk_vda = self.add_vector_data(self.atoms.get_velocities(), 'velocity')
+        vtk_vda = self.add_vector_property(self.atoms.get_velocities(), 'velocity')
 
         # Calculate max norm of the velocities
         vmax = vtk_vda.GetMaxNorm()
@@ -98,5 +123,5 @@ class vtkAtoms(vtkModuleAnchor, vtkAtomicPositions):
 
         self.velocity = vtkGlyphModule(vtk_ugd, vtkVelocitySource(vmax, self.scale),
                                        scalemode='vector', colormode=None)
-        self.add_module('velocity', self.velocity) #TODO XXX active vector clash!
+        self.add_module('velocity', self.velocity)
 

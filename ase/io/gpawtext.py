@@ -1,5 +1,3 @@
-import numpy as npy
-
 from ase.atoms import Atom, Atoms
 from ase.calculators import SinglePointCalculator
 
@@ -13,11 +11,19 @@ def read_gpaw_text(fileobj, index=-1):
     while True:
         try:
             i = lines.index('Unit Cell:\n')
-            cell = [float(line.split()[2]) for line in lines[i + 3:i + 6]]
-            pbc = [line.split()[1] == 'yes' for line in lines[i + 3:i + 6]]
         except ValueError:
             pass
-
+        else:
+            cell = []
+            pbc = []
+            for line in lines[i + 3:i + 6]:
+                words = line.split()
+                if len(words) == 5:
+                    cell.append(float(words[2]))
+                else:
+                    cell.append([float(word) for word in words[3:6]])
+                pbc.append(words[1] == 'yes')
+            
         try:
             i = lines.index('Positions:\n')
         except ValueError:
@@ -47,8 +53,11 @@ def read_gpaw_text(fileobj, index=-1):
         else:
             f = []
             for i in range(ii + 1, ii + 1 + len(atoms)):
-                x, y, z = lines[i].split()[-3:]
-                f.append((float(x), float(y), float(z)))
+                try:
+                    x, y, z = lines[i].split()[-3:]
+                    f.append((float(x), float(y), float(z)))
+                except (ValueError, IndexError), m:
+                    raise IOError('Malformed GPAW log file: %s' % m)
 
         if len(images) > 0 and e is None:
             break

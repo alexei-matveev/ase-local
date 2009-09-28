@@ -4,6 +4,19 @@ from numpy.ctypeslib import ctypes
 
 from vtk import vtkDataArray, vtkFloatArray, vtkDoubleArray
 
+if ctypes is None:
+    class CTypesEmulator:
+        def __init__(self):
+            self._SimpleCData = np.number
+            self.c_float = np.float32
+            self.c_double = np.float64
+    try:
+        import ctypes
+    except ImportError:
+        ctypes = CTypesEmulator()
+
+# -------------------------------------------------------------------
+
 class vtkNumPyBuffer:
     def __init__(self, data):
         self.strbuf = data.tostring()
@@ -33,7 +46,7 @@ class vtkDataArrayFromNumPyBuffer:
 
         self.vtk_da = vtk_class()
         assert isinstance(self.vtk_da, vtkDataArray)
-        assert self.vtk_da.GetDataTypeSize() == np.nbytes[self.ctype]
+        assert self.vtk_da.GetDataTypeSize() == np.nbytes[np.dtype(self.ctype)]
 
         if data is not None:
             self.read_numpy_array(data)
@@ -100,7 +113,7 @@ class vtkDataArrayFromNumPyArray(vtkDataArrayFromNumPyBuffer):
         if data.ndim == 1:
             data = data[:, np.newaxis]
         elif data.ndim != 2:
-            raise ValueError('Data must be a 2D NumPy array.')
+            raise ValueError('Data must be a 1D or 2D NumPy array.')
 
         if self.buffered:
             vtkDataArrayFromNumPyBuffer.read_numpy_array(self, data)
@@ -111,7 +124,6 @@ class vtkDataArrayFromNumPyArray(vtkDataArrayFromNumPyBuffer):
             for i, d_c in enumerate(data):
                 for c, d in enumerate(d_c):
                     self.vtk_da.SetComponent(i, c, d)
-
 
 class vtkFloatArrayFromNumPyArray(vtkDataArrayFromNumPyArray):
     def __init__(self, data):
@@ -150,7 +162,7 @@ class vtkDataArrayFromNumPyMultiArray(vtkDataArrayFromNumPyBuffer):
             data = data.astype(self.ctype)
 
         if data.ndim <=2:
-            raise Warning('Method is inefficient for 1D/2D NumPy arrays. ' +
+            raise Warning('This is inefficient for 1D and 2D NumPy arrays. ' +
                           'Use a vtkDataArrayFromNumPyArray subclass instead.')
 
         if self.buffered:

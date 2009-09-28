@@ -133,8 +133,9 @@ class NPT(MolecularDynamics):
     classname = "NPT"  # Used by the trajectory.
     def __init__(self, atoms, 
                  timestep, temperature, externalstress, ttime, pfactor,
-                 mask=None, trajectory=None):
-        MolecularDynamics.__init__(self, atoms, timestep, trajectory)
+                 mask=None, trajectory=None, logfile=None, loginterval=1):
+        MolecularDynamics.__init__(self, atoms, timestep, trajectory,
+                                   logfile, loginterval)
         #self.atoms = atoms
         #self.timestep = timestep
         self.zero_center_of_mass_momentum(verbose=1)
@@ -267,8 +268,12 @@ class NPT(MolecularDynamics):
         #print "Making a timestep"
         dt = self.dt
         h_future = self.h_past + 2*dt * dot(self.h, self.eta)
-        deltaeta = -2*dt * (self.pfact * linalg.det(self.h)
-                            * (self.atoms.get_stress() - self.externalstress))
+        if self.pfactor_given is None:
+            deltaeta = zeros(6, float)
+        else:
+            deltaeta = -2*dt * (self.pfact * linalg.det(self.h)
+                                * (self.atoms.get_stress()
+                                   - self.externalstress))
         
         if self.frac_traceless == 1:
             eta_future = self.eta_past + self.mask * self._makeuppertriangular(deltaeta)
@@ -490,8 +495,11 @@ class NPT(MolecularDynamics):
 
     def _initialize_eta_h(self):
         self.h_past = self.h - self.dt * dot(self.h, self.eta)
-        deltaeta = (-self.dt * self.pfact * linalg.det(self.h)
-                    * (self.atoms.get_stress() - self.externalstress))
+        if self.pfactor_given is None:
+            deltaeta = zeros(6, float)
+        else:
+            deltaeta = (-self.dt * self.pfact * linalg.det(self.h)
+                        * (self.atoms.get_stress() - self.externalstress))
         if self.frac_traceless == 1:
             self.eta_past = self.eta - self.mask * self._makeuppertriangular(deltaeta)
         else:

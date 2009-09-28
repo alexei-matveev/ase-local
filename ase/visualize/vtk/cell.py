@@ -6,6 +6,8 @@ from ase import Atoms
 from vtk import vtkOutlineSource, vtkAxesActor, vtkProperty2D, vtkTextProperty
 from ase.visualize.vtk.module import vtkModule, vtkPolyDataModule
 
+# -------------------------------------------------------------------
+
 class vtkUnitCellModule(vtkPolyDataModule):
     def __init__(self, atoms):
 
@@ -22,7 +24,7 @@ class vtkUnitCellModule(vtkPolyDataModule):
         assert cell.dtype == float and cell.shape == (3, 3)
         """
 
-        #TODO bounding box with general unit cell?!
+        #TODO bounding box with general unit cell
         diagcell = np.diag(cell.diagonal())
         assert (cell == diagcell).all(), 'Unit cell must be orthogonal'
 
@@ -41,11 +43,11 @@ class vtkUnitCellModule(vtkPolyDataModule):
     def get_size(self):
         return self.bbox[1::2]-self.bbox[0::2]
 
+    def get_pbc(self):
+        return self.pbc
+
     def get_characteristic_length(self):
         return np.prod(self.get_size())**(1.0/3.0)
-
-    def get_grid_spacing(self, shape):
-        return self.get_size()/(np.array(shape)-1.0) #TODO pbc
 
 # -------------------------------------------------------------------
 

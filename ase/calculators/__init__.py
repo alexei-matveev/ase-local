@@ -44,8 +44,8 @@ class Calculator:
 
         Check if the quantities in the *quantities* list have already
         been calculated for the atomic configuration *atoms*.  The
-        quantities can be one or more of: 'energy', 'forces', and
-        'stress'."""
+        quantities can be one or more of: 'energy', 'forces', 'stress',
+        and 'magmoms'."""
         return False
 
     def set_atoms(self, atoms):
@@ -172,11 +172,13 @@ class SinglePointCalculator:
     def calculation_required(self, atoms, quantities):
         ok = self.atoms == atoms
         return ('forces' in quantities and (self.forces is None or not ok) or
-                ('energy' in quantities and (self.energy is None or not ok)))
+                'energy' in quantities and (self.energy is None or not ok) or
+                'stress' in quantities and (self.stress is None or not ok) or
+                'magmoms' in quantities and (self.magmoms is None or not ok))
 
     def update(self, atoms):
         if self.atoms != atoms:
-            raise RuntimeError('Energy, forces and strees no longer correct.')
+            raise RuntimeError('Energy, forces and stress no longer correct.')
 
     def get_potential_energy(self, atoms):
         self.update(atoms)
@@ -197,7 +199,7 @@ class SinglePointCalculator:
         return self.stress
 
     def get_spin_polarized(self):
-        return self.magmoms is not None
+        return self.magmoms is not None and self.magmoms.any()
 
     def get_magnetic_moments(self, atoms):
         self.update(atoms)
@@ -208,7 +210,11 @@ class SinglePointCalculator:
         
 
 def numeric_force(atoms, a, i, d=0.001):
-    """Evaluate forces usinf finite difference formula."""
+    """Evaluate force along i'th axis on a'th atom using finite difference.
+
+    This will trigger two calls to get_potential_energy(), with atom a moved
+    plus/minus d in the i'th axial direction, respectively.
+    """
     p0 = atoms.positions[a, i]
     atoms.positions[a, i] += d
     eplus = atoms.get_potential_energy()
@@ -217,6 +223,24 @@ def numeric_force(atoms, a, i, d=0.001):
     atoms.positions[a, i] = p0
     return (eminus - eplus) / (2 * d)
 
+
+def numeric_forces(atoms, indices=None, axes=(0, 1, 2), d=0.001):
+    """Evaluate finite-difference forces on several atoms.
+
+    Returns an array of forces for each specified atomic index and
+    each specified axis, calculated using finite difference on each
+    atom and direction separately.  Array has same shape as if
+    returned from atoms.get_forces(); uncalculated elements are zero.
+
+    Calculates all forces by default."""
+
+    if indices is None:
+        indices = range(len(atoms))
+    F_ai = np.zeros_like(atoms.positions)
+    for a in indices:
+        for i in axes:
+            F_ai[a, i] = numeric_force(atoms, a, i, d)
+    return F_ai
 
 class TestPotential:
     def get_forces(self, atoms):

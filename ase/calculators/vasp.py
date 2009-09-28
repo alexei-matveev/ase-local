@@ -12,6 +12,9 @@ to a python script looking something like::
    import os
    exitcode = os.system('vasp')
 
+Alternatively, user can set the environmental flag $VASP_COMMAND pointing
+to the command use the launch vasp e.g. 'vasp' or 'mpirun -n 16 vasp'
+
 http://cms.mpi.univie.ac.at/vasp/
 
 -Jonas Bjork j.bjork@liverpool.ac.uk
@@ -33,6 +36,7 @@ keys = [
     'encut',      # Planewave cutoff
     'enmax',      # Another energy cutoff, defaults derived from data in POTCAR
     'enaug',      # Density cutoff
+    'ferwe',      # Fixed band occupation
     'ngx',        # FFT mesh for wavefunctions, x
     'ngy',        # FFT mesh for wavefunctions, y
     'ngz',        # FFT mesh for wavefunctions, z
@@ -46,6 +50,7 @@ keys = [
     'icharg',     # charge: 1-file 2-atom 10-const
     'iniwav',     # initial electr wf. : 0-lowe 1-rand
     'nelm',       #
+    'nelmin',
     'nbands',     #
     'nelmdl',     # nr. of electronic steps
     'ediff',      # stopping-criterion for electronic upd.
@@ -89,6 +94,7 @@ keys = [
     'lelf',       # create ELFCAR
     'lorbit',     # create PROOUT
     'npar',       # parallelization over bands
+    'nsim',       # evaluate NSIM bands simultaneously if using RMM-DIIS
     'lscalapack', # switch off scaLAPACK
     'lscalu',     # switch of LU decomposition
     'lasync',     # overlap communcation with calculations
@@ -137,25 +143,18 @@ class Vasp:
                                # of Monkhorst-Pack
             }
 
+        self.old_incar_parameters = self.incar_parameters.copy()
+        self.old_input_parameters = self.input_parameters.copy()
+
         self.restart = restart
         if restart:
-            self.atoms = ase.io.read('CONTCAR', format='vasp')
-            self.positions = self.atoms.get_positions()
-            self.sort = range(len(self.atoms))
-            self.resort = range(len(self.atoms))
-            self.read_incar()
-            self.read_outcar()
-            self.read_kpoints()
-            self.old_incar_parameters = self.incar_parameters.copy()
-            self.old_input_parameters = self.input_parameters.copy()
-            self.converged = self.read_convergence()
+            self.restart_load()
             return
 
         if self.input_parameters['xc'] not in ['PW91','LDA','PBE']:
             raise ValueError(
                 '%s not supported for xc! use one of: PW91, LDA or PBE.' %
                 kwargs['xc'])
-        self.positions = None
         self.nbands = self.incar_parameters['nbands']
         self.atoms = None
         self.set(**kwargs)
@@ -170,13 +169,12 @@ class Vasp:
                 raise TypeError('Parameter not defined: ' + key)
 
     def update(self, atoms):
-        if (self.positions is None or
-            (self.positions != atoms.get_positions()).any() or
-            (self.incar_parameters != self.old_incar_parameters) or
-            (self.input_parameters != self.old_input_parameters) or
-            not self.converged
-            ):
-            self.initialize(atoms)
+        if self.calculation_required(atoms, ['energy']):
+            if (self.atoms is None or
+                self.atoms.positions.shape != atoms.positions.shape):
+                # Completely new calculation just reusing the same
+                # calculator, so delete any old VASP files found.
+                self.clean()
             self.calculate(atoms)
 
     def initialize(self, atoms):
@@ -239,7 +237,8 @@ class Vasp:
             self.symbol_count.append([atomtypes[m],1])
         for m in symbols:
             self.symbol_count.append([m,symbols[m]])
-        print 'self.symbol_count',self.symbol_count 
+        #print 'self.symbol_count',self.symbol_count 
+        sys.stdout.flush()
         xc = '/'
         #print 'p[xc]',p['xc']
         if p['xc'] == 'PW91':
@@ -294,17 +293,18 @@ class Vasp:
         self.setups_changed = None
 
     def calculate(self, atoms):
-        """Generate necessary files in the working directory.
+        """Generate necessary files in the working directory and run VASP.
         
         If the directory does not exist it will be created.
 
         """
-        positions = atoms.get_positions()
         from ase.io.vasp import write_vasp
+        self.initialize(atoms)
         write_vasp('POSCAR', self.atoms_sorted, symbol_count = self.symbol_count)
         self.write_incar(atoms)
         self.write_potcar()
         self.write_kpoints()
+        self.write_sort_file()
 
         stderr = sys.stderr
         p=self.input_parameters
@@ -315,10 +315,16 @@ class Vasp:
         elif isinstance(p['txt'], str):
             sys.stderr = open(p['txt'], 'w')
 
-        vasp = os.environ['VASP_SCRIPT']
-        locals={}
-        execfile(vasp, {}, locals)
-        exitcode = locals['exitcode']
+        if os.environ.has_key('VASP_COMMAND'):
+            vasp = os.environ['VASP_COMMAND']
+            exitcode = os.system(vasp)
+        elif os.environ.has_key('VASP_SCRIPT'):
+            vasp = os.environ['VASP_SCRIPT']
+            locals={}
+            execfile(vasp, {}, locals)
+            exitcode = locals['exitcode']
+        else:
+            raise RuntimeError('Please set either VASP_COMMAND or VASP_SCRIPT environment variable')
         sys.stderr = stderr
         if exitcode != 0:
             raise RuntimeError('Vasp exited with exit code: %d.  ' % exitcode)
@@ -327,7 +333,6 @@ class Vasp:
         p=self.incar_parameters
         if p['ibrion']>-1 and p['nsw']>0:
             atoms.set_positions(atoms_sorted.get_positions()[self.resort])
-        self.positions = atoms.get_positions()
         self.energy_free, self.energy_zero = self.read_energy()
         self.forces = self.read_forces(atoms)
         self.dipole = self.read_dipole()
@@ -338,6 +343,33 @@ class Vasp:
             self.magnetic_moment = self.read_magnetic_moment()
             if p['lorbit']>=10 or (p['lorbit']!=None and p['rwigs']):
                 self.magnetic_moments = self.read_magnetic_moments(atoms)
+        self.old_incar_parameters = self.incar_parameters.copy()
+        self.old_input_parameters = self.input_parameters.copy()
+        self.converged = self.read_convergence()
+        self.stress = self.read_stress()
+
+    def restart_load(self):
+        """Method which is called upon restart."""
+        
+        # Try to read sorting file
+        if os.path.isfile('ase-sort.dat'):
+            self.sort = []
+            self.resort = []
+            file = open('ase-sort.dat', 'r')
+            lines = file.readlines()
+            file.close()
+            for line in lines:
+                data = line.split()
+                self.sort.append(int(data[0]))
+                self.resort.append(int(data[1]))
+            self.atoms = ase.io.read('CONTCAR', format='vasp')[self.resort]
+        else:
+            self.atoms = ase.io.read('CONTCAR', format='vasp')
+            self.sort = range(len(self.atoms))
+            self.resort = range(len(self.atoms))
+        self.read_incar()
+        self.read_outcar()
+        self.read_kpoints()
         self.old_incar_parameters = self.incar_parameters.copy()
         self.old_input_parameters = self.input_parameters.copy()
         self.converged = self.read_convergence()
@@ -359,6 +391,8 @@ class Vasp:
                 pass
 
     def set_atoms(self, atoms):
+        if (atoms != self.atoms):
+            self.converged = None
         self.atoms = atoms.copy()
 
     def get_atoms(self):
@@ -378,10 +412,25 @@ class Vasp:
         return self.forces
 
     def get_stress(self, atoms):
-        raise NotImplementedError
+        self.update(atoms)
+        return self.stress
 
-    def calculation_required(self,atoms, quantities):
-        raise NotImplementedError
+    def read_stress(self):
+        for line in open('OUTCAR'):
+            if line.find(' Total  ') != -1:
+                stress = np.array(line.split()[1:],
+                                  dtype=float)[[0, 1, 2, 4, 5, 3]]
+        return stress
+
+    def calculation_required(self, atoms, quantities):
+        if (self.atoms != atoms
+            or (self.incar_parameters != self.old_incar_parameters)
+            or (self.input_parameters != self.old_input_parameters)
+            or not self.converged):
+            return True
+        if 'magmom' in quantities:
+            return not hasattr(self, 'magnetic_moment')
+        return False
 
     def get_number_of_bands(self):
         return self.nbands
@@ -427,7 +476,7 @@ class Vasp:
         
     def get_magnetic_moments(self, atoms):
         p=self.incar_parameters
-        if p['lorbit']>=10 or (p['lorbit']!=None and p['rwigs']):
+        if p['lorbit']>=10 or p['rwigs']:
             self.update(atoms)
             return self.magnetic_moments
         else:
@@ -456,11 +505,11 @@ class Vasp:
                 # special cases:
                 if key in ('dipol', 'eint'):
                     [incar.write('%.4f ' % x) for x in val]
-                elif key in ('iband', 'nbmod', 'kpuse'):
+                elif key in ('iband', 'kpuse'):
                     [incar.write('%i ' % x) for x in val]
                 elif key == 'rwigs':
                     [incar.write('%.4f ' % rwigs) for rwigs in val]
-                    if len(val) != self.natoms:
+                    if len(val) != len(self.symbol_count):
                         raise RuntimeError('Incorrect number of magnetic moments')
                 else:
                     if type(val)==type(bool()):
@@ -527,6 +576,18 @@ class Vasp:
                 file_tmp.close()
         potfile.close()
 
+    def write_sort_file(self):
+        """Writes a sortings file.
+
+        This file contains information about how the atoms are sorted in
+        the first column and how they should be resorted in the second
+        column. It is used for restart purposes to get sorting right
+        when reading in an old calculation to ASE."""
+
+        file = open('ase-sort.dat', 'w')
+        for n in range(len(self.sort)):
+            file.write('%5i %5i \n' % (self.sort[n], self.resort[n]))
+
     # Methods for reading information from OUTCAR files:
     def read_energy(self, all=None):
         [energy_free, energy_zero]=[0, 0]
@@ -589,17 +650,14 @@ class Vasp:
                 dipolemoment=np.array([float(f) for f in line.split()[1:4]])
         return dipolemoment
 
-    def read_magnetic_moments(self,atoms):
-        file = open('OUTCAR', 'r')
-        lines = file.readlines()
-        file.close
-        magnetic_moments=np.zeros(len(atoms))
-        n=0
-        for line in lines:
+    def read_magnetic_moments(self, atoms):
+        magnetic_moments = np.zeros(len(atoms))
+        n = 0
+        for line in open('OUTCAR', 'r'):
             if line.rfind('magnetization (x)') > -1:
-                for m in range(0,len(atoms)):
-                    magnetic_moments[m]=float(lines[n+m+4].split()[4])
-            n+=1
+                for m in range(len(atoms)):
+                    magnetic_moments[m] = float(lines[n + m + 4].split()[4])
+            n += 1
         return np.array(magnetic_moments)[self.resort]
 
     def read_magnetic_moment(self):
@@ -618,6 +676,7 @@ class Vasp:
     def read_convergence(self):
         """Method that checks whether a calculation has converged."""
         converged = None
+        # First check electronic convergence
         for line in open('OUTCAR', 'r'):
             if line.rfind('EDIFF  ') > -1:
                 ediff = float(line.split()[2])
@@ -628,7 +687,20 @@ class Vasp:
                 if [abs(a), abs(b)] < [ediff, ediff]:
                     converged = True
                 else:
-                    converged = None
+                    converged = False
+                    continue
+        # Then if ibrion > 0, check whether ionic relaxation condition been fulfilled
+        if self.incar_parameters['ibrion'] > 0:
+            ediffg = self.incar_parameters['ediffg']
+            if ediffg < 0:
+                for force in self.forces:
+                    if np.linalg.norm(force)>=abs(ediffg):
+                        converged = False
+                        continue
+                    else:
+                        converged = True
+            elif self.incar_parameters['ediffg'] > 0:
+                raise NotImplementedError('Method not implemented for ediffg>0')
         return converged
 
     def read_ibz_kpoints(self):
@@ -942,6 +1014,139 @@ class VaspChargeDensity(object):
             if format == 'chg' and len(self.chg) > 1:
                 f.write('\n')
         f.close()
+
+
+class VaspDos(object):
+    """Class for representing density-of-states produced by VASP
+
+    The energies are in property self.energy
+
+    Site-projected DOS is accesible via the self.site_dos method.
+
+    Total and integrated DOS is accessible as numpy.ndarray's in the
+    properties self.dos and self.integrated_dos. If the calculation is
+    spin polarized, the arrays will be of shape (2, NDOS), else (1,
+    NDOS).
+
+    The self.efermi property contains the currently set Fermi
+    level. Changing this value shifts the energies.
+    
+    """
+
+    def __init__(self, doscar='DOSCAR', efermi=0.0):
+        """Initialize"""
+        self._efermi = 0.0
+        self.read_doscar(doscar)
+        self.efermi = efermi
+
+    def _set_efermi(self, efermi):
+        """Set the Fermi level."""
+        ef = efermi - self._efermi
+        self._efermi = efermi
+        self._total_dos[0, :] = self._total_dos[0, :] - ef
+        try:
+            self._site_dos[:, 0, :] = self._site_dos[:, 0, :] - ef
+        except IndexError:
+            pass
+
+    def _get_efermi(self):
+        return self._efermi
+
+    efermi = property(_get_efermi, _set_efermi, None, "Fermi energy.")
+
+    def _get_energy(self):
+        """Return the array with the energies."""
+        return self._total_dos[0, :]
+    energy = property(_get_energy, None, None, "Array of energies")
+
+    def site_dos(self, atom, orbital):
+        """Return an NDOSx1 array with dos for the chosen atom and orbital.
+
+        atom: int
+            Atom index
+        orbital: int or str
+            Which orbital to plot
+
+        If the orbital is given as an integer:
+        If spin-unpolarized calculation, no phase factors:
+        s = 0, p = 1, d = 2
+        Spin-polarized, no phase factors:
+        s-up = 0, s-down = 1, p-up = 2, p-down = 3, d-up = 4, d-down = 5
+        If phase factors have been calculated, orbitals are
+        s, py, pz, px, dxy, dyz, dz2, dxz, dx2
+        double in the above fashion if spin polarized.
+
+        """
+        # Integer indexing for orbitals starts from 1 in the _site_dos array
+        # since the 0th column contains the energies
+        if isinstance(orbital, int):
+            return self._site_dos[atom, orbital + 1, :]
+        n = self._site_dos.shape[1]
+        if n == 4:
+            norb = {'s':1, 'p':2, 'd':3}
+        elif n == 7:
+            norb = {'s+':1, 's-up':1, 's-':2, 's-down':2,
+                    'p+':3, 'p-up':3, 'p-':4, 'p-down':4,
+                    'd+':5, 'd-up':5, 'd-':6, 'd-down':6}
+        elif n == 10:
+            norb = {'s':1, 'py':2, 'pz':3, 'px':4,
+                    'dxy':5, 'dyz':6, 'dz2':7, 'dxz':8,
+                    'dx2':9}
+        elif n == 19:
+            norb = {'s+':1, 's-up':1, 's-':2, 's-down':2,
+                    'py+':3, 'py-up':3, 'py-':4, 'py-down':4,
+                    'pz+':5, 'pz-up':5, 'pz-':6, 'pz-down':6,
+                    'px+':7, 'px-up':7, 'px-':8, 'px-down':8,
+                    'dxy+':9, 'dxy-up':9, 'dxy-':10, 'dxy-down':10,
+                    'dyz+':11, 'dyz-up':11, 'dyz-':12, 'dyz-down':12,
+                    'dz2+':13, 'dz2-up':13, 'dz2-':14, 'dz2-down':14,
+                    'dxz+':15, 'dxz-up':15, 'dxz-':16, 'dxz-down':16,
+                    'dx2+':17, 'dx2-up':17, 'dx2-':18, 'dx2-down':18}
+        return self._site_dos[atom, norb[orbital.lower()], :]
+
+    def _get_dos(self):
+        if self._total_dos.shape[0] == 3:
+            return self._total_dos[1, :]
+        elif self._total_dos.shape[0] == 5:
+            return self._total_dos[1:3, :]
+    dos = property(_get_dos, None, None, 'Average DOS in cell')
+
+    def _get_integrated_dos(self):
+        if self._total_dos.shape[0] == 3:
+            return self._total_dos[2, :]
+        elif self._total_dos.shape[0] == 5:
+            return self._total_dos[3:5, :]
+    integrated_dos = property(_get_integrated_dos, None, None,
+                              'Integrated average DOS in cell')
+
+    def read_doscar(self, fname="DOSCAR"):
+        """Read a VASP DOSCAR file"""
+        f = open(fname)
+        natoms = int(f.readline().split()[0])
+        [f.readline() for nn in range(4)]  # Skip next 4 lines.
+        # First we have a block with total and total integrated DOS
+        ndos = int(f.readline().split()[2])
+        dos = []
+        for nd in xrange(ndos):
+            dos.append(np.array([float(x) for x in f.readline().split()]))
+        self._total_dos = np.array(dos).T
+        # Next we have one block per atom, if INCAR contains the stuff
+        # necessary for generating site-projected DOS
+        dos = []
+        for na in xrange(natoms):
+            line = f.readline()
+            if line == '':
+                # No site-projected DOS
+                break
+            ndos = int(line.split()[2])
+            line = f.readline().split()
+            cdos = np.empty((ndos, len(line)))
+            cdos[0] = np.array(line)
+            for nd in xrange(1, ndos):
+                line = f.readline().split()
+                cdos[nd] = np.array([float(x) for x in line])
+            dos.append(cdos.T)
+        self._site_dos = np.array(dos)
 
 
 import pickle

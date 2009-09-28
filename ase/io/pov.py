@@ -5,7 +5,7 @@ See http://www.povray.org/ for details on the format.
 """
 import os
 
-import numpy as npy
+import numpy as np
 
 from ase.io.eps import EPS
 from ase.data import chemical_symbols
@@ -44,6 +44,7 @@ class POVRAY(EPS):
                           .7, .7, 3, 3], # width, height, Nlamps_x, Nlamps_y
         'background'   : 'White',        # color
         'textures'     : None, # Length of atoms list of texture names
+        'celllinewidth': 0.05, # Radius of the cylinders representing the cell
         }
 
     def __init__(self, atoms, scale=1.0, **parameters):
@@ -52,7 +53,7 @@ class POVRAY(EPS):
         EPS.__init__(self, atoms, scale=scale, **parameters)
 
     def cell_to_lines(self, A):
-        return npy.empty((0, 3)), None, None
+        return np.empty((0, 3)), None, None
 
     def write(self, filename, **settings):
         # Determine canvas width and height
@@ -149,6 +150,7 @@ class POVRAY(EPS):
           'diffuse .3 '
           'specular 1. '
           'roughness .001}\n')
+        w('#declare Rcell = %.3f;' % self.celllinewidth)
         w('\n')
         w('#macro atom(LOC, R, COL, FIN)\n')
         w('  sphere{LOC, R texture{pigment{COL} finish{FIN}}}\n')
@@ -169,7 +171,7 @@ class POVRAY(EPS):
                         j.insert(c, i)
                         w(pa(self.C[tuple(j)]) + ', ')
                         del j[c]
-                    w('%0.3f pigment {Black}}\n' % 0.05)
+                    w('Rcell pigment {Black}}\n')
 
         # Draw atoms
         a = 0
