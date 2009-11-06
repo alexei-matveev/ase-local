@@ -7,6 +7,7 @@ from ase.calculators.emt import EMT, ASAP
 from ase.calculators.siesta import Siesta
 from ase.calculators.dacapo import Dacapo
 from ase.calculators.vasp import Vasp
+from ase.calculators.paragauss import ParaGauss
 
 
 class Calculator:
