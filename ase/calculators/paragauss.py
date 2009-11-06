@@ -78,7 +78,9 @@ class ParaGauss:
         units are Hartree/Bohrs
         """
         self.update(atoms)
-        return self.__grads
+
+        # note that the forces are negative of the energy gradients:
+        return -self.__grads
 
     def get_stress(self, atoms):
             raise NotImplementedError
