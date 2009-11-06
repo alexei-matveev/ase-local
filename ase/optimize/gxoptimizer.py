@@ -5,7 +5,7 @@ import os
 
 from ase.optimize import Optimizer
 # from ase.data import atomic_numbers
-from gxfile import gxread, gxwrite
+from ase.gxfile import gxread, gxwrite, is_dummy
 # conversion factors to Anstrom and eV
 # for usage in the write and read routines for the gxfile
 EINEV=27.2113845
