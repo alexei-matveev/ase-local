@@ -70,6 +70,11 @@ class ParaGauss:
         in atomic units (Hartree))
         """
         self.update(atoms)
+        if self.__energy == None:
+            print "WARNING: no energy available when energy wanted"
+            print "There seems to be gone something wrong with the energy calculation"
+            print "So I better stop here"
+            sys.exit()
         return self.__energy
 
     def get_forces(self, atoms):
@@ -79,6 +84,11 @@ class ParaGauss:
         """
         self.update(atoms)
 
+        if self.__grads == None :
+            print "WARNING: no forces available when they are wanted"
+            print "There seems to be gone something wrong with the force calculation"
+            print "So I better stop here"
+            sys.exit()
         # note that the forces are negative of the energy gradients:
         return -self.__grads
 
