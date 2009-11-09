@@ -110,6 +110,10 @@ class ParaGauss:
         # we must not disturb its internal coordinates
         if os.path.exists('gxfile'):
             atnums_d, xyz_d, self.isyms, inums, iconns, ivars, grads_dummy, energy_dummy = gxread('gxfile')
+            if (atnums_d != self.atnums).any() :
+                print "WARNING: gxfile does not fit!"
+                print "Please delete or change it before restart"
+                sys.exit()
         else:
             self.isyms = np2.ones(n)
             inums = np2.zeros(n)
