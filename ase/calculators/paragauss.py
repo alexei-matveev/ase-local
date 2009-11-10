@@ -16,31 +16,32 @@ class ParaGauss:
     """
     def __init__(self,
           input = "input",
-          writeowninput = False,
-          runpg = "runpg",
-          executable = "mainscf_V3.1.4-32",
-          silence = True
+          cmdline = "runpg /users/alexei/exe/openmpi/mainscf_V3.1.4b7-64",
+          silence = True,
+          writeowninput = False
           ):
 
 
       """
-        Parameters
-        ==========
-      input: name of the input file wich contains all the informations
-             ParaGauss needs
-      writeowninput: if true the Programm does not build its own input
-                     file, but reads in the one named as input parameter
-                     needs this file to exist
-                     so far the option false is not implemented
-      runpg:
-      executable: ParaGauss version, needs to be in working directory
-                  or with Path in front
+      Parameters
+      ==========
+      |input|         name of the input file wich contains all the informations
+                      ParaGauss needs
+
+      |cmdline|       Shell command to start ParaGauss, it will be executed in working directory.
+                      A typical command line reads:
+
+                      runpg /users/alexei/exe/openmpi/mainscf_V3.1.4
+
+      |writeowninput| if true the Programm does not build its own input
+                      file, but reads in the one named as input parameter
+                      needs this file to exist
+                      so far the option false is not implemented
       """
       self.input = input
-      self.writeowninput = writeowninput
-      self.runpg = runpg
-      self.executable = executable
+      self.cmdline = cmdline
       self.silence = silence
+      self.writeowninput = writeowninput
 
       self.converged = False
 
@@ -123,10 +124,10 @@ class ParaGauss:
         # create gxfile with actual geometry for calculation
         gxwrite(self.atnums, self.positions, self.isyms, inums, iconns, ivars, None, None, loop=1, file='gxfile' )
         # the actual calcualtion
-        exetfile = self.runpg + ' ' + self.executable + ' ' + self.input
+        cmd = self.cmdline + ' ' + self.input
         if self.silence:
-            exetfile +=  ' >> ParaGauss.out'
-        tty = os.system(exetfile)
+            cmd +=  ' >> ParaGauss.out'
+        tty = os.system(cmd)
         # reads in new energy and forces
         self.read()
 
