@@ -135,6 +135,36 @@ class ParaGauss:
 
 
     def read(self):
-       # the interisting part to read in are the grads and energy, rest will be ignored afterwards
-       atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy = gxread('gxfile')
+        # the interisting part to read in are the grads and energy, rest will be ignored afterwards
+        if os.path.exists('gxfile'):
+            atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy = gxread('gxfile')
+            if self.__energy is not None:
+                return
+        self.__energy = self.parse_output('o.' + self.input + '/output')
+
+    def parse_output(self, output): # not actually using |self|
+        """
+        Currently only returns the SCF energy.
+
+        Energy lines in SCF section look like this:
+
+        ^  e_sum  =            -1.521590696368  [      0.000000000000]
+        """
+
+        import re
+
+        pattern = re.compile(r'\s*e_sum\s*=\s*(\S+)')
+
+        # in case we dont find anything:
+        e_sum = None
+
+        lines = open(output,'r')
+        for line in lines:
+            match = pattern.search(line)
+            if match is not None:
+                # print line
+                e_sum = float(match.group(1))
+        # print 'e_sum=',e_sum
+        # FIXME: should we somehow close() the file? It happens that close() is not in scope.
+        return e_sum
 
