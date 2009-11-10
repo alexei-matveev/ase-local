@@ -125,7 +125,7 @@ class ParaGauss:
         # the actual calcualtion
         exetfile = self.runpg + ' ' + self.executable + ' ' + self.input
         if self.silence:
-            exetfile+ =  ' >> ParaGauss.out'
+            exetfile +=  ' >> ParaGauss.out'
         tty = os.system(exetfile)
         # reads in new energy and forces
         self.read()
