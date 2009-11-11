@@ -30,7 +30,7 @@ LINA=0.529177
 # for private use only:
 class EOF(Exception): pass
 
-def fromgx( file = "gxfile" ):
+def fromgx( file = "gxfile",   lunitfgx=LUNIT):
     """Return a list of tuples (atnum, position) suitable for
     feeding into Atom() class constructor of ASE:
     E.g.:
@@ -40,17 +40,16 @@ def fromgx( file = "gxfile" ):
     Note tuple expansion *a in argument to the Atom() constructor.
     """
 
-    atnums, positions, isyms, inums, iconns, ivars, __, __ = gxread( file, lunit=LINA, eunit=EINEV )
+    atnums, positions, isyms, inums, iconns, ivars, __, __ , numstart = gxread( file )
+
+    positions *= lunitfgx
     return zip( atnums, positions )
 #enddef
 
-def gxread( file='gxfile' , lunit=LUNIT, eunit=EUNIT ):
+def gxread( file='gxfile' ):
     """Read gxfile in following format, return a list of lists (columns)
     that is a table in the row-major order.
     So far only the geometry section is returned.
-
-    lunit and eunit are unit conversion factors
-      they should include the values of 1Bohr and 1Hatree in the units of the calculator
 
     (first and last lines are not parts of the file, rather for field width extimation):
     ^12345 1234567890123456789012 1234567890123456789012 1234567890123456789012 123 123   123 123 123   123 123 123
@@ -73,14 +72,18 @@ def gxread( file='gxfile' , lunit=LUNIT, eunit=EUNIT ):
     ^   21        0.000000000000   0.000000689261   0.000002806462
     ^12345      1234567890123456 1234567890123456 1234567890123456
      """
-
+    global loopnum
+    loopnum = None
     # a generator function:
     def parse(lines):
+        global loopnum
         # iterator over lines in a file:
         for line in lines:
             fields = _parse_geom(line)
             # stop iterations on negative atomic numbers:
-            if fields[0] < 0:  return
+            if fields[0] < 0:
+                loopnum = -fields[0]
+                return
             yield fields
 
     # a generator for lines of the file:
@@ -107,7 +110,7 @@ def gxread( file='gxfile' , lunit=LUNIT, eunit=EUNIT ):
     #enddef
 
     # convert to 2D array and consider units:
-    xyz = nx3(xyz) * lunit
+    xyz = nx3(xyz)
     # print "xyz=", xyz
 
     #
@@ -117,7 +120,7 @@ def gxread( file='gxfile' , lunit=LUNIT, eunit=EUNIT ):
         try: # if the energy line is present ...
              # consider units
             fields = lines.next().split()
-            energy = float( fields[0] ) * eunit
+            energy = float( fields[0] )
         except StopIteration: # is raised by .next() on EOF
             warn("gxread: gxfile does not contain energy")
             raise EOF, "gxread: no energies"
@@ -132,7 +135,7 @@ def gxread( file='gxfile' , lunit=LUNIT, eunit=EUNIT ):
         grads = [ _parse_grad(line) for line in lines ]
 
         # convert to 2D array and consider units:
-        grads = nx3(grads) * eunit / lunit
+        grads = nx3(grads)
         # print "grads=", grads
     except EOF:
         energy = None
@@ -140,10 +143,10 @@ def gxread( file='gxfile' , lunit=LUNIT, eunit=EUNIT ):
     #end try
 
     # return all columns and scalar energy:
-    return atnums, xyz, isyms, inums, iconns, ivars, grads, energy 
+    return atnums, xyz, isyms, inums, iconns, ivars, grads, energy, loopnum
 #end def
 
-def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=None, loop=1, file='-',lunit=LUNIT, eunit=EUNIT ):
+def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=None, loop=1, file='-'):
     """Write gxfile in following format,
     (first and last lines are not parts of the file, rather for field width extimation):
     #12345 1234567890123456789012 1234567890123456789012 1234567890123456789012 123 123   123 123 123   123 123 123
@@ -176,8 +179,7 @@ def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=N
 
     #
     # First, the geometry section ...
-    # distances in Bohr units
-    cols = (atnums, positions/lunit , isyms, inums, iconns, ivars)
+    cols = (atnums, positions , isyms, inums, iconns, ivars)
     rows = zip( *cols )
 
     for row in rows: # row = (atnum, pos, isym, inum, iconn, ivar)
@@ -195,14 +197,13 @@ def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=N
     # Second, the energy and gradients (not needed if this is a new geometry):
     #
 
-    # energy in optimizer units :
-    write( " %23.12f %23.12f\n"  % (energy / eunit, energy / eunit) )
+    # energy  :
+    write( " %23.12f %23.12f\n"  % (energy, energy ) )
 
     # gradients:
     for inum, grad in enumerate(grads):
         # enumerate starts from zero:
-        # transform gradient in optimizer units if necessary
-        write( _tostr_grad(inum+1, grad * lunit / eunit ) )
+        write( _tostr_grad(inum+1, grad) )
 #end def
 
 def _tostr_geom(atnum, pos, isym, inum, iconn, ivar):

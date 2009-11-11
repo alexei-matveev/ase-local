@@ -5,6 +5,7 @@ import os
 
 import numpy as np2
 from ase.gxfile import gxread, gxwrite
+from ase.units import Bohr, Hartree
 
 
 class ParaGauss:
@@ -68,7 +69,7 @@ class ParaGauss:
         """
         makes sure energy (and forces) are up to date and afterwards
         gives energy back (energy is energy calculated with ParaGauss
-        in atomic units (Hartree))
+        in atomic units (energy transformed to ASE units))
         """
         self.update(atoms)
         if self.__energy == None:
@@ -76,12 +77,12 @@ class ParaGauss:
             print "There seems to be gone something wrong with the energy calculation"
             print "So I better stop here"
             sys.exit()
-        return self.__energy
+        return self.__energy * Hartree
 
     def get_forces(self, atoms):
         """
         same as get_potential_energy but for forces
-        units are Hartree/Bohrs
+        units are transformed
         """
         self.update(atoms)
 
@@ -91,7 +92,7 @@ class ParaGauss:
             print "So I better stop here"
             sys.exit()
         # note that the forces are negative of the energy gradients:
-        return -self.__grads
+        return -self.__grads * Hartree / Bohr
 
     def get_stress(self, atoms):
             raise NotImplementedError
@@ -107,10 +108,11 @@ class ParaGauss:
         self.positions = atoms.get_positions().copy()
         self.atnums = atoms.get_atomic_numbers().copy()
         n = len(self.atnums)
+        loop = 1
         # there may be a gxfile from gxoptimizer
         # we must not disturb its internal coordinates
         if os.path.exists('gxfile'):
-            atnums_d, xyz_d, self.isyms, inums, iconns, ivars, grads_dummy, energy_dummy = gxread('gxfile')
+            atnums_d, xyz_d, self.isyms, inums, iconns, ivars, grads_dummy, energy_dummy, loop = gxread('gxfile')
             if (atnums_d != self.atnums).any() :
                 print "WARNING: gxfile does not fit!"
                 print "Please delete or change it before restart"
@@ -122,7 +124,8 @@ class ParaGauss:
             ivars = np2.zeros((n,3))
 
         # create gxfile with actual geometry for calculation
-        gxwrite(self.atnums, self.positions, self.isyms, inums, iconns, ivars, None, None, loop=1, file='gxfile' )
+        # units of positions should be Bohrs in here, so they are changed
+        gxwrite(self.atnums, self.positions/Bohr, self.isyms, inums, iconns, ivars, None, None, loop, file='gxfile' )
         # the actual calcualtion
         cmd = self.cmdline + ' ' + self.input
         if self.silence:
@@ -137,7 +140,7 @@ class ParaGauss:
     def read(self):
         # the interisting part to read in are the grads and energy, rest will be ignored afterwards
         if os.path.exists('gxfile'):
-            atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy = gxread('gxfile')
+            atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy, loopi_d = gxread('gxfile')
             if self.__energy is not None:
                 return
         self.__energy = self.parse_output('o.' + self.input + '/output')
