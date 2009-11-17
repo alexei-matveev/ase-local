@@ -1,8 +1,7 @@
 """This module defines an ASE interface to ParaGauss.
 
 """
-import os
-
+import os, sys
 import numpy as np2
 from ase.gxfile import gxread, gxwrite
 from ase.units import Bohr, Hartree
