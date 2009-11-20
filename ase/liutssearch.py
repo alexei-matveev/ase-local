@@ -8,7 +8,7 @@ from ase.optimize.gxoptimizer import GxOptimizer
 class LiuTSsearch(Dynamics):
     def __init__(self, atoms, restart=None, logfile='-' , trajectory=None, soften = 0, factsoft = 0.7,
                  outer_optimizer=BFGS, finish_optimizer = GxOptimizer, opt_args=None, relax_max=2, liuconstr = None,
-                 switchfinish = False, treat1 = True, treat2 = True):
+                 switchfinish = False, treat1 = True, treat2 = True, additionalcoords = [1, 2] ):
         """Structure optimizer object.
        source of the code is the following paper:
         H.-F. Wang and Z.-P. Liu: Comprehensive Mechanism and Structure-Sensitivity of Ethanol
@@ -52,8 +52,8 @@ class LiuTSsearch(Dynamics):
         self.factsoft = factsoft
         self.switchfinish = switchfinish
         self.finish_optimizer = finish_optimizer
-        #self.logout = open('liu.output','w')
-
+        self.logout = open('liu.output','w')
+        self.adcoord = additionalcoords
 
     def setliuconstr(self, liuconstr):
         self.liuconstr = liuconstr
@@ -71,8 +71,12 @@ class LiuTSsearch(Dynamics):
         self.smax = smax
         step = 0
         switch_finish = 0
+        relaxorup = 0
         # next one for counting the relaxation steps
         step_relax = 1
+        self.logout.write('Transition State search after algorithm of Liu et al.\n')
+        self.logout.write('Parameter for system %s \n' % (self.atoms.get_name()) )
+        self.logout.write('iteration energy (eV) max. force (eV/A) max step (A) react.coord. add.cord. dist %s \n' %  (str(self.adcoord) ) )
         self.writegeometry( self.atoms.get_positions() , second = 0)
         while step < steps:
             f = self.atoms.get_forces()
@@ -106,12 +110,15 @@ class LiuTSsearch(Dynamics):
                     #self.writegeometry( newval)
                     #print "after treatment2", newval
                 step_relax = 0
+                relaxorup = 2
             else:
                 self.liuconstr.relaxation( oldval, newval, f, self.treat1)
+                relaxorup = 1
             # the positions now have to given back to the atoms object
             self.atoms.set_positions(newval)
             # some more output
             self.writegeometry( self.atoms.get_positions())
+            self.logreact(newval, relaxorup) 
             self.call_observers()
             self.nsteps += 1
             step += 1
@@ -145,6 +152,18 @@ class LiuTSsearch(Dynamics):
             self.logfile.write('%s: %3d  %02d:%02d:%02d %15.6f %12.4f %12.4f\n' %
                                (name, self.nsteps, T[3], T[4], T[5], e, fmax2, stmax))
             self.logfile.flush()
+        self.logout.write('%3d %15.6f %15.8f %15.8f' % (self.nsteps, e, fmax2, stmax))
+
+    def logreact(self, newval, relaxorup):
+        centers = self.liuconstr.centerofnetwork()
+        for count in range(len(centers) / 2):
+            self.logout.write('%18.12f' % self.distance(newval[centers[count] - 1], newval[centers[count + 1] - 1]))
+        for count2 in range(len(self.adcoord) / 2):
+            self.logout.write('%16.10f' % self.distance(newval[self.adcoord[count2] - 1], newval[self.adcoord[count2 + 1] - 1]))
+        if (relaxorup == 1):
+            self.logout.write(' r\n')
+        else:
+            self.logout.write(' u\n')
 
     def switchforlast(steps):
         self.dyn = self.finish_optimizer(atoms)
