@@ -100,18 +100,29 @@ class LiuTSsearch(Dynamics):
             if (step_relax == self.relax_max or (self.stepsmax < self.smax)):
                 self.dyn.initialize()
                 if (self.treat2):
+                    # for treatment two there have to be some values stored
+                    # (atomic network) before update could be performed
                     self.__treat2_init(newval, self.soften)
                     # print "before treatment2", newval
                     #self.writegeometry( newval)
+                # updates the reaction coordinate(s) and gives back the change of
+                # the atoms related to this (for treatment 2)
                 change =  self.liuconstr.update(oldval, newval, f)
                 if (self.treat2):
                     #self.writegeometry(newval)
+                    # treatment 2 adjusts the atoms neighboring the ones changed in 
+                    # update, there are several possibilities of doing so, some require
+                    # the knowledge of the actual change, others require only the knowledge
+                    # of the old distances (stored in atomicnetwork)
                     self.treatment2(newval, self.soften, self.factsoft, change)
                     #self.writegeometry( newval)
                     #print "after treatment2", newval
                 step_relax = 0
                 relaxorup = 2
             else:
+                # in relaxation the "constraint" only has to be reset, so for example in LiuCbond
+                # the bond length between atomA and atomB, treatment 1 includes the mean square forces
+                # to decide which atom to move more
                 self.liuconstr.relaxation( oldval, newval, f, self.treat1)
                 relaxorup = 1
             # the positions now have to given back to the atoms object
@@ -120,9 +131,14 @@ class LiuTSsearch(Dynamics):
             self.writegeometry( self.atoms.get_positions())
             self.logreact(newval, relaxorup) 
             self.call_observers()
+            # steps have to count up, self.nsteps for output, step for the steps restriction
+            # and step_relax to know if next iteration is relaxation or update iteration
             self.nsteps += 1
             step += 1
             step_relax += 1
+            # if the algorithm is near (enough) to the transition state, a faster other
+            # transition state searcher may be used, so far this will happen if after three
+            # update steps and 4 relaxation steps the steps have not finish much on the values
             if (self.switchfinish):
                  if (self.stepsmax < self.smax):
                       switch_finish += 1
@@ -216,34 +232,68 @@ class LiuTSsearch(Dynamics):
 
 
     def treatment2( self, new, soften, p, ch,  cutoff = None):
-        # the actual treatment2, changes *new* positions with the help of some factors
-        # to adjust the positions of the other atoms
-        # print "changes", ch
+        '''the actual treatment2, changes *new* positions with the help of some factors
+        to adjust the positions of the other atoms
+        so far there are three different ways for that:
+        consider the change for atom C in shell s (smallest distance of atoms to center of network)
+        p is a factor to damp the changes
+        example is for bond length between A and B
+        parameters indiced with A and B belong to the coresponding atom, those indiced with AB belong
+        to the dimer AB
+        Ni is the next neighbor of C (there may be several, therefore i), which is on the path to A or B
+        (is in shell s-1 and has a bond to C), n is the number of this neighbors
+        soften = 0:
+        rC' = rC + p^ s_A * r(A'A) + p^ s_b * r(B'B)
+        soften = 1:
+        rC' = rC + (1 - p * s_A) * r(A'A) + (1 - p * s_B) * r(B'B)
+        if one of the (1 - p * s) is smaller than 0 this factor is omited
+        soften = -1:
+        rC' = rC + p ^ s_AB / n *  sum_i( (|r(CNi')|- |r(CNi)| )e_r(CNi') )
+        '''
         if (soften < 0):
+             # soften = -1, maxshell: only consider up to this shell
              maxshell = 0  
              for memberinshell in self.memberinshell:
+                 # in the memberinshells for the atomic networks of the atoms the
+                 # length is the amount of shells available + 1 for the 0'th shell
                  maxshell = max(maxshell, len(memberinshell))
              maxshell -= 1
              if (cutoff != None):
+                 # or set maxshell to the cutoff if only wanted to this shell
                  maxshell = min(cutoff, maxshell)
              for s in range(maxshell):
+                 # s goes over the shells, because this update has to be made shellwise
                  for i in range(len(self.allnetwork)):
+                      # i goes over all atoms, but only those wich have the correct shell, looked at the moment
+                      # will be considerd further
                       if (self.allnetwork[i].shell == s + 1):
-                          # for this treatment2 the update has to be make shell wise
+                          # there may be several atoms to which the distances should be fixed, they are in the
+                          # nextN list of the atom
                           for k, smo  in enumerate(self.allnetwork[i].nextN):
                                distold = self.allnetwork[i].dist_to_next[k]
                                print "change of", self.allnetwork[i].number, "of shell", self.allnetwork[i].shell
                                print "old value", new[self.allnetwork[i].number-1]
+                               # this update considers the change in the bond length of the corresponding atoms
                                dt = self.vect_of_change(new[self.allnetwork[i].number-1], new[smo -1], distold)
                                print dt
+                               # actual adjustment
                                new[self.allnetwork[i].number-1] += self._adjustas(dt / self.allnetwork[i].multiplicity, soften, p, s + 1)
                                print "new value", new[self.allnetwork[i].number-1]
         else:
+            # the other cases (soften 0 and 1) are very similar and could be considerd together
             for inum, network in enumerate(self.networks):
+                # inum counts the atoms to be changed, network is the atomic network of them,
+                # as here the changes from different atoms just sum up, each of them can be considerd one after another
                 maxshell = len(self.memberinshell[inum])
+                # maybe a cutoff for shells with to high numbers is wanted
                 if (cutoff != None ):
                     maxshell = min(cutoff, maxshell)
                 for i in range(len(network)):
+                    # i runs over all atoms, only those are considerd which are wanted
+                    # (shell smaller eventually set maxshell, shell + 0 would mean this atom
+                    # is not connected to the atom of which this network is, or the atom is one
+                    # of the network center atoms, which won't be adjusted further, as they have been reset
+                    # in the update function)
                     if (network[i].shell > 0 and network[i].shell < maxshell):
                         # print "change of", network[i].number, "of shell", network[i].shell
                         # print "old value", new[network[i].number-1]
@@ -261,8 +311,10 @@ class LiuTSsearch(Dynamics):
     def _adjustas(self, dt, soften, p, shell):
          # decides how much the positons of the actual atom are changed
          if (soften < 1):
+              # update for soften = 0 and soften = -1, softfact ^ shell is used
               return ( p ** shell ) * dt
          else:
+              # update for soften = 1, here only positiv changes are considerd
               if ( p * shell > 1.0 ):
                   return (1.0 - p * shell) * dt
               else:
@@ -272,6 +324,9 @@ class LiuTSsearch(Dynamics):
         '''builds an atomic network around atom *center* (position in atomics list)
            pos are the positions considerd
            for a given cutoff, the network will stop with shell = cutoff -1
+
+           the informations stored are explaned in the netinfo class, which gives the
+           format they are stored in
         '''
         # atomic network objects are stored in netinfo class in variable atnet
         # (will be given back)
@@ -288,13 +343,13 @@ class LiuTSsearch(Dynamics):
             d = self.distance(pos[i], pos[center])
             atnet.append(netinfo(i+1, dist_to_center = d, radius = self.__giveradius( atnums[i])))
         # start calculating the first shell
-        # memberinshell needs new value for members of shell 0
+        # memberinshell needs new value for members of shell 1
         memberinshell.append(0)
         # for i in range(len(atnet)):
         #     print atnet[i]
         ra = atnet[center].radius
         # find out if atom i is in first shell ( d(i center) < radius(i) + radius(center))
-        # if true, write shell 1 in atnet of atom i, multiplicity is always 0, because there is only one
+        # if true, write shell 1 in atnet of atom i, multiplicity is always 1, because there is only one
         # atom in shell "0"
         # atom center should be in shell 1 too after this calculation, but that will be changed lateron
         for i in range(len(atnet)):
@@ -375,6 +430,7 @@ class LiuTSsearch(Dynamics):
                           mergednetwork[i].multiplicity += network[i].multiplicity
                           mergednetwork[i].nextN = mergednetwork[i].nextN + network[i].nextN
                           mergednetwork[i].dist_to_next = mergednetwork[i].dist_to_next + network[i].dist_to_next
+        # the shell of the centers of the network should always be 0, as they should'nt be changed further
         for center in centers:
              mergednetwork[center].shell = 0
         print 'Data from merged network of atom'
@@ -383,11 +439,14 @@ class LiuTSsearch(Dynamics):
         return mergednetwork
 
     def distance(self, atoma, atomb):
+        # gives back the distance between atoma and atomb
         avec = atoma - atomb
         return sqrt(np.dot(avec, avec))
 
     def __giveradius(self, z):
         # gives the radius back
+        # stored values are in bohrs, therefore the factor
+        # they are listed in order of the atomic number
         gradius = [ None,
              0.3200, 0.9300, 1.2300, 0.9000, 0.8200,
              0.7700, 0.7500, 0.7300, 0.7200, 0.7100,
