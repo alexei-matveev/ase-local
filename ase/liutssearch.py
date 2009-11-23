@@ -8,7 +8,7 @@ from ase.optimize.gxoptimizer import GxOptimizer
 class LiuTSsearch(Dynamics):
     def __init__(self, atoms, restart=None, logfile='-' , trajectory=None, soften = 0, factsoft = 0.7,
                  outer_optimizer=BFGS, finish_optimizer = GxOptimizer, opt_args=None, relax_max=2, liuconstr = None,
-                 switchfinish = False, treat1 = True, treat2 = True, additionalcoords = [1, 2] ):
+                 switchfinish = True, treat1 = True, treat2 = True, additionalcoords = [1, 2] ):
         """Structure optimizer object.
        source of the code is the following paper:
         H.-F. Wang and Z.-P. Liu: Comprehensive Mechanism and Structure-Sensitivity of Ethanol
@@ -27,10 +27,25 @@ class LiuTSsearch(Dynamics):
             PickleTrajectory will be constructed.  Use *None* for no
             trajectory.
         outer_optimizer: optimizer for the "Broyden steps"
+        opt_args: **opt_args will be given to the outer optimizer, so if 
+                  some addiditional arguments are wanted
 
         relax_max: after this amount of steps (integer) an update step
                   is performed
         liuconstr: constraint object
+
+        treat1: if true calculate with treatment 1
+        treat2: if true calculate with treatment 2
+        soften: there are different implementations of treatment 2, soften
+                chooses which one to take
+        factsoft: treatment 2 wants a value, saying how much of change considerd
+                  will be used for adjusting the neighboring atoms, different meaning
+                  for the different soften values
+        switchfinish: for the finishing of the calculation (if already near TS) there
+                      may be the wanting for another (faster) transition state searcher
+        finish_optimizer: optimizer which finishes after switchforfinish, will be used after
+                          three update and four additional relaxation steps without any 
+                          visible change to the coordinates
         """
 
         Dynamics.__init__(self, atoms, logfile, trajectory)
