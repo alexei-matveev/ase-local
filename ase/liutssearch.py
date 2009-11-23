@@ -161,6 +161,8 @@ class LiuTSsearch(Dynamics):
                      switch_finish = 0
                  if (switch_finish > self.relax_max * 3 + 4 ):
                      self.switchforlast(steps - step)
+                     break
+
         print "maximum number of steps exceeded, calculation stopped"
 
     def converged(self, forces=None, stepdiff = None):
@@ -188,7 +190,7 @@ class LiuTSsearch(Dynamics):
     def logreact(self, newval, relaxorup):
         centers = self.liuconstr.centerofnetwork()
         for count in range(len(centers) / 2):
-            self.logout.write('%18.12f' % self.distance(newval[centers[count] - 1], newval[centers[count + 1] - 1]))
+            self.logout.write('%18.12f' % self.distance(newval[centers[count]], newval[centers[count + 1]]))
         for count2 in range(len(self.adcoord) / 2):
             self.logout.write('%16.10f' % self.distance(newval[self.adcoord[count2] - 1], newval[self.adcoord[count2 + 1] - 1]))
         if (relaxorup == 1):
@@ -196,8 +198,8 @@ class LiuTSsearch(Dynamics):
         else:
             self.logout.write(' u\n')
 
-    def switchforlast(steps):
-        self.dyn = self.finish_optimizer(atoms)
+    def switchforlast(self, steps):
+        self.dyn = self.finish_optimizer(self.atoms)
         self.dyn.initialize()
         self.dyn.run(self.fmax, steps)
 
