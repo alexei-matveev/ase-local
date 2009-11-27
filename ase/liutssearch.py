@@ -278,30 +278,48 @@ class LiuTSsearch(Dynamics):
              if (cutoff != None):
                  # or set maxshell to the cutoff if only wanted to this shell
                  maxshell = min(cutoff, maxshell)
-             for s in range(maxshell):
-                 # s goes over the shells, because this update has to be made shellwise
+             if (soften < -1):
                  for i in range(len(self.allnetwork)):
-                      # i goes over all atoms, but only those wich have the correct shell, looked at the moment
-                      # will be considerd further
-                      if (self.allnetwork[i].shell == s + 1):
-                          # there may be several atoms to which the distances should be fixed, they are in the
-                          # nextN list of the atom
-                          for k, smo  in enumerate(self.allnetwork[i].nextN):
-                               distold = self.allnetwork[i].dist_to_next[k]
-                               print "change of", self.allnetwork[i].number, "of shell", self.allnetwork[i].shell
-                               print "old value", new[self.allnetwork[i].number-1]
-                               # this update considers the change in the bond length of the corresponding atoms
-                               dt = self.vect_of_change(new[self.allnetwork[i].number-1], new[smo -1], distold)
-                               print dt
-                               # actual adjustment
-                               new[self.allnetwork[i].number-1] += self._adjustas(dt / self.allnetwork[i].multiplicity, soften, p, s + 1)
-                               print "new value", new[self.allnetwork[i].number-1]
+                     # i runs over all atoms, only those are considerd which are wanted
+                     # (shell smaller eventually set maxshell, shell + 0 would mean this atom
+                     # is not connected to the atom of which this network is, or the atom is one
+                     # of the network center atoms, which won't be adjusted further, as they have been reset
+                     # in the update function)
+                     if (self.allnetwork[i].shell > 0 and self.allnetwork[i].shell < maxshell):
+                         print "change of", self.allnetwork[i].number, "of shell", self.allnetwork[i].shell
+                         print "old value", new[self.allnetwork[i].number-1]
+                         print self.allnetwork[i].center, self.liuconstr.centerofnetwork()
+                         for inum, center in  enumerate(self.liuconstr.centerofnetwork()):
+                              if ( center == (self.allnetwork[i].center -1)  ): 
+                                 new[self.allnetwork[i].number-1] += self._adjustas(ch[inum] , soften, p, self.allnetwork[i].shell)
+                                 print "update around center", center + 1, " with adjustment", ch[inum]
+                                 break
+                         print "new value", new[self.allnetwork[i].number-1]
+             else:
+                 for s in range(maxshell):
+                     # s goes over the shells, because this update has to be made shellwise
+                     for i in range(len(self.allnetwork)):
+                          # i goes over all atoms, but only those wich have the correct shell, looked at the moment
+                          # will be considerd further
+                          if (self.allnetwork[i].shell == s + 1):
+                              # there may be several atoms to which the distances should be fixed, they are in the
+                              # nextN list of the atom
+                              for k, smo  in enumerate(self.allnetwork[i].nextN):
+                                   distold = self.allnetwork[i].dist_to_next[k]
+                                   print "change of", self.allnetwork[i].number, "of shell", self.allnetwork[i].shell
+                                   print "old value", new[self.allnetwork[i].number-1]
+                                   # this update considers the change in the bond length of the corresponding atoms
+                                   dt = self.vect_of_change(new[self.allnetwork[i].number-1], new[smo -1], distold)
+                                   print dt
+                                   # actual adjustment
+                                   new[self.allnetwork[i].number-1] += self._adjustas(dt / self.allnetwork[i].multiplicity, soften, p, s + 1)
+                                   print "new value", new[self.allnetwork[i].number-1]
         else:
             # the other cases (soften 0 and 1) are very similar and could be considerd together
             for inum, network in enumerate(self.networks):
                 # inum counts the atoms to be changed, network is the atomic network of them,
                 # as here the changes from different atoms just sum up, each of them can be considerd one after another
-                maxshell = len(self.memberinshell[inum])
+                maxshell = len(self.memberinshell[inum])+1
                 # maybe a cutoff for shells with to high numbers is wanted
                 if (cutoff != None ):
                     maxshell = min(cutoff, maxshell)
@@ -358,7 +376,7 @@ class LiuTSsearch(Dynamics):
         # the center atom of the network and their radius, needed further on
         for i in range(len(pos)):
             d = self.distance(pos[i], pos[center])
-            atnet.append(netinfo(i+1, dist_to_center = d, radius = self.__giveradius( atnums[i])))
+            atnet.append(netinfo(i+1, dist_to_center = d, radius = self.__giveradius( atnums[i]), center = (center + 1)  ))
         # start calculating the first shell
         # memberinshell needs new value for members of shell 1
         memberinshell.append(0)
@@ -443,10 +461,11 @@ class LiuTSsearch(Dynamics):
                       # is taken
                       if ((network[i].shell > 0 and network[i].shell < mergednetwork[i].shell) or (mergednetwork[i].shell == 0)):
                            mergednetwork[i] = network[i]
-                      if ((network[i].shell > 0 and network[i].shell == mergednetwork[i].shell)):
+                      elif ((network[i].shell > 0 and network[i].shell == mergednetwork[i].shell)):
                           mergednetwork[i].multiplicity += network[i].multiplicity
                           mergednetwork[i].nextN = mergednetwork[i].nextN + network[i].nextN
                           mergednetwork[i].dist_to_next = mergednetwork[i].dist_to_next + network[i].dist_to_next
+                          mergednetwork[i].center = 0 
         # the shell of the centers of the network should always be 0, as they should'nt be changed further
         for center in centers:
              mergednetwork[center].shell = 0
@@ -558,7 +577,7 @@ class LiuCBond:
 
 class netinfo:
      def __init__(self, number, dist_to_center = None, shell = 0,
-                  multiplicity = 0, nextN = [], dist_to_next = [], radius = None):
+                  multiplicity = 0, nextN = [], dist_to_next = [], radius = None, center = 0  ):
          '''Gives the info of a atomicnetwork for one (current) atom, related to a center
          the variables stored there are:
             number: the number of the atom, consider that the lists start with 0, but
@@ -572,6 +591,7 @@ class netinfo:
             dist_to_next: distance to the direct neigbors, in the same order given
             multiplicity: dimension of nextN, how many direct neigbohrs are there
             radius: radius of the current atom, just to store it and have easier access
+            center: center of the atomic network (as number of it)
          '''
          self.number = number
          self.dist_to_center = dist_to_center
@@ -580,3 +600,4 @@ class netinfo:
          self.nextN = nextN
          self.dist_to_next = dist_to_next
          self.radius = radius
+         self.center = center
