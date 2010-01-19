@@ -44,6 +44,7 @@ keys = [
     'ngyf',       # FFT mesh for charges y
     'ngzf',       # FFT mesh for charges z
     'nblk',       # blocking for some BLAS calls (Sec. 6.5)
+    'nplane',     # for PAW
     'system',     # name of System
     'nwrite',     # verbosity write-flag (how much is written)
     'istart',     # startjob: 0-new 1-cont 2-samecut
