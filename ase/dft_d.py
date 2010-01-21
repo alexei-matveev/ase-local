@@ -1,4 +1,14 @@
 #!/usr/bin/python
+"""
+Example for H2:
+
+    >>> e, g = test()
+    >>> e
+    -0.0087334944573799964
+    >>> g
+    array([[-0.01760738,  0.        ,  0.        ],
+           [ 0.01760738,  0.        ,  0.        ]])
+"""
 
 from ase import Atoms
 import numpy as np
@@ -13,21 +23,21 @@ DF_CUTOFF_RADIUS = 9.0
 def test():
     h3 = Atoms('H2')
 
-    x1 = ( -2., 0, 0)
-    x2 = ( 2., 0, 0)
+    x1 = ( -2., 0., 0.)
+    x2 = (  2., 0., 0.)
 
     h3.set_positions([x1,x2])
     h3.set_atomic_numbers([1,1])
-    h3.set_cell([(20.0, 0.0, 0.0), (0.0, 5.0, 0.0), (0.0, 0.0, 5.0)])
+    h3.set_cell([(6.0, 0.0, 0.0), (0.0, 6.0, 0.0), (0.0, 0.0, 6.0)])
     h3.set_pbc([True, False, False])
     dc, dcg = dft_d_pbc(h3)
-    print dc, dcg
+    return dc, dcg
 
-# Function dft_d_iso: Main function making the D-G06 DFT-D correction available for
-#                     isolated systems. Consists in the application of an intra-cell
-#                     evaluation of the D-G06 correction carried out in "d_g06_cell".
 def dft_d_iso(atoms, scaling_factor=0.75, interactionlist=[None,], interactionmatrix=None, cutoff_radius=DF_CUTOFF_RADIUS):
-    """
+    """Main function making the D-G06 DFT-D correction available for
+    isolated systems. Consists in the application of an intra-cell
+    evaluation of the D-G06 correction carried out in "d_g06_cell".
+
         >>> HCldim = Atoms('Cl2')
         >>> x1 = ( 1.65, 0, -0.01)
         >>> x2 = (-1.65, 0,  0.01)
@@ -62,13 +72,13 @@ def dft_d_iso(atoms, scaling_factor=0.75, interactionlist=[None,], interactionma
     #
     return dispersion_correction, gradient_contribution
 # End of function dft_d_iso
-#
-# Function dft_d_pbc: Main function making the D-G06 DFT-D correction available for
-#                     systems with periodic boundary conditions. Applies the lattice
-#                     summation defined in "lattice_sum" to the intra- and inter-cell
-#                     evaluation of the D-G06 correction carried out in "d_g06_cell".
+
 def dft_d_pbc(atoms, scaling_factor=0.75, interactionlist=[None,], interactionmatrix=None, cutoff_radius=DF_CUTOFF_RADIUS):
-    """
+    """Main function making the D-G06 DFT-D correction available for
+    systems with periodic boundary conditions. Applies the lattice
+    summation defined in "lattice_sum" to the intra- and inter-cell
+    evaluation of the D-G06 correction carried out in "d_g06_cell".
+
         >>> HCldim = Atoms('Cl2')
         >>> x1 = ( 1.65, 0, -0.01)
         >>> x2 = (-1.65, 0,  0.01)
@@ -116,11 +126,11 @@ def dft_d_pbc(atoms, scaling_factor=0.75, interactionlist=[None,], interactionma
     #
     return dispersion_correction, gradient_contribution
 # End of function dft_d_pbc
-#
-# Function check_interaction_group_input: Checks consistency of defined interactionlist
-#                                         and interactionmatrix and sets proper values in
-#                                         the default case.
+
 def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
+    """Checks consistency of defined interactionlist
+    and interactionmatrix and sets proper values in the default case.
+    """
     if interactionlist == [None,]:
         # Case 1: Nothing given, all atoms in the same group and interacting with each other
         interactionlist = [0,]*N_atoms
@@ -128,23 +138,30 @@ def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
     elif interactionlist[0] != None and interactionmatrix == None:
         # Case 2: List given, but interaction matrix has to be set to its default
         N_groups = max(interactionlist) + 1
-        if len(interactionlist) != N_atoms: raise SyntaxError, 'DFT-D: interaction list not of expected size'
+
+        if len(interactionlist) != N_atoms:
+            raise SyntaxError, 'DFT-D: interaction list not of expected size'
+
         interactionmatrix = np.array(np.ones((N_groups,N_groups)) - np.eye((N_groups)),dtype=bool)
     elif interactionlist[0] != None and interactionmatrix != None:
         # Case 3: List and interaction matrix given
         N_groups = max(interactionlist) + 1
-        if len(interactionlist) != N_atoms: raise SyntaxError, 'DFT-D: interaction list not of expected size'
-        if not (len(interactionmatrix[:,1]) == N_groups and len(interactionmatrix[1,:]) == N_groups): raise SyntaxError, 'DFT-D: interaction matrix not of expected size'
+
+        if len(interactionlist) != N_atoms:
+            raise SyntaxError, 'DFT-D: interaction list not of expected size'
+
+        if not (len(interactionmatrix[:,1]) == N_groups and len(interactionmatrix[1,:]) == N_groups):
+            raise SyntaxError, 'DFT-D: interaction matrix not of expected size'
     #
     return interactionlist, interactionmatrix
 # End of function check_interaction_group_input
-#
-# Function lattice_sum: Computes the lattice sum of interactions within the (0,0,0) copy
-#                       as well as the interactions to all other copies that lie whithin
-#                       a sphere defined by the "cutoff_radius". Thereby the interaction
-#                       is defined by a distance-vector-dependent function "func"
-def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=3*(False,), cutoff_radius=DF_CUTOFF_RADIUS):
-    """
+
+def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False, False, False), cutoff_radius=DF_CUTOFF_RADIUS):
+    """Computes the lattice sum of interactions within the (0,0,0) copy
+    as well as the interactions to all other copies that lie whithin
+    a sphere defined by the "cutoff_radius". Thereby the interaction
+    is defined by a distance-vector-dependent function "func"
+
         >>> from math import pi
         >>> v, g = lattice_sum(lambda x: (1, 1), [[0., 0., 0.]], periodic_directions=3*(True,))
         >>> v / (4. * pi / 3. * DF_CUTOFF_RADIUS**3)
@@ -153,41 +170,52 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=3*(Fal
     #
     # Number of atoms within a single copy
     N_atoms = len(positions)
-    #
-    # Initialization of output values
-    f       = 0.0
-    f_prime = np.zeros((N_atoms,3))
+
     #
     # Maximum distance of two atoms within a copy
     # Serves as measure for extension of a single copy
-    Rij_max               = 0.0
-    for ind_i in range(0, N_atoms - 1):
-        for ind_j in range(ind_i + 1, N_atoms ):
+    Rij_max = 0.0
+    for i in range(N_atoms):
+        for j in range(i):
             # Determine pairwise distance
-            dirij = positions[ind_j,:] - positions[ind_i,:]
-            Rij   = sqrt(sum(dirij**2))
+            dirij = positions[j] - positions[i]
+            Rij   = sqrt(np.dot(dirij, dirij))
             # Check if larger than actual maximum
             if Rij_max < Rij: Rij_max = Rij
-    #
+
+    # use this below as cutoff radius:
+    cutoff = cutoff_radius + Rij_max
+
     # Determine dual vectors to the unit-cell vectors
     D_vecs = np.matrix(elem_cell).I
-    #
+
     # Search for maximum indices: max_ind = |D_vec|*|R_cut+Rij_max|
-    max_ind = [0,]*3
-    for ind_i in range(0,3):
-        if periodic_directions[ind_i]:
-            D_vec_norm = sqrt(sum(np.multiply(D_vecs[:,ind_i],D_vecs[:,ind_i])))
-            max_ind[ind_i] = int(ceil(D_vec_norm * (cutoff_radius + Rij_max)))
-    #
+    max_ind = [0, 0, 0]
+    for i in range(3):
+        if periodic_directions[i]:
+            # maybe convert D_vecs back to array() to avoid .T here:
+            D_vec_norm = sqrt(np.dot(D_vecs[:,i].T, D_vecs[:,i]))
+
+            # index of a cell that is at about |cutoff| from the origin
+            # in u-, v- or w- direction:
+            max_ind[i] = int(ceil(D_vec_norm * cutoff))
+
+    # Initialization of output values
+    f       = 0.0
+    f_prime = np.zeros((N_atoms,3))
+
     # scan over indices u, v, w
-    for ind_u in range(-max_ind[0],max_ind[0]+1):
-        for ind_v in range(-max_ind[1],max_ind[1]+1):
-            for ind_w in range(-max_ind[2],max_ind[2]+1):
+    for u in range(-max_ind[0], max_ind[0] + 1):
+        for v in range(-max_ind[1], max_ind[1] + 1):
+            for w in range(-max_ind[2], max_ind[2] + 1):
+
                 # Calculate translation vector to actual copy
-                t_vec = ind_u * elem_cell[0] + ind_v * elem_cell[1] + ind_w * elem_cell[2]
-                # Calculate distance to copy
-                t_len = sqrt(sum(t_vec**2))
-                if t_len > cutoff_radius + Rij_max: continue
+                t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
+
+                # Calculate the squared distance to copy, cycle if that is too long:
+                t2 = np.dot(t_vec, t_vec)
+                if t2 > cutoff**2: continue
+
                 # Calculate the dispersion interaction between
                 # the considered pair of copies
                 f1, fprime1 = func(t_vec)
@@ -200,12 +228,14 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=3*(Fal
     #
     return f, f_prime
 # End of function lattice_sum
-#
-# Function d_g06_cell: Evaluation of the dispersion correction between two cells
-#                      or within the (0,0,0) cell
+
 def d_g06_cell(N_atoms, parameters, positions, interactionlist, interactionmatrix, cutoff_radius, t_vec=[0., 0., 0.]):
-    """
-	>>> d_g06_cell(2, [[ 5.71 , 1.144 ], [ 5.07 , 1.639 ]], np.array([[ 0., 0., 0.], [ 0., 0., 2.91]]), [0, 0], np.eye(1), DF_CUTOFF_RADIUS)
+    """Evaluation of the dispersion correction between two cells
+    or within the (0,0,0) cell
+
+        >>> parameters = [[ 5.71 , 1.144 ], [ 5.07 , 1.639 ]]
+        >>> positions = np.array([[ 0., 0., 0.], [ 0., 0., 2.91]])
+	>>> d_g06_cell(2, parameters, positions, [0, 0], np.eye(1), DF_CUTOFF_RADIUS)
         (-0.0063224873391008497, array([[  0.00000000e+00,   0.00000000e+00,  -2.07338491e-05],
                [  0.00000000e+00,   0.00000000e+00,   2.07338491e-05]]))
     """
@@ -245,11 +275,11 @@ def d_g06_cell(N_atoms, parameters, positions, interactionlist, interactionmatri
     #
     return dispersion_correction_cell, gradient_contribution_cell
 # End of function d_g06_cell
-#
-# Function d_g06: Pairwise evaluation of the D-G06 dispersion correction in terms of
-#                 the dimensionless vector rij_vec / Rij0
+
 def d_g06(rij_vec_Rij0):
-    """
+    """Pairwise evaluation of the D-G06 dispersion correction in terms of
+    the dimensionless vector rij_vec / Rij0
+
         >>> d_g06(np.array([1., 0., 0.]))
         (-0.5, array([-2., -0., -0.]))
         >>> d_g06(np.array([1., 1., 1.]))
@@ -276,11 +306,11 @@ def d_g06(rij_vec_Rij0):
     #
     return Dij, dDij_drij_vec_Rij0
 # End of function d_g06
-#
-# Function d_g06_parameters: Delivers the atomic parameters C6 and R0 of the D-G06
-#                            DFT-D correction
+
 def d_g06_parameters(pse_number):
-    """
+    """Delivers the atomic parameters C6 and R0 of the D-G06
+    DFT-D correction
+
         >>> d_g06_parameters(1)
         [1.4509976368338922, 1.0009999999999999]
         >>> d_g06_parameters(6)
@@ -351,13 +381,11 @@ def d_g06_parameters(pse_number):
     #
     return [C_6_par, R_0_par]
 # End of function d_g06_parameters
-#
-# python mueller_brown.py [-v]:
+
+# python dft_d.py [-v]:
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
     test()
 
-
 # Default options for vim:sw=4:expandtab:smarttab:autoindent:syntax
-
