@@ -205,9 +205,9 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
     f_prime = np.zeros((N_atoms,3))
 
     # scan over indices u, v, w
-    for u in range(-max_ind[0], max_ind[0] + 1):
-        for v in range(-max_ind[1], max_ind[1] + 1):
-            for w in range(-max_ind[2], max_ind[2] + 1):
+    for u in xrange(-max_ind[0], max_ind[0] + 1):
+        for v in xrange(-max_ind[1], max_ind[1] + 1):
+            for w in xrange(-max_ind[2], max_ind[2] + 1):
 
                 # Calculate translation vector to actual copy
                 t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
