@@ -181,25 +181,46 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
     # Determine dual vectors to the unit-cell vectors
     D_vecs = np.matrix(elem_cell).I
 
-    # Search for maximum indices: max_ind = |D_vec|*|R_cut+Rij_max|
-    max_ind = [0, 0, 0]
-    for i in range(3):
-        if periodic_directions[i]:
-            # maybe convert D_vecs back to array() to avoid .T here:
-            D_vec_norm = sqrt(np.dot(D_vecs[:,i].T, D_vecs[:,i]))
+    #
+    # So far we have to provide the meaningfull (non-linearly dependent) cell vectors
+    # also for directions that are not periodic in order to be able to invert the 3x3
+    # matrix. FIXME: Is there a better way?
+    #
 
-            # index of a cell that is at about |cutoff| from the origin
-            # in u-, v- or w- direction:
-            max_ind[i] = int(ceil(D_vec_norm * cutoff))
+    # compute the size of the box enclosing a sphere of radius |cutoff|
+    # in "fractional" coordinates:
+    box = minbox(elem_cell, cutoff)
+
+    # round them in very conservative fashion, all box[i] >= 1,
+    box = [ int(ceil(k)) for k in box ]
+
+    #
+    # This rounding approach appears to never restrict the summation
+    # later to a single cell, rather to at least three at
+    #
+    #   -1, 0 , +1
+    #
+    # of the cell vector in each direction.
+    #
+
+    # reset the values for non-periodic directions to zero:
+    for i in range(len(box)):
+        if not periodic_directions[i]:
+            # in this direction treat only the unit cell itself:
+            box[i] = 0
+
+    #
+    # Now we are ready to sum over all cells in the box
+    #
 
     # Initialization of output values
     f       = 0.0
     f_prime = np.zeros((N_atoms,3))
 
     # scan over indices u, v, w
-    for u in xrange(-max_ind[0], max_ind[0] + 1):
-        for v in xrange(-max_ind[1], max_ind[1] + 1):
-            for w in xrange(-max_ind[2], max_ind[2] + 1):
+    for u in xrange(-box[0], box[0] + 1):
+        for v in xrange(-box[1], box[1] + 1):
+            for w in xrange(-box[2], box[2] + 1):
 
                 # Calculate translation vector to actual copy
                 t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
@@ -245,6 +266,57 @@ def maxdist(positions):
             if Rij_max < Rij: Rij_max = Rij
 
     return Rij_max
+
+def minbox(cell, R=1.):
+    """Given the (non-orthogonal) cell vectors, return the dimensions (u, v, w)
+    of the minimal box (-u:u,-v:v,-w:w) containing the sphere of radius R.
+    Works for any dimension, however assumes linarly independent cell vectors.
+
+    1D-case:
+
+        >>> minbox([[1.]], 8.0)
+        [8.0]
+
+    2D-case:
+
+        >>> minbox([[1., 0.], [0., 2.]], 8.0)
+        [8.0, 4.0]
+
+    3D-case:
+
+        >>> minbox([[1., 0., 0.], [0., 2., 0.], [0., 0., 4.]], 8.0)
+        [8.0, 4.0, 2.0]
+
+    Here 10 / sqrt(2) should appear:
+
+        >>> minbox([[1., 1., 0.], [1., -1., 0.], [0., 0., 1.]], 10.0)
+        [7.0710678118654755, 7.0710678118654755, 10.0]
+
+    Here sqrt(3):
+
+        >>> minbox([[1., 0., 0.], [1., 1., 0.], [1., 0., 1.]])
+        [1.7320508075688772, 1.0, 1.0]
+    """
+
+    # Determine dual vectors to the unit-cell vectors
+    # as inverse and transposed:
+    dcell = np.asarray(np.matrix(cell).I.T)
+
+    # Search for maximum indices: box[i] = |dcell[i]| * R
+    box = []
+    for d in dcell:
+        dnorm = sqrt(np.dot(d, d))
+
+        # u-, v-, and w-coordinates of a cell that is at about |cutoff| from the origin
+        k = dnorm * R
+        box.append(k)
+
+    # DONT return intergers (cell indices) not below our estimates:
+    #return [ int(ceil(k)) for k in box ]
+
+    # return exact estimates:
+    return box
+
 
 def d_g06_cell(N_atoms, parameters, positions, interactionlist, interactionmatrix, cutoff_radius, t_vec=[0., 0., 0.]):
     """Evaluation of the dispersion correction between two cells
