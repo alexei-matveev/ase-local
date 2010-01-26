@@ -178,9 +178,6 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
     # use this below as cutoff radius:
     cutoff = cutoff_radius + Rij_max
 
-    # Determine dual vectors to the unit-cell vectors
-    D_vecs = np.matrix(elem_cell).I
-
     #
     # So far we have to provide the meaningfull (non-linearly dependent) cell vectors
     # also for directions that are not periodic in order to be able to invert the 3x3
