@@ -167,21 +167,13 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
         >>> v / (4. * pi / 3. * DF_CUTOFF_RADIUS**3)
         1.0056889511012566
     """
-    #
+
     # Number of atoms within a single copy
     N_atoms = len(positions)
 
-    #
     # Maximum distance of two atoms within a copy
     # Serves as measure for extension of a single copy
-    Rij_max = 0.0
-    for i in range(N_atoms):
-        for j in range(i):
-            # Determine pairwise distance
-            dirij = positions[j] - positions[i]
-            Rij   = sqrt(np.dot(dirij, dirij))
-            # Check if larger than actual maximum
-            if Rij_max < Rij: Rij_max = Rij
+    Rij_max = maxdist(positions)
 
     # use this below as cutoff radius:
     cutoff = cutoff_radius + Rij_max
@@ -228,6 +220,31 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
     #
     return f, f_prime
 # End of function lattice_sum
+
+def maxdist(positions):
+    """Computes the maximum distance between pair of atoms.
+    Serves as measure for extension of a "unit cell".
+
+    >>> pos = np.array([[0., 0., 0.], [1., 0., 0.], [0., 0., 1.]])
+    >>> maxdist(pos)
+    1.4142135623730951
+    """
+
+    # Number of atoms within a single copy
+    N_atoms = len(positions)
+
+    # Maximum distance of two atoms within a copy
+    # Serves as measure for extension of a single copy
+    Rij_max = 0.0
+    for i in range(N_atoms):
+        for j in range(i):
+            # Determine pairwise distance
+            dirij = positions[j] - positions[i]
+            Rij   = sqrt(np.dot(dirij, dirij))
+            # Check if larger than actual maximum
+            if Rij_max < Rij: Rij_max = Rij
+
+    return Rij_max
 
 def d_g06_cell(N_atoms, parameters, positions, interactionlist, interactionmatrix, cutoff_radius, t_vec=[0., 0., 0.]):
     """Evaluation of the dispersion correction between two cells
