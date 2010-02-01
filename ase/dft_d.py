@@ -10,7 +10,7 @@ Example for H2:
            [ 0.01760738,  0.        ,  0.        ]])
 """
 
-from ase import Atoms
+import atoms
 import numpy as np
 from math import sqrt, exp, ceil
 
@@ -18,7 +18,7 @@ from math import sqrt, exp, ceil
 # steepness of damping function
 ALPHA = 20.0
 # Default value of cutoff radius in Angstrom
-DF_CUTOFF_RADIUS = 9.0
+DF_CUTOFF_RADIUS = 25.0
 
 def test():
     h3 = Atoms('H2')
@@ -33,7 +33,7 @@ def test():
     dc, dcg = dft_d_pbc(h3)
     return dc, dcg
 
-def dft_d_iso(atoms, scaling_factor=0.75, interactionlist=[None,], interactionmatrix=None, cutoff_radius=DF_CUTOFF_RADIUS):
+def dft_d_iso(atoms, scaling_factor=0.75, interactionlist=None, interactionmatrix=None, cutoff_radius=DF_CUTOFF_RADIUS):
     """Main function making the D-G06 DFT-D correction available for
     isolated systems. Consists in the application of an intra-cell
     evaluation of the D-G06 correction carried out in "d_g06_cell".
@@ -73,7 +73,7 @@ def dft_d_iso(atoms, scaling_factor=0.75, interactionlist=[None,], interactionma
     return dispersion_correction, gradient_contribution
 # End of function dft_d_iso
 
-def dft_d_pbc(atoms, scaling_factor=0.75, interactionlist=[None,], interactionmatrix=None, cutoff_radius=DF_CUTOFF_RADIUS):
+def dft_d_pbc(atoms, scaling_factor=0.75, interactionlist=None, interactionmatrix=None, cutoff_radius=DF_CUTOFF_RADIUS):
     """Main function making the D-G06 DFT-D correction available for
     systems with periodic boundary conditions. Applies the lattice
     summation defined in "lattice_sum" to the intra- and inter-cell
@@ -107,7 +107,6 @@ def dft_d_pbc(atoms, scaling_factor=0.75, interactionlist=[None,], interactionma
     #
     # Check input i.e. if interactionlist and interactionmatrix are set properly
     interactionlist, interactionmatrix = check_interaction_group_input(N_atoms, interactionlist, interactionmatrix)
-    interactionmatrix = np.array(interactionmatrix)
     #
     # Start with Calculation
     # Get DFT-D parameters
@@ -131,10 +130,11 @@ def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
     """Checks consistency of defined interactionlist
     and interactionmatrix and sets proper values in the default case.
     """
-    if interactionlist == [None,]:
+    if interactionlist == None:
         # Case 1: Nothing given, all atoms in the same group and interacting with each other
-        interactionlist = [0,]*N_atoms
+        interactionlist = [0,] * N_atoms
         interactionmatrix = np.array(np.ones((1,1)),dtype=bool)
+	#
     elif interactionlist[0] != None and interactionmatrix == None:
         # Case 2: List given, but interaction matrix has to be set to its default
         N_groups = max(interactionlist) + 1
@@ -143,6 +143,7 @@ def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
             raise SyntaxError, 'DFT-D: interaction list not of expected size'
 
         interactionmatrix = np.array(np.ones((N_groups,N_groups)) - np.eye((N_groups)),dtype=bool)
+	#
     elif interactionlist[0] != None and interactionmatrix != None:
         # Case 3: List and interaction matrix given
         N_groups = max(interactionlist) + 1
@@ -150,8 +151,12 @@ def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
         if len(interactionlist) != N_atoms:
             raise SyntaxError, 'DFT-D: interaction list not of expected size'
 
-        if not (len(interactionmatrix[:,1]) == N_groups and len(interactionmatrix[1,:]) == N_groups):
+	interactionmatrix = np.array(interactionmatrix,dtype=bool)
+
+        if not (len(interactionmatrix[:,0]) == N_groups and len(interactionmatrix[0,:]) == N_groups):
             raise SyntaxError, 'DFT-D: interaction matrix not of expected size'
+
+	#
     #
     return interactionlist, interactionmatrix
 # End of function check_interaction_group_input
@@ -181,7 +186,7 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
     #
     # So far we have to provide the meaningfull (non-linearly dependent) cell vectors
     # also for directions that are not periodic in order to be able to invert the 3x3
-    # matrix. FIXME: Is there a better way?
+    # matrix. FIXME: Is there a better way? Also ASE sets the system in that way?
     #
 
     # compute the size of the box enclosing a sphere of radius |cutoff|
