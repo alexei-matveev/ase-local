@@ -72,7 +72,7 @@ class ParaGauss:
         """
         self.update(atoms)
         if self.__energy == None:
-            print "WARNING: no energy available when energy wanted"
+            print "ParaGauss WARNING: no energy available when energy wanted"
             print "There seems to be gone something wrong with the energy calculation"
             print "So I better stop here"
             sys.exit()
@@ -86,7 +86,7 @@ class ParaGauss:
         self.update(atoms)
 
         if self.__grads == None :
-            print "WARNING: no forces available when they are wanted"
+            print "ParaGauss WARNING: no forces available when they are wanted"
             print "There seems to be gone something wrong with the force calculation"
             print "So I better stop here"
             sys.exit()
@@ -142,6 +142,13 @@ class ParaGauss:
             atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy, loopi_d = gxread('gxfile')
             if self.__energy is not None:
                 return
+        else:
+            print "ParaGauss ERROR: Found no gxfile to read energy or forces from"
+            print "There should be at least the one I created"
+            print "Therefore something very strange happened"
+            print "ERROR: I quit!!"
+            sys.exit(1)
+
         self.__energy = self.parse_output('o.' + self.input + '/output')
 
     def parse_output(self, output): # not actually using |self|
