@@ -138,6 +138,7 @@ class ParaGauss:
 
     def read(self):
         # the interisting part to read in are the grads and energy, rest will be ignored afterwards
+        os.system("ls > /dev/null")
         if os.path.exists('gxfile'):
             atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy, loopi_d = gxread('gxfile')
             if self.__energy is not None:
