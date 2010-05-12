@@ -3,39 +3,83 @@ import numpy as np
 from numpy import linalg
 from ase.transport.selfenergy import LeadSelfEnergy, BoxProbe
 from ase.transport.greenfunction import GreenFunction
-from ase.transport.tools import subdiagonalize, cutcoupling, tri2full, dagger
+from ase.transport.tools import subdiagonalize, cutcoupling, tri2full, dagger,\
+    rotate_matrix
 
 
 class TransportCalculator:
-    """Determine transport properties of device sandwiched between
-    semi-infinite leads using nonequillibrium Green function methods.
+    """Determine transport properties of a device sandwiched between
+    two semi-infinite leads using a Green function method.
     """
 
     def __init__(self, **kwargs):
-        """Bla Bla XXX
-        
-        energies is the energy grid on which the transport properties
-        should be determined.
-        
-        h1 (h2) is a matrix representation of the Hamiltonian of two
-        principal layers of the left (right) lead, and the coupling
-        between such layers.
-        
-        h is a matrix representation of the Hamiltonian of the
-        scattering region. This must include at least one lead
-        principal layer on each side. The coupling in (out) of the
-        scattering region is by default assumed to be identical to the
-        coupling between left (right) principal layers.  However,
-        these couplings can also be specified explicitly through hc1
-        and hc2.
-        
-        s, s1, and s2 are the overlap matrices corresponding to h, h1,
-        and h2. Default is the identity operator. sc1 and sc2 are the
-        overlap matrices corresponding to the optional couplings hc1
-        and hc2.
-        
-        align_bf specifies the principal layer basis index used to
-        align the fermi levels of the lead and scattering regions.
+        """Create the transport calculator.
+
+        Parameters
+        ==========
+        h : (N, N) ndarray
+            Hamiltonian matrix for the central region. 
+        s : {None, (N, N) ndarray}, optional
+            Overlap matrix for the central region. 
+            Use None for an orthonormal basis.
+        h1 : (N1, N1) ndarray
+            Hamiltonian matrix for lead1.
+        h2 : {None, (N2, N2) ndarray}, optional
+            Hamiltonian matrix for lead2. You may use None if lead1 and lead2 
+            are identical.
+        s1 : {None, (N1, N1) ndarray}, optional
+            Overlap matrix for lead1. Use None for an orthonomormal basis.
+        hc1 : {None, (N1, N) ndarray}, optional
+            Hamiltonian coupling matrix between the first principal
+            layer in lead1 and the central region.
+        hc2 : {None, (N2, N} ndarray), optional
+            Hamiltonian coupling matrix between the first principal
+            layer in lead2 and the central region.
+        sc1 : {None, (N1, N) ndarray}, optional  
+            Overlap coupling matrix between the first principal
+            layer in lead1 and the central region.
+        sc2 : {None, (N2, N) ndarray}, optional  
+            Overlap coupling matrix between the first principal
+            layer in lead2 and the central region.
+        energies : {None, array_like}, optional
+            Energy points for which calculated transport properties are
+            evaluated.
+        eta : {1.0e-5, float}, optional
+            Infinitesimal for the central region Green function. 
+        eta1/eta2 : {1.0e-5, float}, optional
+            Infinitesimal for lead1/lead2 Green function.
+        align_bf : {None, int}, optional
+            Use align_bf=m to shift the central region 
+            by a constant potential such that the m'th onsite element
+            in the central region is aligned to the m'th onsite element
+            in lead1 principal layer.
+        logfile : {None, str}, optional 
+            Write a logfile to file with name `logfile`.
+            Use '-' to write to std out.
+        eigenchannels: {0, int}, optional
+            Number of eigenchannel transmission coefficients to 
+            calculate. 
+        pdos : {None, (N,) array_like}, optional
+            Specify which basis functions to calculate the
+            projected density of states for.
+        dos : {False, bool}, optional
+            The total density of states of the central region.
+        box: XXX
+            YYY
+            
+        If hc1/hc2 are None, they are assumed to be identical to
+        the coupling matrix elements between neareste neighbor 
+        principal layers in lead1/lead2.
+
+        Examples
+        ========
+        >>> import numpy as np
+        >>> h = np.array((0,)).reshape((1,1))
+        >>> h1 = np.array((0, -1, -1, 0)).reshape(2,2)
+        >>> energies = np.arange(-3, 3, 0.1)
+        >>> calc = TransportCalculator(h=h, h1=h1, energies=energies)
+        >>> T = calc.get_transmission()
+
         """
         
         # The default values for all extra keywords
@@ -52,9 +96,9 @@ class TransportCalculator:
                                  'sc2': None,
                                  'box': None,
                                  'align_bf': None,
-                                 'eta1': 1e-3,
-                                 'eta2': 1e-3,
-                                 'eta': 1e-3,
+                                 'eta1': 1e-5,
+                                 'eta2': 1e-5,
+                                 'eta': 1e-5,
                                  'logfile': None, # '-',
                                  'eigenchannels': 0,
                                  'dos': False,
@@ -99,13 +143,23 @@ class TransportCalculator:
         print >> self.log, '# Initializing calculator...'
 
         p = self.input_parameters
-        if p['s1'] == None:
-            p['s1'] = np.identity(len(p['h1']))
-        if p['s2'] == None:
-            p['s2'] = np.identity(len(p['h2']))
         if p['s'] == None:
             p['s'] = np.identity(len(p['h']))
-            
+        
+        identical_leads = False
+        if p['h2'] == None:   
+            p['h2'] = p['h1'] # Lead2 is idendical to lead1
+            identical_leads = True
+ 
+        if p['s1'] == None: 
+            p['s1'] = np.identity(len(p['h1']))
+       
+        if p['s2'] == None and not identical_leads:
+            p['s2'] = np.identity(len(p['h2'])) # Orthonormal basis for lead 2
+        else: # Lead2 is idendical to lead1
+            p['s2'] = p['s1']
+
+           
         h_mm = p['h']
         s_mm = p['s']
         pl1 = len(p['h1']) / 2
@@ -125,24 +179,30 @@ class TransportCalculator:
             s1_im = np.zeros((pl1, nbf), complex)
             h1_im[:pl1, :pl1] = h1_ij
             s1_im[:pl1, :pl1] = s1_ij
+            p['hc1'] = h1_im
+            p['sc1'] = s1_im
         else:
             h1_im = p['hc1']
             if p['sc1'] is not None:
                 s1_im = p['sc1']
             else:
                 s1_im = np.zeros(h1_im.shape, complex)
+                p['sc1'] = s1_im
 
         if p['hc2'] is None:
             h2_im = np.zeros((pl2, nbf), complex)
             s2_im = np.zeros((pl2, nbf), complex)
             h2_im[-pl2:, -pl2:] = h2_ij
             s2_im[-pl2:, -pl2:] = s2_ij
+            p['hc2'] = h2_im
+            p['sc2'] = s2_im
         else:
             h2_im = p['hc2']
             if p['sc2'] is not None:
-                s2_im[:] = p['sc2']
+                s2_im = p['sc2']
             else:
                 s2_im = np.zeros(h2_im.shape, complex)
+                p['sc2'] = s2_im
 
         align_bf = p['align_bf']
         if align_bf != None:
@@ -151,7 +211,9 @@ class TransportCalculator:
             print >> self.log, '# Aligning scat. H to left lead H. diff=', diff
             h_mm -= diff * s_mm
 
-        #setup lead self-energies
+        # Setup lead self-energies
+        # All infinitesimals must be > 0 
+        assert np.all(np.array((p['eta'], p['eta1'], p['eta2'])) > 0.0)
         self.selfenergies = [LeadSelfEnergy((h1_ii, s1_ii), 
                                             (h1_ij, s1_ij),
                                             (h1_im, s1_im),
@@ -265,26 +327,60 @@ class TransportCalculator:
         self.update()
         return self.pdos_ne
 
-    def subdiagonalize_bfs(self, bfs):
+    def subdiagonalize_bfs(self, bfs, apply=False):
         self.initialize()
         bfs = np.array(bfs)
         p = self.input_parameters
-        h_pp = p['h']
-        s_pp = p['s']
-        ht_pp, st_pp, c_pp, e_p = subdiagonalize(h_pp, s_pp, bfs)
-        c_pp = np.take(c_pp, bfs, axis=0)
-        c_pp = np.take(c_pp, bfs, axis=1)
-        return ht_pp, st_pp, e_p, c_pp
+        h_mm = p['h']
+        s_mm = p['s']
+        ht_mm, st_mm, c_mm, e_m = subdiagonalize(h_mm, s_mm, bfs)
+        if apply:
+            self.uptodate = False
+            h_mm[:] = ht_mm 
+            s_mm[:] = st_mm 
+            # Rotate coupling between lead and central region
+            for alpha, sigma in enumerate(self.selfenergies):
+                sigma.h_im[:] = np.dot(sigma.h_im, c_mm)
+                sigma.s_im[:] = np.dot(sigma.s_im, c_mm)
+        
+        c_mm = np.take(c_mm, bfs, axis=0)
+        c_mm = np.take(c_mm, bfs, axis=1)
+        return ht_mm, st_mm, e_m, c_mm
 
-    def cutcoupling_bfs(self, bfs):
+    def cutcoupling_bfs(self, bfs, apply=False):
         self.initialize()
         bfs = np.array(bfs)
         p = self.input_parameters
         h_pp = p['h'].copy()
         s_pp = p['s'].copy()
         cutcoupling(h_pp, s_pp, bfs)
+        if apply:
+            self.uptodate = False
+            p['h'][:] = h_pp
+            p['s'][:] = s_pp
+            for alpha, sigma in enumerate(self.selfenergies):
+                for m in bfs:
+                    sigma.h_im[:, m] = 0.0
+                    sigma.s_im[:, m] = 0.0
         return h_pp, s_pp
-        
+
+    def lowdin_rotation(self, apply=False):
+        p = self.input_parameters
+        h_mm = p['h']
+        s_mm = p['s']
+        eig, rot_mm = linalg.eigh(s_mm)
+        eig = np.abs(eig)
+        rot_mm = np.dot(rot_mm / np.sqrt(eig), dagger(rot_mm))
+        if apply:
+            self.uptodate = False
+            h_mm[:] = rotate_matrix(h_mm, rot_mm) # rotate C region
+            s_mm[:] = rotate_matrix(s_mm, rot_mm)
+            for alpha, sigma in enumerate(self.selfenergies):
+                sigma.h_im[:] = np.dot(sigma.h_im, rot_mm) # rotate L-C coupl.
+                sigma.s_im[:] = np.dot(sigma.s_im, rot_mm)
+
+        return rot_mm
+
     def get_left_channels(self, energy, nchan=1):
         self.initialize()
         g_s_ii = self.greenfunction.retarded(energy)

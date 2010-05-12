@@ -10,7 +10,11 @@ def slice2enlist(s):
         step = 1
     else:
         step = s.step
-    return enumerate(range(s.start, s.stop, step))
+    if s.start == None:
+        start = 0
+    else:
+        start = s.start
+    return enumerate(range(start, s.stop, step))
 
 class FixConstraint:
     """Base class for classes that fix one or more atoms in some way."""
@@ -116,6 +120,24 @@ def ints2string(x, threshold=10):
         return str(x.tolist())
     return str(x[:threshold].tolist())[:-1] + ', ...]'
 
+class FixBondLengths(FixConstraint):
+    def __init__(self, pairs, iterations=10):
+        self.constraints = [FixBondLength(a1, a2)
+                            for a1, a2 in pairs]
+        self.iterations = iterations
+
+    def adjust_positions(self, old, new):
+        for i in range(self.iterations):
+            for constraint in self.constraints:
+                constraint.adjust_positions(old, new)
+
+    def adjust_forces(self, positions, forces):
+        for i in range(self.iterations):
+            for constraint in self.constraints:
+                constraint.adjust_forces(positions, forces)
+
+    def copy(self):
+        return FixBondLengths([constraint.indices for constraint in self.constraints])
 
 class FixBondLength(FixConstraint):
     """Constraint object for fixing a bond length."""
@@ -351,9 +373,15 @@ class Filter:
         tg[self.index] = tags
         self.atoms.set_tags(tg)
 
-    def get_forces(self):
-        return self.atoms.get_forces()[self.index]
+    def get_forces(self, *args, **kwargs):
+        return self.atoms.get_forces(*args, **kwargs)[self.index]
 
+    def get_stress(self):
+        return self.atoms.get_stress()
+
+    def get_stresses(self):
+        return self.atoms.get_stresses()[self.index]
+    
     def get_masses(self):
         return self.atoms.get_masses()[self.index]
 

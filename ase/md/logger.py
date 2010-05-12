@@ -5,7 +5,7 @@ import sys
 import ase.units as units
 # ase.parallel imported in __init__
 
-class MDlogger:
+class MDLogger:
     """Class for logging molecular dynamics simulations.
 
     Parameters:
@@ -45,7 +45,7 @@ class MDlogger:
         self.peratom = peratom
         if self.dyn is not None:
             self.hdr = "%-8s " % ("Time[ps]",)
-            self.fmt = "%-8f "
+            self.fmt = "%-8.2f "
         else:
             self.hdr = ""
             self.fmt = ""

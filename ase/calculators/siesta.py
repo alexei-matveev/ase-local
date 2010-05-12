@@ -5,10 +5,13 @@ http://www.uam.es/departamentos/ciencias/fismateriac/siesta
 
 import os
 from os.path import join, isfile, islink
+from cmath import exp
+import array
 
 import numpy as np
 
 from ase.data import chemical_symbols
+from ase.units import Rydberg
 
 
 class Siesta:
@@ -151,6 +154,20 @@ class Siesta:
         self.update(atoms)
         return self.stress.copy()
 
+    def get_dipole_moment(self, atoms):
+        """Returns total dipole moment of the system."""
+        self.update(atoms)
+        return self.dipole
+
+    def read_dipole(self):
+        dipolemoment=np.zeros([1,3])
+        for line in open(self.label + '.txt', 'r'):
+            if line.rfind('Electric dipole (Debye)') > -1:
+                dipolemoment=np.array([float(f) for f in line.split()[5:8]])
+        #debye to e*Ang (the units of VASP)
+        dipolemoment=dipolemoment*0.2081943482534
+        return dipolemoment
+
     def calculate(self, atoms):
         self.positions = atoms.get_positions().copy()
         self.cell = atoms.get_cell().copy()
@@ -168,6 +185,7 @@ class Siesta:
                                 'Check %s.txt for more information.') %
                                (exitcode, self.label))
         
+        self.dipole = self.read_dipole()
         self.read()
 
         self.converged = True
@@ -306,11 +324,310 @@ class Siesta:
         self.forces = np.array([[float(word)
                                  for word in line.split()[1:4]]
                                 for line in lines[1:]])
+
+    def read_hs(self, filename, is_gamma_only=False, magnus=False):
+        """Read the Hamiltonian and overlap matrix from a Siesta 
+           calculation in sparse format. 
+
+        Parameters
+        ==========
+        filename: str
+            The filename should be on the form jobname.HS  
+        is_gamma_only: {False, True), optional
+            Is it a gamma point calculation?
+        magnus: bool
+            The fileformat was changed by Magnus in Siesta at some
+            point around version 2.xxx. 
+            Use mangus=False, to use the old file format.
+
+        Note
+        ====
+        Data read in is put in self._dat.
+
+        Examples
+        ========
+            >>> calc = Siesta()
+            >>> calc.read_hs('jobname.HS')
+            >>> print calc._dat.fermi_level
+            >>> print 'Number of orbitals: %i' % calc._dat.nuotot 
+        """
+        assert not magnus, 'Not implemented; changes by Magnus to file io' 
+        assert not is_gamma_only, 'Not implemented. Only works for k-points.'
+        class Dummy: pass
+        self._dat = dat = Dummy()
+        # Try to read supercell and atom data from a jobname.XV file
+        filename_xv = filename[:-2] + 'XV'
+        #assert isfile(filename_xv), 'Missing jobname.XV file'
+        if isfile(filename_xv):
+            print 'Reading supercell and atom data from ' + filename_xv
+            fd = open(filename_xv, 'r')
+            dat.cell = np.zeros((3, 3)) # Supercell
+            for a_vec in dat.cell:
+                a_vec[:] = np.array(fd.readline().split()[:3], float)
+            dat.rcell = 2 * np.pi * np.linalg.inv(dat.cell.T)
+            dat.natoms = int(fd.readline().split()[0])
+            dat.symbols = []
+            dat.pos_ac = np.zeros((dat.natoms, 3))
+            for a in range(dat.natoms):
+                line = fd.readline().split()
+                dat.symbols.append(chemical_symbols[int(line[1])])
+                dat.pos_ac[a, :] = [float(line[i]) for i in range(2, 2 + 3)]
+        # Read in the jobname.HS file
+        fileobj = file(filename, 'rb')
+        fileobj.seek(0)
+        dat.fermi_level = float(open(filename[:-3] + '.EIG', 'r').readline())
+        dat.is_gammay_only = is_gamma_only 
+        dat.nuotot, dat.ns, dat.mnh = getrecord(fileobj, 'l')
+        nuotot, ns, mnh = dat.nuotot, dat.ns, dat.mnh
+        print 'Number of orbitals found: %i' % nuotot
+        dat.numh = numh = np.array([getrecord(fileobj, 'l')
+                                    for i in range(nuotot)], 'l')
+        dat.maxval = max(numh)
+        dat.listhptr = listhptr = np.zeros(nuotot, 'l')
+        listhptr[0] = 0
+        for oi in xrange(1, nuotot):
+            listhptr[oi] = listhptr[oi - 1] + numh[oi - 1]
+        dat.listh = listh = np.zeros(mnh, 'l')
         
+        print 'Reading sparse info'
+        for oi in xrange(nuotot):
+            for mi in xrange(numh[oi]):
+                listh[listhptr[oi] + mi] = getrecord(fileobj, 'l')
+
+        dat.nuotot_sc = nuotot_sc = max(listh)
+        dat.h_sparse = h_sparse = np.zeros((mnh, ns), float)
+        dat.s_sparse = s_sparse = np.zeros(mnh, float)
+        print 'Reading H'
+        for si in xrange(ns):
+            for oi in xrange(nuotot):
+                for mi in xrange(numh[oi]):
+                    h_sparse[listhptr[oi] + mi, si] = getrecord(fileobj, 'd')
+        print 'Reading S'
+        for oi in xrange(nuotot):
+            for mi in xrange(numh[oi]):
+                s_sparse[listhptr[oi] + mi] = getrecord(fileobj, 'd')
+
+        dat.qtot, dat.temperature = getrecord(fileobj, 'd')
+        if not is_gamma_only:
+            print 'Reading X'
+            dat.xij_sparse = xij_sparse = np.zeros([3, mnh], float)
+            for oi in xrange(nuotot):
+                for mi in xrange(numh[oi]):
+                    xij_sparse[:, listhptr[oi] + mi] = getrecord(fileobj, 'd')
+        fileobj.close()
+
+    def get_hs(self, kpt=(0, 0, 0), spin=0, remove_pbc=None, kpt_scaled=True):
+        """Hamiltonian and overlap matrices for an arbitrary k-point.
+       
+        The default values corresponds to the Gamma point for 
+        spin 0 and periodic boundary conditions.
+
+        Parameters
+        ==========
+        kpt : {(0, 0, 0), (3,) array_like}, optional
+            k-point in scaled or absolute coordinates.
+            For the latter the units should be Bohr^-1.
+        spin : {0, 1}, optional
+            Spin index 
+        remove_pbc : {None, ({'x', 'y', 'z'}, basis)}, optional
+            Use remove_pbc to truncate h and s along a cartesian
+            axis. 
+        basis: {str, dict}
+            The basis specification as either a string or a dictionary.
+        kpt_scaled : {True, bool}, optional
+            Use kpt_scaled=False if `kpt` is in absolute units (Bohr^-1).
+
+        Note
+        ====
+        read_hs should be called before get_hs gets called.
+
+        Examples
+        ========
+        >>> calc = Siesta()
+        >>> calc.read_hs('jobname.HS')
+        >>> h, s = calc.get_hs((0.0, 0.375, 0.375))
+        >>> h -= s * calc._dat.fermi_level # fermi level is now at 0.0
+        >>> basis = 'szp'
+        >>> h, s = calc.get_hs((0.0, 0.375, 0.375), remove_pbc=('x', basis))
+        >>> basis = {'Au:'sz}', 'C':'dzp', None:'szp'}
+        >>> h, s = calc.get_hs((0.0, 0.375, 0.375), remove_pbc=('x', basis))
+
+        """
+        if not hasattr(self, '_dat'):# XXX Crude check if data is avail.
+            print 'Please read in data first by calling the method read_hs.'
+            return None, None
+        dot = np.dot
+        dat = self._dat            
+        kpt_c = np.array(kpt, float)
+        if kpt_scaled:
+            kpt_c = dot(kpt_c, dat.rcell)
+
+        h_MM = np.zeros((dat.nuotot, dat.nuotot), complex)
+        s_MM = np.zeros((dat.nuotot, dat.nuotot), complex)
+        h_sparse, s_sparse = dat.h_sparse, dat.s_sparse
+        x_sparse = dat.xij_sparse
+        numh, listhptr, listh = dat.numh, dat.listhptr, dat.listh
+        indxuo = np.mod(np.arange(dat.nuotot_sc), dat.nuotot)
+        
+        for iuo in xrange(dat.nuotot):
+            for j in range(numh[iuo]):
+                ind =  listhptr[iuo] + j 
+                jo = listh[ind] - 1
+                juo = indxuo[jo]
+                kx = dot(kpt_c, x_sparse[:, ind])
+                phasef = exp(1.0j * kx)
+                h_MM[iuo, juo] += phasef * h_sparse[ind, spin] 
+                s_MM[iuo, juo] += phasef * s_sparse[ind]
+        
+        if remove_pbc is not None:
+            direction, basis = remove_pbc
+            centers_ic = get_bf_centers(dat.symbols, dat.pos_ac, basis)
+            d = 'xyz'.index(direction)
+            cutoff = dat.cell[d, d] * 0.5
+            truncate_along_axis(h_MM, s_MM, direction, centers_ic, cutoff)
+        
+        h_MM *= complex(Rydberg)
+        return h_MM, s_MM
+
+
+def getrecord(fileobj, dtype):
+    """Used to read in binary files. 
+    """
+    typetosize = {'l':4, 'f':4, 'd':8}# XXX np.int, np.float32, np.float64
+    assert dtype in typetosize # XXX
+    size = typetosize[dtype]
+    record = array.array('l')
+    trunk = array.array(dtype)
+    record.fromfile(fileobj, 1)
+    nofelements = int(record[-1]) / size
+    trunk.fromfile(fileobj, nofelements)
+    record.fromfile(fileobj, 1)
+    data = np.array(trunk, dtype=dtype)
+    if len(data)==1:
+        data = data[0]
+    return data
+
+def truncate_along_axis(h, s, direction, centers_ic, cutoff):
+    """Truncate h and s such along a cartesian axis.
+
+    Parameters:
+
+    h: (N, N) ndarray
+        Hamiltonian matrix.
+    s: (N, N) ndarray
+        Overlap matrix.
+    direction: {'x', 'y', 'z'} 
+        Truncate allong a cartesian axis.
+    centers_ic: (N, 3) ndarray
+        Centers of the basis functions.
+    cutoff: float
+        The (direction-axis projected) cutoff distance.
+    """
+    dtype = h.dtype
+    ni = len(centers_ic)
+    d = 'xyz'.index(direction)
+    pos_i = centers_ic[:, d]
+    for i in range(ni):
+        dpos_i = abs(pos_i - pos_i[i])
+        mask_i = (dpos_i < cutoff).astype(dtype)
+        h[i, :] *= mask_i
+        h[:, i] *= mask_i
+        s[i, :] *= mask_i
+        s[:, i] *= mask_i
+
+def get_nao(symbol, basis):
+    """Number of basis functions. 
+
+    Parameters
+    ==========
+    symbol: str
+        The chemical symbol.
+    basis: str
+        Basis function type.
+    """
+    ls = valence_config[symbol]
+    nao = 0
+    zeta = {'s':1, 'd':2, 't':3, 'q':4}
+    nzeta = zeta[basis[0]]
+    is_pol = 'p' in basis
+    for l in ls: 
+        nao += (2 * l + 1) * nzeta
+    if is_pol:
+        l_pol = None
+        l = -1 
+        while l_pol is None:
+            l += 1
+            if not l in ls:
+                l_pol = l
+        nao += 2 * l_pol + 1
+    return nao        
+
+def get_bf_centers(symbols, positions, basis):
+    """Centers of basis functions.
+
+    Parameters
+    ==========
+    symbols: str, (N, ) array_like 
+        chemical symbol for each atom. 
+    positions: float, (N, 3) array_like
+        Positions of the atoms.
+    basis: {str,  dict}
+        Basis set specification as either a string or a dictionary
+
+    Examples
+    ========
+    >>> symbols = ['O', 'H']
+    >>> positions = [(0, 0, 0), (0, 0, 1)]
+    >>> basis = 'sz'
+    >>> print get_bf_centers(symbols, positions, basis)
+    [[0 0 0]
+     [0 0 0]
+     [0 0 0]
+     [0 0 0]
+     [0 0 1]]
+    >>> basis = {'H':'dz', None:'sz'}
+    >>> print get_bf_centers(symbols, positions, basis)
+    [[0 0 0]
+     [0 0 0]
+     [0 0 0]
+     [0 0 0]
+     [0 0 1]
+     [0 0 1]]
+
+    """
+    centers_ic = []
+    dict_basis = False
+    if type(basis)==dict:
+        dict_basis = True
+    for symbol, pos in zip(symbols, positions):
+        if dict_basis:
+            if symbol not in basis:
+                bas = basis[None]
+            else:
+                bas = basis[symbol]
+        else:
+            bas = basis
+        for i in range(get_nao(symbol, bas)):
+            centers_ic.append(pos)
+    return np.asarray(centers_ic)
 
 def fdfify(key):
     return key.lower().replace('_', '').replace('.', '').replace('-', '')
 
+valence_config = {
+    'H': (0,),
+    'C': (0, 1),
+    'N': (0, 1),
+    'O': (0, 1),
+    'S': (0, 1), 
+    'Li': (0,),
+    'Na': (0,),
+    'Ni': (0, 2),
+    'Cu': (0, 2), 
+    'Pd': (0, 2), 
+    'Ag': (0, 2), 
+    'Pt': (0, 2), 
+    'Au': (0, 2)}
 
 keys_with_units = {
     'paoenergyshift': 'eV',
@@ -345,4 +662,6 @@ keys_with_units = {
     'rcspatial': 'Ang',
     'kgridcutoff': 'Ang',
     'latticeconstant': 'Ang'}
+
+    
 

@@ -14,7 +14,6 @@ import numpy as np
 from ase.atom import Atom
 from ase.data import atomic_numbers, chemical_symbols, atomic_masses
 
-
 class Atoms(object):
     """Atoms object.
     
@@ -94,9 +93,6 @@ class Atoms(object):
     ...           cell=(d, L, L),
     ...           pbc=(1, 0, 0))
     """
-
-    __slots__ = ['arrays', '_cell', '_pbc', 'calc', '_constraints',
-                 'adsorbate_info']
 
     def __init__(self, symbols=None,
                  positions=None, numbers=None,
@@ -358,9 +354,23 @@ class Atoms(object):
         """Set chemical symbols."""
         self.set_array('numbers', symbols2numbers(symbols), int, ())
 
-    def get_chemical_symbols(self):
-        """Get list of chemical symbol strings."""
-        return [chemical_symbols[Z] for Z in self.arrays['numbers']]
+    def get_chemical_symbols(self, reduce=False):
+        """Get list of chemical symbol strings.
+
+        If reduce is True, a single string is returned, where repeated
+        elements have been contracted to a single symbol and a number.
+        E.g. instead of ['C', 'O', 'O', 'H'], the string 'CO2H' is returned.
+        """
+        if not reduce:
+            return [chemical_symbols[Z] for Z in self.arrays['numbers']]
+        else:
+            num = self.get_atomic_numbers()
+            N = len(num)
+            dis = np.concatenate(([0], np.arange(1, N)[num[1:] != num[:-1]]))
+            repeat = np.append(dis[1:], N) - dis
+            symbols = ''.join([chemical_symbols[num[d]] + str(r) * (r != 1)
+                               for r, d in zip(repeat, dis)])
+            return symbols
 
     def set_tags(self, tags):
         """Set tags for all atoms."""
@@ -557,6 +567,18 @@ class Atoms(object):
         if self.calc is None:
             raise RuntimeError('Atoms object has no calculator.')
         return self.calc.get_stresses(self)
+
+    def get_dipole_moment(self):
+        """Calculate the electric dipole moment for the atoms object.
+
+        Only available for calculators which has a get_dipole_moment() method."""
+        if self.calc is None:
+            raise RuntimeError('Atoms object has no calculator.')
+        try:
+            dipole = self.calc.get_dipole_moment(self)
+        except AttributeError:
+            raise AttributeError('Calculator object has no get_dipole_moment method.')
+        return dipole
     
     def copy(self):
         """Return a copy."""
@@ -586,11 +608,7 @@ class Atoms(object):
         if N == 0:
             symbols = ''
         elif N <= 60:
-            # Distinct atomic numbers in num:
-            dis = np.concatenate(([0], np.arange(1, N)[num[1:] != num[:-1]]))
-            repeat = np.append(dis[1:], N) - dis
-            symbols = ''.join([chemical_symbols[num[d]] + str(r) * (r != 1)
-                               for r, d in zip(repeat, dis)])
+            symbols = self.get_chemical_symbols(reduce=True)
         else:
             symbols = ''.join([chemical_symbols[Z] for Z in num[:15]]) + '...'
         s = "Atoms(symbols='%s', " % symbols
@@ -755,38 +773,55 @@ class Atoms(object):
         """Center atoms in unit cell.
 
         Centers the atoms in the unit cell, so there is the same
-        amount of vacuum on all sides.  Currenly only supports
-        orthogonal unit cells.
+        amount of vacuum on all sides.
 
         Parameters:
 
         vacuum (default: None): If specified adjust the amount of
-        vacuum when centering.  If vacuum=10.0 there will
-        thus be 10 Angstrom of vacuum on each side.  Does not work
-        reliably for non-orthogonal unit cells.
+        vacuum when centering.  If vacuum=10.0 there will thus be 10
+        Angstrom of vacuum on each side.
 
         axis (default: None): If specified, only act on the specified
         axis.  Default: Act on all axes.
         """
-        # TO DO: Arbitrary unit cells.
-        p = self.arrays['positions']
-        p0 = p.min(0)
-        p1 = p.max(0)
+        # Find the orientations of the faces of the unit cell
+        c = self.get_cell()
+        dirs = np.zeros_like(c)
+        for i in range(3):
+            dirs[i] = np.cross(c[i-1], c[i-2])
+            dirs[i] /= np.sqrt(np.dot(dirs[i], dirs[i])) #Normalize
+            if np.dot(dirs[i], c[i]) < 0.0:      
+                dirs[i] *= -1
+
+        # Now, decide how much each basis vector should be made longer
         if axis is None:
-            if vacuum is not None:
-                self._cell = np.diag(p1 - p0 + 2 * np.asarray(vacuum))
-            p += 0.5 * (self._cell.sum(0) - p0 - p1)
+            axes = (0,1,2)
         else:
+            axes = (axis,)
+        p = self.arrays['positions']
+        longer = np.zeros(3)
+        shift = np.zeros(3)
+        for i in axes:
+            p0 = np.dot(p, dirs[i]).min()
+            p1 = np.dot(p, dirs[i]).max()
+            height = np.dot(c[i], dirs[i])
             if vacuum is not None:
-                c = self._cell.copy()
-                axis1 = (axis + 1) % 3
-                axis2 = (axis + 2) % 3
-                if (abs(np.dot(c[axis], c[axis1])) > 1e-6 or
-                    abs(np.dot(c[axis], c[axis2])) > 1e-6):
-                    raise NotImplementedError(
-                        'Cannot add vacuum along non-orthogonal axis')
-                self._cell[axis, axis] = p1[axis] - p0[axis] + 2 * vacuum
-            p[:, axis] += 0.5 * (self._cell[axis, axis] - p0[axis] - p1[axis])
+                lng = (p1 - p0 + 2*vacuum) - height
+            else:
+                lng = 0.0  # Do not change unit cell size!
+            top = lng + height - p1
+            shf = 0.5 * (top - p0)
+            cosphi = np.dot(c[i], dirs[i]) / np.sqrt(np.dot(c[i], c[i]))
+            longer[i] = lng / cosphi
+            shift[i] = shf / cosphi
+
+        # Now, do it!
+        translation = np.zeros(3)
+        for i in axes:
+            nowlen = np.sqrt(np.dot(c[i], c[i]))
+            self._cell[i] *= 1 + longer[i] / nowlen
+            translation += shift[i] * c[i] / nowlen
+        self.arrays['positions'] += translation
 
     def get_center_of_mass(self, scaled = False):
         """Get the center of mass.
@@ -802,7 +837,41 @@ class Atoms(object):
         else:
             return com
 
-    def rotate(self, v, a=None, center=(0, 0, 0)):
+    def get_moments_of_inertia(self):
+        '''Get the moments of inertia
+
+        The three principal moments of inertia are computed from the
+        eigenvalues of the inertial tensor. periodic boundary
+        conditions are ignored. Units of the moments of inertia are
+        amu*angstrom**2.
+        '''
+        
+        com = self.get_center_of_mass()
+        positions = self.get_positions()
+        positions -= com #translate center of mass to origin
+        masses = self.get_masses()
+
+        #initialize elements of the inertial tensor
+        I11 = I22 = I33 = I12 = I13 = I23 = 0.0
+        for i in range(len(self)):
+            x,y,z = positions[i]
+            m = masses[i]
+
+            I11 += m*(y**2 + z**2)
+            I22 += m*(x**2 + z**2)
+            I33 += m*(x**2 + y**2)
+            I12 += -m*x*y
+            I13 += -m*x*z
+            I23 += -m*y*z
+
+        I = np.array([[I11, I12, I13],
+                      [I12, I22, I23],
+                      [I13, I23, I33]])
+
+        evals, evecs = np.linalg.eig(I)
+        return evals
+
+    def rotate(self, v, a=None, center=(0, 0, 0), rotate_cell=False):
         """Rotate atoms.
 
         Rotate the angle *a* around the vector *v*.  If *a* is not
@@ -850,7 +919,13 @@ class Atoms(object):
                                        np.cross(p, s * v) + 
                                        np.outer(np.dot(p, v), (1.0 - c) * v)+
                                        center)
-
+        if rotate_cell:
+            rotcell = self.get_cell()
+            rotcell[:] = (c * rotcell - 
+                          np.cross(rotcell, s * v) + 
+                          np.outer(np.dot(rotcell, v), (1.0 - c) * v))
+            self.set_cell(rotcell)
+                
     def rotate_euler(self, center=(0, 0, 0), phi=0.0, theta=0.0, psi=0.0):
         """Rotate atoms via Euler angles.
         
@@ -1032,6 +1107,11 @@ class Atoms(object):
             if elements[element] > 1:
                 name += str(elements[element])
         return name
+
+    def write(self, filename, format=None):
+        """Write yourself to a file."""
+        from ase.io import write
+        write(filename, self, format)
         
 def string2symbols(s):
     """Convert string to list of chemical symbols."""

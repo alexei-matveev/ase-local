@@ -1,187 +1,263 @@
+# -*- coding: utf-8 -*-
+import sys
 import numpy as np
-import copy 
 from ase.optimize import Optimizer
-from ase.neb import *
-import random
 
-class BaseLBFGS(Optimizer):
-    """Limited memory bfgs algorithm. Unlike the bfgs algorithm used in qn.py,
-       the inverse of hessian matrix is updated. 
+class LBFGS(Optimizer):
+    """Limited memory BFGS optimizer.
+    
+    A limited memory version of the bfgs algorithm. Unlike the bfgs algorithm
+    used in bfgs.py, the inverse of Hessian matrix is updated.  The inverse
+    Hessian is represented only as a diagonal matrix to save memory
 
-    Parameters:
-
-    restart: string
-        Pickle file used to store vectors for updating the inverse of
-        hessian matrix. If set, file with such a name will be searched
-        and information stored will be used, if the file exists.
-
-    memory: int
-        Number of steps to be stored. Default value is 25.
-
-    method: string
-        Two methods for determine atomic movement are available. If
-        method = 'line', a line search will be performed to determine
-        the atomic movement. An extra scf loop for the trail step in
-        each atomic step. And if method = 'hess', the atomic step will
-        be determined by hessian matrix, which means each atomic step
-        include only one scf loop.  """
-
+    """
     def __init__(self, atoms, restart=None, logfile='-', trajectory=None,
-                 maxstep=0.2, dR=0.1, memory=25, damping=1.):
+                 maxstep=None, memory=100, damping = 1.0, alpha = 70.0):
+        """
+        Parameters:
+
+        restart: string
+            Pickle file used to store vectors for updating the inverse of Hessian
+            matrix. If set, file with such a name will be searched and information
+            stored will be used, if the file exists.
+
+        logfile: string
+            Where should output go. None for no output, '-' for stdout.
+
+        trajectory: string
+            Pickle file used to store trajectory of atomic movement.
+
+        maxstep: float
+            How far is a single atom allowed to move. This is useful for DFT
+            calculations where wavefunctions can be reused if steps are small.
+            Default is 0.04 Angstrom.
+
+        memory: int
+            Number of steps to be stored. Default value is 100. Three numpy
+            arrays of this length containing floats are stored.
+
+        damping: float
+            The calculated step is multiplied with this number before added to
+            the positions. 
+
+        alpha: float
+            Initial guess for the Hessian (curvature of energy surface). A
+            conservative value of 70.0 is the default, but number of needed
+            steps to converge might be less if a lower value is used. However,
+            a lower value also means risk of instability.
+            
+        """
         Optimizer.__init__(self, atoms, restart, logfile, trajectory)
 
-        if maxstep > 1.0:
-            raise ValueError(
-                             'Wanna fly? I know the calculation is too slow. ' +
-                             'But you have to follow the rules.\n'+
-                             '            The maximum step size %.1f' % maxstep 
-                             +' is too big! \n'+
-                             '            Try to set the maximum step size'+
-                             ' below 0.2.')
-        self.maxstep = maxstep
-        self.dR = dR
+        if maxstep is not None:
+            if maxstep > 1.0:
+                raise ValueError('You are using a much too large value for ' +
+                                 'the maximum step size: %.1f Angstrom' % maxstep)
+            self.maxstep = maxstep
+        else:
+            self.maxstep = 0.04
+
         self.memory = memory
+        self.H0 = 1. / alpha  # Initial approximation of inverse Hessian
+                            # 1./70. is to emulate the behaviour of BFGS
+                            # Note that this is never changed!
         self.damping = damping
-        self.Ho = 1.0
 
     def initialize(self):
-        self.ITR = None
-        self.f_old = None
-        self.r_old = None
+        """Initalize everything so no checks have to be done in step"""
+        self.iteration = 0
+        self.s = []
+        self.y = []
+        self.rho = [] # Store also rho, to avoid calculationg the dot product
+                      # again and again
+
+        self.r0 = None
+        self.f0 = None
 
     def read(self):
-        (self.ITR, self.s, self.y, self.rho, self.r_old, 
-         self.f_old) = self.load()
+        """Load saved arrays to reconstruct the Hessian"""
+        self.iteration, self.s, self.y, self.rho, self.r0, self.f0 = self.load()
 
     def step(self, f):
+        """Take a single step
+        
+        Use the given forces, update the history and calculate the next step --
+        then take it"""
         r = self.atoms.get_positions()
-        self.update(r, f, self.r_old, self.f_old)
-        du = self.d / np.sqrt(np.vdot(self.d, self.d))
-        dr = self.determine_step(r, f, du)        
-        self.r_old = r.copy()
-        self.f_old = f.copy()
-        r += dr * self.damping
-        self.atoms.set_positions(r)
+    
+        self.update(r, f, self.r0, self.f0)
 
-    def update(self, r, f, r_old, f_old):
-        a = np.zeros(self.memory + 1, 'd')
-        self.tmp = self.atoms
-        if not self.ITR:
-            self.ITR = 1
-            self.s = [1.] # The 0'th element is not actually used
-            # The point is to use 1-indexation
-            self.y = [1.]
-            self.rho = [1.]
-        else:
-            a1 = abs (np.vdot(f, f_old))
-            a2 = np.vdot(f_old, f_old)
-            reset_flag = self.check_for_reset(a1, a2)
-            if not reset_flag:
-                ITR = self.ITR
-                if(ITR > self.memory):
-                    self.s.pop(1)
-                    self.y.pop(1)
-                    self.rho.pop(1)
-                    ITR = self.memory
-                self.s.append(r - r_old)
-                self.y.append(-(f - f_old))
-                self.rho.append(1 / np.vdot(self.y[ITR],self.s[ITR]))
-                self.ITR += 1
-            else:
-                self.ITR = 1
-                self.s = [1.]
-                self.y = [1.]
-                self.rho = [1.]
-        self.dump((self.ITR, self.s, self.y, self.rho, r_old, f_old))
+        s = self.s
+        y = self.y
+        rho = self.rho
+        H0 = self.H0
 
-        r_old = r.copy()
-        f_old = f.copy()
-        if self.ITR <= self.memory:
-            BOUND = self.ITR
-        else:
-            BOUND = self.memory
-        q = -1.0 * f
-        for j in range(1,BOUND):
-            k = (BOUND - j)
-            a[k] = self.rho[k] * np.vdot(self.s[k], q)
-            q -= a[k] * self.y[k]
-        d = self.Ho * q
-        for j in range(1,BOUND):
-            B = self.rho[j] * np.vdot(self.y[j], d)
-            d = d + self.s[j] * (a[j] - B)
-        self.d = -1.0 * d
+        loopmax = np.min([self.memory, self.iteration])
+        a = np.empty((loopmax,), dtype=np.float64)
+
+        ### The algorithm itself:
+        q = - f.reshape(-1) 
+        for i in range(loopmax - 1, -1, -1):
+            a[i] = rho[i] * np.dot(s[i], q)
+            q -= a[i] * y[i]
+        z = H0 * q
+        
+        for i in range(loopmax):
+            b = rho[i] * np.dot(y[i], z)
+            z += s[i] * (a[i] - b)
+
+        dr = - z.reshape((-1, 3))
+        ###
+
+        dr = self.determine_step(dr) * self.damping
+        self.atoms.set_positions(r + dr) 
+        
+        self.iteration += 1
+        self.dump((self.iteration, self.s, self.y, 
+                   self.rho, self.r0, self.f0))
+        self.r0 = r.copy() 
+        self.f0 = f.copy()
+
+    def determine_step(self, dr):
+        """Determine step to take according to maxstep
+        
+        Normalize all steps as the largest step. This way
+        we still move along the eigendirection.
+        """
+        steplengths = (dr**2).sum(1)**0.5
+        longest_step = np.max(steplengths)
+        if longest_step >= self.maxstep:
+            dr *= self.maxstep / longest_step
+        
+        return dr
+
+    def update(self, r, f, r0, f0):
+        """Update everything that is kept in memory
+
+        This function is mostly here to allow for replay_trajectory.
+        """
+        if self.iteration > 0:
+            s0 = r.reshape(-1) - r0.reshape(-1)
+            self.s.append(s0)
+
+            # We use the gradient which is minus the force!
+            y0 = f0.reshape(-1) - f.reshape(-1)
+            self.y.append(y0)
+            
+            rho0 = 1.0 / np.dot(y0, s0)
+            self.rho.append(rho0)
+
+        if self.iteration > self.memory:
+            self.s.pop(0)
+            self.y.pop(0)
+            self.rho.pop(0)
 
     def replay_trajectory(self, traj):
-        """Initialize hessian from old trajectory."""
+        """Initialize history from old trajectory."""
         if isinstance(traj, str):
             from ase.io.trajectory import PickleTrajectory
             traj = PickleTrajectory(traj, 'r')
-        atoms = traj[0]
-        r_old = atoms.get_positions()
-        f_old = atoms.get_forces()
+        r0 = None
+        f0 = None
+        # The last element is not added, as we get that for free when taking
+        # the first qn-step after the replay
         for i in range(0, len(traj) - 1):
             r = traj[i].get_positions()
             f = traj[i].get_forces()
-            self.update(r, f, r_old, f_old)
-            r_old = r
-            f_old = f
-        self.r_old = traj[-2].get_positions()
-        self.f_old = traj[-2].get_forces()
+            self.update(r, f, r0, f0)
+            r0 = r.copy()
+            f0 = f.copy()
+            self.iteration += 1
+        self.r0 = r0
+        self.f0 = f0
 
-class LBFGS(BaseLBFGS):
-    def initialize(self):
-        BaseLBFGS.initialize(self)
-        self.Ho = 0.05
-    
-    def determine_step(self, r, f, du):
-        # use the Hessian Matrix to predict the min
-        dr = self.d
-        if(abs(np.sqrt(np.vdot(dr, dr).sum())) > self.maxstep):
-            dr = du * self.maxstep
-        return dr
+class LineSearchLBFGS(LBFGS):
+    """Modified version of LBFGS.
 
-    def check_for_reset(self, a1, a2):
-        return False
+    This optimizer uses the LBFGS algorithm, but does a line search for the
+    minimum along the search direction. This is done by issuing an additional
+    force call for each step, thus doubling the number of calculations.
 
-class LineSearchLBFGS(BaseLBFGS):
-    """"""
-    def determine_step(self, r, f, du):
+    Additionally the Hessian is reset if the new guess is not sufficiently
+    better than the old one.
+    """
+    def __init__(self, *args, **kwargs):
+        self.dR = kwargs.pop('dR', 0.1)         
+        LBFGS.__init__(self, *args, **kwargs)
+
+    def update(self, r, f, r0, f0):
+        """Update everything that is kept in memory
+
+        This function is mostly here to allow for replay_trajectory.
+        """
+        if self.iteration > 0:
+            a1 = abs(np.dot(f.reshape(-1), f0.reshape(-1)))
+            a2 = np.dot(f0.reshape(-1), f0.reshape(-1))
+            if not (a1 <= 0.5 * a2 and a2 != 0):
+                # Reset optimization
+                self.initialize()
+
+        # Note that the reset above will set self.iteration to 0 again
+        # which is why we should check again
+        if self.iteration > 0:
+            s0 = r.reshape(-1) - r0.reshape(-1)
+            self.s.append(s0)
+
+            # We use the gradient which is minus the force!
+            y0 = f0.reshape(-1) - f.reshape(-1)
+            self.y.append(y0)
+            
+            rho0 = 1.0 / np.dot(y0, s0)
+            self.rho.append(rho0)
+
+        if self.iteration > self.memory:
+            self.s.pop(0)
+            self.y.pop(0)
+            self.rho.pop(0)
+
+    def determine_step(self, dr):
+        f = self.atoms.get_forces()
+        
+        # Unit-vector along the search direction
+        du = dr / np.sqrt(np.dot(dr.reshape(-1), dr.reshape(-1)))
+
+        # We keep the old step determination before we figure 
+        # out what is the best to do.
+        maxstep = self.maxstep * np.sqrt(3 * len(self.atoms))
+
         # Finite difference step using temporary point
-        tmp_r = r.copy()
-        tmp_r += (du * self.dR)
-        self.tmp.set_positions(tmp_r)
+        self.atoms.positions += (du * self.dR)
         # Decide how much to move along the line du
-        Fp1 = np.vdot(f, du)
-        Fp2 = np.vdot(self.tmp.get_forces(), du)
+        Fp1 = np.dot(f.reshape(-1), du.reshape(-1))
+        Fp2 = np.dot(self.atoms.get_forces().reshape(-1), du.reshape(-1))
         CR = (Fp1 - Fp2) / self.dR
         #RdR = Fp1*0.1
         if CR < 0.0:
             #print "negcurve"
-            RdR = self.maxstep
-            #if(abs(RdR) > self.maxstep):
-            #    RdR = self.sign(RdR) * self.maxstep
+            RdR = maxstep
+            #if(abs(RdR) > maxstep):
+            #    RdR = self.sign(RdR) * maxstep
         else:
             Fp = (Fp1 + Fp2) * 0.5
             RdR = Fp / CR 
-            if abs(RdR) > self.maxstep:
-                RdR = np.sign(RdR) * self.maxstep
+            if abs(RdR) > maxstep:
+                RdR = np.sign(RdR) * maxstep
             else:
                 RdR += self.dR * 0.5
         return du * RdR
 
-    def check_for_reset(self, a1, a2):
-        return not (a1 <= 0.5 * a2 and a2 != 0)
-
-class LineLBFGS(LineSearchLBFGS):
-    def __init__(self, *args, **kwargs):
-        if 'method' in kwargs:
-            del kwargs['method']
-        sys.stderr.write('Please use LineSearchLBFGS instead of LineLBFGS!')
-        LineSearchLBFGS.__init__(self, *args, **kwargs)
-
 class HessLBFGS(LBFGS):
+    """Backwards compatibiliyt class"""
     def __init__(self, *args, **kwargs):
         if 'method' in kwargs:
             del kwargs['method']
         sys.stderr.write('Please use LBFGS instead of HessLBFGS!')
         LBFGS.__init__(self, *args, **kwargs)
+
+class LineLBFGS(LineSearchLBFGS):
+    """Backwards compatibiliyt class"""
+    def __init__(self, *args, **kwargs):
+        if 'method' in kwargs:
+            del kwargs['method']
+        sys.stderr.write('Please use LineSearchLBFGS instead of LineLBFGS!')
+        LineSearchLBFGS.__init__(self, *args, **kwargs)

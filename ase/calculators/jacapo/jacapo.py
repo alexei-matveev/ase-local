@@ -375,7 +375,11 @@ class Jacapo:
                 
         s.append('')
         s.append('  Details:')
-        s.append('  XCfunctional        = %s' %self.get_xc())
+        xc = self.get_xc()
+        if xc is not None:
+            s.append('  XCfunctional        = %s' % self.get_xc())
+        else:
+            s.append('  XCfunctional        = Not defined')
         s.append('  Planewavecutoff     = %i eV' % self.get_pw())
         s.append('  Densitywavecutoff   = %i eV' % self.get_dw())
         ft = self.get_ft()
@@ -392,6 +396,7 @@ class Jacapo:
         s.append('  Kpoint grid         = %s' % str(self.get_kpts()))
         s.append('  Spin-polarized      = %s' % self.get_spin_polarized())
         s.append('  Dipole correction   = %s' % self.get_dipole())
+        s.append('  Symmetry            = %s' % self.get_symmetry())
         s.append('  Constraints         = %s' % str(atoms._get_constraints()))
         s.append('  ---------------------------------')
         nc.close()
@@ -495,7 +500,7 @@ class Jacapo:
             vpw = nc.variables['PlaneWaveCutoff']
             vpw.assignValue(pw)
         else:
-            vpw = nc.createVariable('PlaneWaveCutoff','i',('dim1',))
+            vpw = nc.createVariable('PlaneWaveCutoff','f',('dim1',))
             vpw.assignValue(pw)
 
         if 'Density_WaveCutoff' in nc.variables:
@@ -504,7 +509,7 @@ class Jacapo:
             if pw > dw:
                 vdw.assignValue(pw) #make them equal
         else:
-            vdw = nc.createVariable('Density_WaveCutoff','i',('dim1',))
+            vdw = nc.createVariable('Density_WaveCutoff','f',('dim1',))
             vdw.assignValue(pw) 
         nc.close()
         self.restart() #nc dimension change for number_plane_Wave dimension
@@ -1184,7 +1189,7 @@ class Jacapo:
         if 'NetCDFOutputControl' in nc.variables:
             v = nc.variables['NetCDFOutputControl']
         else:
-            v = nc.createVariable('NetCDFOutputControl','c',('dim20',))
+            v = nc.createVariable('NetCDFOutputControl','c',())
 
         if wf is not None: v.PrintWaveFunction = wf
         if cd is not None: v.PrintChargeDensity = cd
@@ -1222,7 +1227,7 @@ class Jacapo:
         if 'PrintAtomProjectedDOS' in nc.variables:
             v = nc.variables['PrintAtomProjectedDOS']
         else:
-            v = nc.createVariable('PrintAtomProjectedDOS','c',('dim20',))
+            v = nc.createVariable('PrintAtomProjectedDOS','c',())
 
         v.EnergyWindow = energywindow
         v.EnergyWidth  = energywidth
@@ -1265,7 +1270,7 @@ class Jacapo:
         if 'Decoupling' in nc.variables:
             v = nc.variables['Decoupling']
         else:
-            v = nc.createVariable('Decoupling','c',('dim20',))
+            v = nc.createVariable('Decoupling','c',())
 
         v.NumberOfGaussians = ngaussians
         v.ECutoff = ecutoff
@@ -1362,7 +1367,7 @@ class Jacapo:
         
         ncf = netCDF(self.get_nc(),'a')
         if 'DipoleCorrection' not in ncf.variables:
-            dip = ncf.createVariable('DipoleCorrection','c',('dim20',))
+            dip = ncf.createVariable('DipoleCorrection','c',())
         else:
             dip = ncf.variables['DipoleCorrection']
         dip.MixingParameter = mixpar
@@ -1389,6 +1394,17 @@ class Jacapo:
 
     def get_stay_alive(self):
         return self.stay_alive
+
+    def get_symmetry(self):
+        '''return the type of symmetry used'''
+        nc = netCDF(self.nc,'r')
+        if 'UseSymmetry' in nc.variables:
+            sym = string.join(nc.variables['UseSymmetry'][:],'')
+        else:
+            sym = None
+            
+        nc.close()
+        return sym
 
     def get_fftgrid(self):
         'return soft and hard grids'
@@ -1514,8 +1530,10 @@ class Jacapo:
             raise RuntimeError('Error in calculating the total energy\n' +
                                'Check ascii out file for error messages')
 
-    def get_forces(self, atoms):
+    def get_forces(self, atoms=None):
         """Calculate atomic forces"""
+        if atoms is None:
+            atoms = self.atoms
         if self.calculation_required(atoms):
             if self.debug > 0: print 'calculation required for forces'
             self.calculate()
@@ -1768,8 +1786,15 @@ class Jacapo:
                     nc.close()
                     return True
             else:
+                #legacy calculations do not have a status flag in them.
+                #let us guess that if the TotalEnergy is there
+                #no calculation needs to be run?
+                if 'TotalEnergy' in nc.variables:
+                    runflag = False
+                else:
+                    runflag = True
                 nc.close()
-                return True #if no status run calculation
+                return runflag #if no status run calculation
             nc.close()
             
         #default, a calculation is required
@@ -2888,9 +2913,68 @@ s.recv(14)
             c[k] = np.array(c[k])
         return c, U
 
+    def get_psp_nuclear_charge(self,psp):
+        '''
+        get the nuclear charge of the atom from teh psp-file.
+
+        This is not the same as the atomic number, nor is it
+        necessarily the negative of the number of valence electrons,
+        since a psp may be an ion. this function is needed to compute
+        centers of ion charge for the dipole moment calculation.
+
+        We read in the valence ion configuration from the psp file and
+        add up the charges in each shell.
+        '''
+        from struct import unpack
+        dacapopath = os.environ.get('DACAPOPATH')
+
+        if os.path.exists(psp):
+            #the pspfile may be in the current directory
+            #or defined by an absolute path
+            fullpsp = psp
+
+        else:
+            #or, it is in the default psp path
+            fullpsp = os.path.join(dacapopath,psp)
+
+        if os.path.exists(fullpsp.strip()):
+            f = open(fullpsp)
+            unpack('>i',f.read(4))[0]
+            for i in range(3):
+                f.read(4)
+            for i in range(3):
+                f.read(4)
+            f.read(8)
+            f.read(20)
+            f.read(8)
+            f.read(8)
+            f.read(8)
+            nvalps = unpack('>i',f.read(4))[0]
+            f.read(4)
+            f.read(8)
+            f.read(8)
+            wwnlps = []
+            for i in range(nvalps):
+                f.read(4)
+                wwnlps.append(unpack('>d',f.read(8))[0])
+                f.read(8)
+            f.close()
+
+        else:
+            raise Exception, "%s does not exist" % fullpsp
+
+        return np.array(wwnlps).sum()
+
     def get_dipole_moment(self):
         '''
-        return dipole moment
+        return dipole moment of unit cell
+
+        Defined by the vector connecting the center of electron charge
+        density to the center of nuclear charge density.
+
+        Units = eV*angstrom
+
+        1 Debye = 0.208194 eV*angstrom
 
         '''
         if self.calculation_required():
@@ -2899,26 +2983,43 @@ s.recv(14)
         atoms = self.get_atoms()
         
         #center of electron charge density
-        x,y,z,density = self.get_charge_density()
-        nelectrons = self.get_valence()
-        #need to integrate \int n(r)rdr/\int n(r)dr
-        center_electron_charge = 0.0
-        
-        #center of positive charge density
-        center_nuclear_charge = np.array([0.0, 0.0, 0.0])
-        
-        for atom in atoms:
-            nuc_charge = atom.z
-            pos = atom.get_position()
-            center_nuclear_charge = center_nuclear_charge + nuc_charge*pos
+        x,y,z,cd = self.get_charge_density()
 
-        #center_electron_charge has a negative sign due to charge of electron
-        dipole_moment = center_nuclear_charge + center_electron_charge
+        n1,n2,n3 = cd.shape
+        nelements = n1*n2*n3
+        voxel_volume = atoms.get_volume()/nelements
+        total_electron_charge = -cd.sum()*voxel_volume
+
         
-        raise NotImplementedError
-    
+        electron_density_center = np.array([(cd*x).sum(),
+                                            (cd*y).sum(),
+                                            (cd*z).sum()])
+        electron_density_center *= voxel_volume
+        electron_density_center /= total_electron_charge
+        #we need the - here so the two negatives don't cancel
+        electron_dipole_moment = -electron_density_center*total_electron_charge
+
+        # now the ion charge center
+        psps = self.get_pseudopotentials()
+        ion_charge_center = np.array([0.0, 0.0, 0.0])
+        total_ion_charge = 0.0
+        for atom in atoms:
+            Z = self.get_psp_nuclear_charge(psps[atom.symbol])
+            total_ion_charge += Z
+            pos = atom.get_position()
+            ion_charge_center += Z*pos
+
+        ion_charge_center /= total_ion_charge
+        ion_dipole_moment = ion_charge_center*total_ion_charge
+
+        dipole_vector = (ion_dipole_moment + electron_dipole_moment)
+        return dipole_vector
+ 
     def get_reciprocal_bloch_function(self,band=0,kpt=0,spin=0):
-        '''return the reciprocal bloch function. Need for Jacapo Wannier class.'''
+        '''
+        return the reciprocal bloch function.  Need for Jacapo Wannier
+        class.
+        '''
         if self.calculation_required():
             self.calculate()
 
