@@ -138,6 +138,11 @@ class ParaGauss:
 
     def read(self):
         # the interisting part to read in are the grads and energy, rest will be ignored afterwards
+        # FIXME: Somehow we need (sometimes) to pass some time here, before we can find the
+        # gxfile as output. This is especially valid when running several calculations in parallel.
+        #It's done this way and not with sleep as the problems seems to be related
+        # to a file that should but isn't there. So it makes sense to read all the files that are there,
+        # even if we don't need the output.
         os.system("ls > /dev/null")
         if os.path.exists('gxfile'):
             atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy, loopi_d = gxread('gxfile')
