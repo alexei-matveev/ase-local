@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from ase import _deprecate_things_from_ase_module
 from ase.calculators.lj import LennardJones
 from ase.calculators.emt import EMT, ASAP
 from ase.calculators.siesta import Siesta
@@ -9,6 +10,14 @@ from ase.calculators.dacapo import Dacapo
 from ase.calculators.vasp import Vasp
 
 
+if _deprecate_things_from_ase_module:
+    from ase.utils.deprecate import Deprecate
+    _locals = locals()
+    for name in ['LennardJones', 'EMT', 'ASAP', 'Siesta', 'Dacapo', 'Vasp',
+                 'Aims', 'AimsCube', 'Turbomole', 'Exciting', 'Dftb']:
+        obj = _locals[name]
+        _locals[name] = Deprecate(obj, name, obj.__module__, 'ase.calculators')
+    
 class Calculator:
     """Class for demonstrating the ASE-calculator interface.
 
@@ -164,8 +173,14 @@ class SinglePointCalculator:
     def __init__(self, energy, forces, stress, magmoms, atoms):
         """Save energy, forces and stresses for the current configuration."""
         self.energy = energy
+        if forces is not None:
+            forces = np.array(forces, float)
         self.forces = forces
+        if stress is not None:
+            stress = np.array(stress, float)
         self.stress = stress
+        if magmoms is not None:
+            magmoms = np.array(magmoms, float)
         self.magmoms = magmoms
         self.atoms = atoms.copy()
 

@@ -1,11 +1,14 @@
 # encoding: utf-8
 """surfaceslab.py - Window for setting up surfaces
-
-This is part of the Visual ASE for teaching (vase) GUI.
 """
 
 import gtk
-from ase.gui.widgets import pack, cancel_apply_ok
+from ase.gui.widgets import pack, cancel_apply_ok, oops
+from ase.gui.pybutton import PyButton
+from ase.gui.setupwindow import SetupWindow
+import ase.lattice.surface as _surf
+import ase
+import numpy as np
 
 introtext = """\
   Use this dialog to create surface slabs.  Select the element by
@@ -18,10 +21,6 @@ cases the non-orthogonal unit cell will contain fewer atoms.
 look up the lattice constant, otherwise you have to specify it
 yourself."""
 
-import ase.lattice.surface as _surf
-import ase
-import numpy as np
-
 # Name, structure, orthogonal, support-nonorthogonal, function
 surfaces = [('FCC(100)', 'fcc', True, False, _surf.fcc100),
             ('FCC(110)', 'fcc', True, False, _surf.fcc110),
@@ -32,25 +31,28 @@ surfaces = [('FCC(100)', 'fcc', True, False, _surf.fcc100),
             ('BCC(110) orthogonal', 'bcc', True, True, _surf.bcc110),
             ('BCC(111) non-orthogonal', 'bcc', False, True, _surf.bcc111),
             ('BCC(111) orthogonal', 'bcc', True, True, _surf.bcc111),
+            ('HCP(0001) non-orthogonal', 'hcp', False, True, _surf.hcp0001),
+            ('HCP(0001) orthogonal', 'hcp', True, True, _surf.hcp0001),
             ]
 
-class SetupSurfaceSlab(gtk.Window):
+py_template = """
+from ase.lattice.surface import %(func)s
+
+atoms = %(func)s(symbol='%(symbol)s', size=%(size)s,
+    a=%(a).3f, vacuum=%(vacuum).3f%(orthoarg)s)
+"""
+
+class SetupSurfaceSlab(SetupWindow):
     """Window for setting up a surface."""
     def __init__(self, gui):
-        gtk.Window.__init__(self)
+        SetupWindow.__init__(self)
         self.set_title("Surface")
         self.atoms = None
 
         vbox = gtk.VBox()
 
         # Intoductory text
-        pack(vbox, gtk.Label(""))
-        txtframe = gtk.Frame()
-        txtlbl = gtk.Label(introtext)
-        txtframe.add(txtlbl)
-        txtlbl.show()
-        pack(vbox, txtframe)
-        pack(vbox, gtk.Label(""))
+        self.packtext(vbox, introtext)
              
         # Choose the element
         label = gtk.Label("Element: ")
@@ -73,13 +75,34 @@ class SetupSurfaceSlab(gtk.Window):
         self.structchoice.connect('changed', self.update)
 
         # Choose the lattice constant
+        tbl = gtk.Table(2, 3)
         label = gtk.Label("Lattice constant: ")
+        tbl.attach(label, 0, 1, 0, 1)
+        vbox2 = gtk.VBox()          # For the non-HCP stuff
+        self.vbox_hcp = gtk.VBox()  # For the HCP stuff.
         self.lattice_const = gtk.Adjustment(3.0, 0.0, 1000.0, 0.01)
         lattice_box = gtk.SpinButton(self.lattice_const, 10.0, 3)
         lattice_box.numeric = True
+        pack(vbox2, [gtk.Label("a:"), lattice_box, gtk.Label("Å")])
+        tbl.attach(vbox2, 1, 2, 0, 1)
         lattice_button = gtk.Button("Get from database")
-        pack(vbox, [label, lattice_box, lattice_button], end=True)
+        tbl.attach(lattice_button, 2, 3, 0, 1)
+        # HCP stuff
+        self.hcp_ideal = (8.0/3)**(1.0/3)
+        self.lattice_const_c = gtk.Adjustment(self.lattice_const.value * self.hcp_ideal,
+                                              0.0, 1000.0, 0.01)
+        lattice_box_c = gtk.SpinButton(self.lattice_const_c, 10.0, 3)
+        lattice_box_c.numeric = True
+        pack(self.vbox_hcp, [gtk.Label("c:"), lattice_box_c, gtk.Label("Å")])
+        self.hcp_c_over_a_format = "c/a: %.3f (%.1f %% of ideal)"
+        self.hcp_c_over_a_label = gtk.Label(self.hcp_c_over_a_format % (self.hcp_ideal,
+                                                                        100.0))
+        pack(self.vbox_hcp, [self.hcp_c_over_a_label])
+        tbl.attach(self.vbox_hcp, 1, 2, 1, 2)
+        tbl.show_all()
+        pack(vbox, [tbl])
         self.lattice_const.connect('value-changed', self.update)
+        self.lattice_const_c.connect('value-changed', self.update)
         lattice_button.connect('clicked', self.get_lattice_const)
         pack(vbox, gtk.Label(""))
 
@@ -104,68 +127,67 @@ class SetupSurfaceSlab(gtk.Window):
         pack(vbox, gtk.Label(""))
 
         # Buttons
+        self.pybut = PyButton("Creating a surface slab.")
+        self.pybut.connect('clicked', self.update)
         buts = cancel_apply_ok(cancel=lambda widget: self.destroy(),
                                apply=self.apply,
                                ok=self.ok)
-        pack(vbox, [buts], end=True)
+        pack(vbox, [self.pybut, buts], end=True, bottom=True)
         
         self.add(vbox)
         vbox.show()
         self.show()
         self.gui = gui
 
-    def update_element(self, *args):
-        "Called when a new element may have been entered."
-        elem = self.element.get_text()
-        if not elem:
-            self.invalid_element("  No element specified!")
-            return False
-        try:
-            z = int(elem)
-        except ValueError:
-            # Probably a symbol
-            try:
-                z = ase.data.atomic_numbers[elem]
-            except KeyError:
-                self.invalid_element()
-                return False
-        try:
-            symb = ase.data.chemical_symbols[z]
-        except KeyError:
-            self.invalid_element()
-            return False
-        name = ase.data.atomic_names[z]
-        ref = ase.data.reference_states[z]
-        if ref is None:
-            struct = "No crystal structure data"
-        else:
-            struct = ref['symmetry'].lower()
-            if struct == 'fcc' or struct == 'bcc':
-                struct = "%s (a=%.3f Å)" % (struct, ref['a'])
-        
-        txt = "  %s: %s, Z=%i, %s" % (name, symb, z, struct)
-        self.elementinfo.set_text(txt)
-        self.legal_element = symb
-        return True
+        # Hide the HCP stuff to begin with.
+        self.vbox_hcp.hide_all()
+
+    # update_element inherited from SetupWindow
 
     def update(self, *args):
         "Called when something has changed."
         struct = self.structchoice.get_active_text()
+        if struct:
+            structinfo = self.surfinfo[struct]
+            if structinfo[1] == 'hcp':
+                self.vbox_hcp.show_all()
+                ca = self.lattice_const_c.value / self.lattice_const.value
+                self.hcp_c_over_a_label.set_text(self.hcp_c_over_a_format %
+                                                 (ca, 100 * ca / self.hcp_ideal))
+            else:
+                self.vbox_hcp.hide_all()
+        # Abort if element or structure is invalid
         if not (self.update_element() and struct):
             self.sizelabel.set_text(self.nosize)
             self.atoms = None
+            self.pybut.python = None
             return False
         # Make the atoms
         assert self.legal_element
-        structinfo = self.surfinfo[struct]
-        xtra_keywords = {}
+        kw = {}
+        kw2 = {}
         if structinfo[3]:  # Support othogonal keyword?
-            xtra_keywords['orthogonal'] = structinfo[2]
-        self.atoms = structinfo[4](symbol=self.legal_element,
-                                   size=[int(s.value) for s in self.size],
-                                   a=self.lattice_const.value,
-                                   vacuum=self.vacuum.value,
-                                   **xtra_keywords)
+            kw['orthogonal'] = structinfo[2]
+            kw2['orthoarg'] = ', orthogonal='+str(kw['orthogonal'])
+        else:
+            kw2['orthoarg'] = ''
+        kw2['func'] = structinfo[4].__name__
+        kw['symbol'] = self.legal_element
+        kw['size'] = [int(s.value) for s in self.size]
+        kw['a'] = self.lattice_const.value
+        kw['vacuum'] = self.vacuum.value
+        # Now create the atoms
+        try:
+            self.atoms = structinfo[4](**kw)
+        except ValueError, e:
+            # The values were illegal - for example some size
+            # constants must be even for some structures.
+            self.pybut.python = None
+            self.atoms = None
+            self.sizelabel.set_text(str(e).replace(".  ", ".\n"))
+            return False
+        kw2.update(kw)
+        self.pybut.python = py_template % kw2
         # Find the heights of the unit cell
         h = np.zeros(3)
         uc = self.atoms.get_cell()
@@ -179,45 +201,40 @@ class SetupSurfaceSlab(gtk.Window):
         self.sizelabel.set_text(txt)
         return True
     
-    def invalid_element(self, txt="  ERROR: Invalid element!"):
-        self.legal_element = False
-        self.elementinfo.set_text(txt)
-
     def get_lattice_const(self, *args):
         if not self.update_element():
-            self.oops("Invalid element.")
+            oops("Invalid element.")
             return
         z = ase.atomic_numbers[self.legal_element]
         ref = ase.data.reference_states[z]
         surface = self.structchoice.get_active_text()
         if not surface:
-            self.oops("No structure specified!")
+            oops("No structure specified!")
             return
         struct = self.surfinfo[surface][1]
         if ref is None or ref['symmetry'].lower() != struct:
-            self.oops(struct.upper() + " lattice constant unknown for "
+            oops(struct.upper() + " lattice constant unknown for "
                       + self.legal_element + ".")
             return
         a = ref['a']
         self.lattice_const.set_value(a)
+        if struct == 'hcp':
+            c = ref['c/a'] * a
+            self.lattice_const_c.set_value(c)
 
     def apply(self, *args):
+        self.update()
         if self.atoms is not None:
             self.gui.new_atoms(self.atoms)
             return True
         else:
-            self.oops("No valid atoms.")
+            oops("No valid atoms.",
+                 "You have not (yet) specified a consistent set of parameters.")
             return False
 
     def ok(self, *args):
         if self.apply():
             self.destroy()
             
-    def oops(self, message):
-        dialog = gtk.MessageDialog(flags=gtk.DIALOG_MODAL,
-                                   type=gtk.MESSAGE_WARNING,
-                                   buttons=gtk.BUTTONS_CLOSE,
-                                   message_format=message)
-        dialog.connect('response', lambda x, y: dialog.destroy())
-        dialog.show()
+
         

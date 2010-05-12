@@ -23,21 +23,32 @@ packages = ['ase',
             'ase.md',
             'ase.dft',
             'ase.gui',
+            'ase.gui.languages',
             'ase.data',
             'ase.test',
             'ase.utils',
             'ase.lattice',
+            'ase.lattice.spacegroup',
             'ase.examples',
             'ase.optimize',
+            'ase.optimize.test',
             'ase.visualize',
             'ase.visualize.vtk',
             'ase.transport',
             'ase.calculators',
-            'ase.gui.languages',
             'ase.calculators.jacapo']
 
+package_dir={'ase': 'ase'}
+
+package_data={'ase': ['lattice/spacegroup/spacegroup.dat']}
+
 # Get the current version number:
-execfile('ase/version.py')
+execfile('ase/svnversion_io.py')  # write ase/svnversion.py and get svnversion
+execfile('ase/version.py')        # get version_base
+if svnversion:
+    version = version_base + '.' + svnversion
+else:
+    version = version_base
 
 setup(name = 'python-ase',
       version=version,
@@ -45,8 +56,10 @@ setup(name = 'python-ase',
       url='https://wiki.fysik.dtu.dk/ase',
       maintainer='CAMd',
       maintainer_email='camd@fysik.dtu.dk',
-      license='LGPL',
+      license='LGPLv2.1+',
       platforms=['linux'],
       packages=packages,
+      package_dir=package_dir,
+      package_data=package_data,
       scripts=['tools/ag', 'tools/ASE2ase.py', 'tools/testase.py'],
       long_description=long_description)

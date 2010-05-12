@@ -1,11 +1,10 @@
 import os
-import pickle
+import cPickle as pickle
 
 from ase.calculators import SinglePointCalculator
 from ase.atoms import Atoms
-from ase.parallel import rank
+from ase.parallel import rank, barrier
 from ase.utils import devnull
-from ase.neb import NEB
 
 
 class PickleTrajectory:
@@ -68,15 +67,21 @@ class PickleTrajectory:
         self.fd = filename
         if mode == 'r':
             if isinstance(filename, str):
-                self.fd = open(filename, mode + 'b')
+                self.fd = open(filename, 'rb')
             self.read_header()
         elif mode == 'a':
             exists = True
             if isinstance(filename, str):
                 exists = os.path.isfile(filename)
-                self.fd = open(filename, mode + 'b+')
-            if exists:
-                self.read_header()
+                if exists:
+                    self.fd = open(filename, 'rb')
+                    self.read_header()
+                    self.fd.close()
+                barrier()
+                if self.master:
+                    self.fd = open(filename, 'ab+')
+                else:
+                    self.fd = devnull
         elif mode == 'w':
             if self.master:
                 if isinstance(filename, str):
@@ -98,6 +103,7 @@ class PickleTrajectory:
         self.atoms = atoms
 
     def read_header(self):
+        self.fd.seek(0)
         try:
             if self.fd.read(len('PickleTrajectory')) != 'PickleTrajectory':
                 raise IOError('This is not a trajectory file!')
@@ -265,7 +271,34 @@ def read_trajectory(filename, index=-1):
     if isinstance(index, int):
         return traj[index]
     else:
-        return [traj[i] for i in range(len(traj))[index]]
+        # Here, we try to read only the configurations we need to read
+        # and len(traj) should only be called if we need to as it will
+        # read all configurations!
+
+        # XXX there must be a simpler way?
+        step = index.step or 1
+        if step > 0:
+            start = index.start or 0
+            if start < 0:
+                start += len(traj)
+            stop = index.stop or len(traj)
+            if stop < 0:
+                stop += len(traj)
+        else:
+            if index.start is None:
+                start = len(traj) - 1
+            else:
+                start = index.start
+                if start < 0:
+                    start += len(traj)
+            if index.stop is None:
+                stop = -1
+            else:
+                stop = index.stop
+                if stop < 0:
+                    stop += len(traj)
+                    
+        return [traj[i] for i in range(start, stop, step)]
 
 def write_trajectory(filename, images):
     """Write image(s) to trajectory.

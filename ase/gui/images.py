@@ -10,11 +10,14 @@ from ase.io import read, write, string2index
 
 class Images:
     def __init__(self, images=None):
+
         if images is not None:
             self.initialize(images)
     
-    def initialize(self, images, filenames=None):
+    def initialize(self, images, filenames=None, init_magmom=False):
+        
         self.natoms = len(images[0])
+
         self.nimages = len(images)
         if filenames is None:
             filenames = [None] * self.nimages
@@ -24,6 +27,7 @@ class Images:
         self.K = np.empty(self.nimages)
         self.F = np.empty((self.nimages, self.natoms, 3))
         self.M = np.empty((self.nimages, self.natoms))
+        self.T = np.empty((self.natoms))
         self.A = np.empty((self.nimages, 3, 3))
         self.Z = images[0].get_atomic_numbers()
         self.pbc = images[0].get_pbc()
@@ -49,20 +53,69 @@ class Images:
             except RuntimeError:
                 self.F[i] = np.nan
             try:
-                self.M[i] = atoms.get_magnetic_moments()
+                if init_magmom:
+                    self.M[i] = atoms.get_initial_magnetic_moments()
+                else:
+                  self.M[i] = atoms.get_magnetic_moments()
+            except (RuntimeError, AttributeError):
+                self.M[i] = 0.0
+                
+            # added support for tags
+            try:
+                self.T = atoms.get_tags()
             except RuntimeError:
-                self.M[i] = np.nan
+                self.T = np.nan
+                
 
         if warning:
             print('WARNING: Not all images have the same bondary conditions!')
             
         self.selected = np.zeros(self.natoms, bool)
+        self.atoms_to_rotate_0 = np.zeros(self.natoms, bool)
         self.visible = np.ones(self.natoms, bool)
         self.nselected = 0
         self.set_dynamic()
         self.repeat = np.ones(3, int)
         self.set_radii(0.89)
-
+        
+    def prepare_new_atoms(self):
+        "Marks that the next call to append_atoms should clear the images."
+        self.next_append_clears = True
+        
+    def append_atoms(self, atoms, filename=None):
+        "Append an atoms object to the images already stored."
+        assert len(atoms) == self.natoms
+        if self.next_append_clears:
+            i = 0
+        else:
+            i = self.nimages
+        for name in ('P', 'E', 'K', 'F', 'M', 'A'):
+            a = getattr(self, name)
+            newa = np.empty( (i+1,) + a.shape[1:] )
+            if not self.next_append_clears:
+                newa[:-1] = a
+            setattr(self, name, newa)
+        self.next_append_clears = False
+        self.P[i] = atoms.get_positions()
+        self.A[i] = atoms.get_cell()
+        try:
+            self.E[i] = atoms.get_potential_energy()
+        except RuntimeError:
+            self.E[i] = np.nan
+        self.K[i] = atoms.get_kinetic_energy()
+        try:
+            self.F[i] = atoms.get_forces(apply_constraint=False)
+        except RuntimeError:
+            self.F[i] = np.nan
+        try:
+            self.M[i] = atoms.get_magnetic_moments()
+        except (RuntimeError, AttributeError):
+            self.M[i] = np.nan
+        self.nimages = i + 1
+        self.filenames.append(filename)
+        self.set_dynamic()
+        return self.nimages
+        
     def set_radii(self, scale):
         self.r = covalent_radii[self.Z] * scale
                 
@@ -71,12 +124,22 @@ class Images:
         names = []
         for filename in filenames:
             i = read(filename, index)
+            
             if not isinstance(i, list):
                 i = [i]
             images.extend(i)
             names.extend([filename] * len(i))
+            
         self.initialize(images, names)
-
+    
+    def import_atoms(self, filename, cur_frame):
+        if filename:
+            filename = filename[0]
+            old_a = self.get_atoms(cur_frame)
+            imp_a = read(filename, -1)
+            new_a = old_a + imp_a
+            self.initialize([new_a], [filename])
+    
     def repeat_images(self, repeat):
         n = self.repeat.prod()
         repeat = np.array(repeat)
@@ -84,6 +147,8 @@ class Images:
         N = repeat.prod()
         natoms = self.natoms // n
         P = np.empty((self.nimages, natoms * N, 3))
+        M = np.empty((self.nimages, natoms * N))
+        T = np.empty(natoms * N, int)
         F = np.empty((self.nimages, natoms * N, 3))
         Z = np.empty(natoms * N, int)
         r = np.empty(natoms * N)
@@ -97,6 +162,8 @@ class Images:
                         P[i, a0:a1] = (self.P[i, :natoms] +
                                        np.dot((i0, i1, i2), self.A[i]))
                     F[:, a0:a1] = self.F[:, :natoms]
+                    M[:, a0:a1] = self.M[:, :natoms]
+                    T[a0:a1] = self.T[:natoms]
                     Z[a0:a1] = self.Z[:natoms]
                     r[a0:a1] = self.r[:natoms]
                     dynamic[a0:a1] = self.dynamic[:natoms]
@@ -104,10 +171,13 @@ class Images:
         self.P = P
         self.F = F
         self.Z = Z
+        self.T = T
+        self.M = M
         self.r = r
         self.dynamic = dynamic
         self.natoms = natoms * N
         self.selected = np.zeros(natoms * N, bool)
+        self.atoms_to_rotate_0 = np.zeros(self.natoms, bool)
         self.visible = np.ones(natoms * N, bool)
         self.nselected = 0
         
@@ -125,7 +195,6 @@ class Images:
         for i in range(n):
             R = self.P[i]
             F = self.F[i]
-            M = self.M[i]
             A = self.A[i]
             f = ((F * D)**2).sum(1)**.5
             fmax = max(f)
@@ -176,6 +245,8 @@ class Images:
     def get_atoms(self, frame):
         atoms = Atoms(positions=self.P[frame],
                       numbers=self.Z,
+                      magmoms=self.M[0],
+                      tags=self.T,
                       cell=self.A[frame],
                       pbc=self.pbc)
         atoms.set_calculator(SinglePointCalculator(self.E[frame],
@@ -253,3 +324,7 @@ class Images:
         self.A = A
         self.E = E
         self.filenames[1:1] = [None] * m
+
+if __name__ == '__main__':
+    import os
+    os.system('python gui.py')

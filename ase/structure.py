@@ -150,7 +150,8 @@ def nanotube(n, m, length=1, bond=1.42, symbol='C', verbose=False):
     ChiralAngle = np.arctan((sq3 * n) / (2 * m + n)) / (np.pi * 180)
    
     cell = [Diameter * 2, Diameter * 2, length * t]
-    atoms = Atoms(symbol + str(NumAtom), positions=X, cell=cell)
+    atoms = Atoms(symbol + str(NumAtom), positions=X, cell=cell,
+                  pbc=[False, False, True])
     atoms.center()
     if verbose:
         print 'translation vector =', TransVec
@@ -213,16 +214,18 @@ def graphene_nanoribbon(n, m, type='zigzag', saturated=False, C_H=1.09,
     return atoms
 
 
-def bulk(name, crystalstructure, a=None, covera=None,
+def bulk(name, crystalstructure, a=None, c=None, covera=None,
          orthorhombic=False, cubic=False):
     """Helper function for creating bulk systems.
 
     name: str
         Chemical symbol or symbols as in 'MgO' or 'NaCl'.
     crystalstructure: str
-        Must be one of sc, fcc, bcc, hcp, diamond, zinkblende or
+        Must be one of sc, fcc, bcc, hcp, diamond, zincblende or
         rocksalt.
     a: float
+        Lattice constant.
+    c: float
         Lattice constant.
     covera: float
         c/a raitio used for hcp.  Defaults to ideal ratio.
@@ -233,12 +236,18 @@ def bulk(name, crystalstructure, a=None, covera=None,
         Construct cubic unit cell.
     """
 
-    if covera is None:
+    if covera is not None and  c is not None:
+        raise ValueError("Don't specify both c and c/a!")
+    
+    if covera is None and c is None:
         covera = sqrt(8.0 / 3.0)
         
     if a is None:
         a = estimate_lattice_constant(name, crystalstructure, covera)
 
+    if covera is None and c is not None:
+        covera = c / a
+        
     x = crystalstructure.lower()
 
     if orthorhombic and x != 'sc':
@@ -341,10 +350,10 @@ def _cubic_bulk(name, x, a):
                                         (0.5, 0.5, 0), (0.75, 0.75, 0.25)])
     elif x == 'rocksalt':
         atoms = Atoms(4 * name, cell=(a, a, a), pbc=True,
-                      scaled_positions=[(0, 0, 0), (0.5, 0.5, 0),
-                                        (0, 0.5, 0.5), (0.5, 0, 0.5),
-                                        (0.5, 0, 0.5), (0, 0.5, 0.5),
-                                        (0.5, 0.5, 0), (0, 0, 0)])
+                      scaled_positions=[(0, 0, 0), (0.5, 0, 0),
+                                        (0, 0.5, 0.5), (0.5, 0.5, 0.5),
+                                        (0.5, 0, 0.5), (0, 0, 0.5),
+                                        (0.5, 0.5, 0), (0, 0.5, 0)])
     else:
         raise RuntimeError
     

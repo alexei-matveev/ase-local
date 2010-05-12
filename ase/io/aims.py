@@ -75,6 +75,13 @@ def write_aims(filename, atoms):
     from ase.constraints import FixAtoms, FixCartesian
     import numpy as np
 
+    if isinstance(atoms, (list, tuple)):
+        if len(atoms) > 1:
+            raise RuntimeError("Don't know how to save more than "+
+                               "one image to FHI-aims input")
+        else:
+            atoms = atoms[0]
+
     fd = open(filename, 'w')
     i = 0
     if atoms.get_pbc().any():
@@ -106,7 +113,11 @@ def write_aims(filename, atoms):
             xyz = fix_cart[i]
             for n in range(3):
                 if xyz[n]:
-                    fd.write('constraint_relaxation %s\n' % 'xyz'[n])
+                    fd.write('constrain_relaxation %s\n' % 'xyz'[n])
+        if atom.charge:
+            fd.write('initial_charge %16.6f\n' % atom.charge)
+        if atom.magmom:
+            fd.write('initial_moment %16.6f\n' % atom.magmom)
 # except KeyError:
 #     continue
 
@@ -127,10 +138,16 @@ def read_aims_output(filename):
     n_periodic = -1
     f = None
     pbc = False
+    found_aims_calculator = False
     while True:
         line = fd.readline()
         if not line:
             break
+        if "List of parameters used to initialize the calculator:" in line:
+            fd.readline()
+            calc = read_aims_calculator(fd)
+            calc.out = filename
+            found_aims_calculator = True
         if "Number of atoms" in line:
             inp = line.split()
             n_atoms = int(inp[5])
@@ -157,8 +174,9 @@ def read_aims_output(filename):
             for i in range(n_atoms):
                 inp = fd.readline().split()
                 f.append([float(inp[2]),float(inp[3]),float(inp[4])])
-            e = images[-1].get_potential_energy()
-            images[-1].set_calculator(SinglePointCalculator(e,f,None,None,atoms))
+            if not found_aims_calculator:
+                e = images[-1].get_potential_energy()
+                images[-1].set_calculator(SinglePointCalculator(e,f,None,None,atoms))
             e = None
             f = None
         if "Total energy corrected" in line:
@@ -166,9 +184,42 @@ def read_aims_output(filename):
             if pbc:
                 atoms.set_cell(cell)
                 atoms.pbc = True
-            atoms.set_calculator(SinglePointCalculator(e,None,None,None,atoms))
+            if not found_aims_calculator:
+                atoms.set_calculator(SinglePointCalculator(e,None,None,None,atoms))
             images.append(atoms)
             e = None
     fd.close()
-    return images
+    if found_aims_calculator:
+        calc.set_results(images[-1])
+        images[-1].set_calculator(calc)
+    return images[-1]
 
+def read_aims_calculator(file):
+    """  found instructions for building an FHI-aims calculator in the output file, 
+    read its specifications and return it. """
+    from ase.calculators.aims import Aims
+    calc = Aims()
+    while True:
+        line = file.readline()
+        if "=======================================================" in line:
+            break
+        else:
+            args = line.split()
+            key = args[0]
+            if calc.float_params.has_key(key):
+                calc.float_params[key] = float(args[1])
+            elif calc.exp_params.has_key(key):
+                calc.exp_params[key] = float(args[1])
+            elif calc.string_params.has_key(key):
+                calc.string_params[key] = args[1]
+            elif calc.int_params.has_key(key):
+                calc.int_params[key] = int(args[1])
+            elif calc.bool_params.has_key(key):
+                calc.bool_params[key] = bool(args[1])
+            elif calc.list_params.has_key(key):
+                calc.list_params[key] = tuple(args[1:])
+            elif calc.input_parameters.has_key(key):
+                calc.input_parameters[key] = args[1]
+            else:
+                raise TypeError('FHI-aims keyword not defined in ASE: ' + key + '. Please check.')
+    return calc

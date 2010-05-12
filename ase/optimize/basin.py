@@ -1,6 +1,6 @@
 import numpy as np
 
-from ase.optimize import Dynamics
+from ase.optimize.optimize import Dynamics
 from ase.optimize.fire import FIRE
 from ase.units import kB
 from ase.parallel import world
@@ -44,6 +44,7 @@ class BasinHopping(Dynamics):
         self.Emin = self.get_energy(self.atoms.get_positions())
         self.rmin = self.atoms.get_positions()
         self.positions = self.atoms.get_positions()
+        self.call_observers()
         self.log(-1, self.Emin, self.Emin)
                 
     def run(self, steps):
