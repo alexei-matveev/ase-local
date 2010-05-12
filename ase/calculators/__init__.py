@@ -8,7 +8,11 @@ from ase.calculators.emt import EMT, ASAP
 from ase.calculators.siesta import Siesta
 from ase.calculators.dacapo import Dacapo
 from ase.calculators.vasp import Vasp
-
+from ase.calculators.aims import Aims, AimsCube
+from ase.calculators.turbomole import Turbomole
+from ase.calculators.paragauss import ParaGauss
+from ase.calculators.exciting import Exciting
+from ase.calculators.dftb import Dftb
 
 if _deprecate_things_from_ase_module:
     from ase.utils.deprecate import Deprecate
