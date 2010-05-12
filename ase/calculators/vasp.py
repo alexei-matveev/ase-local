@@ -317,7 +317,8 @@ class Vasp:
         atoms_sorted = ase.io.read('CONTCAR', format='vasp')
         p=self.incar_parameters
         if p['ibrion']>-1 and p['nsw']>0:
-            atoms.set_positions(atoms_sorted.get_positions()[self.resort])
+            # Replace entire atoms object with the one read from CONTCAR.
+            atoms.__dict__ = atoms_sorted[self.resort].__dict__
         self.energy_free, self.energy_zero = self.read_energy()
         self.forces = self.read_forces(atoms)
         self.dipole = self.read_dipole()
@@ -385,6 +386,7 @@ class Vasp:
         self.read_incar()
         self.read_outcar()
         self.read_kpoints()
+        self.read_potcar()
         self.old_incar_parameters = self.incar_parameters.copy()
         self.old_input_parameters = self.input_parameters.copy()
         self.converged = self.read_convergence()
@@ -433,8 +435,10 @@ class Vasp:
 
     def read_stress(self):
         for line in open('OUTCAR'):
-            if line.find(' Total  ') != -1:
-                stress = np.array([float(a) for a in line.split()[1:]])[[0, 1, 2, 4, 5, 3]]
+            if line.find(' in kB  ') != -1:
+                stress = -np.array([float(a) for a in line.split()[2:]]) \
+                         [[0, 1, 2, 4, 5, 3]] \
+                         * 1e-1 * ase.units.GPa
         return stress
 
     def calculation_required(self, atoms, quantities):
@@ -803,6 +807,7 @@ class Vasp:
         self.forces = self.read_forces(self.atoms)
         self.dipole = self.read_dipole()
         self.fermi = self.read_fermi()
+        self.stress = self.read_stress()
         self.nbands = self.read_nbands()
         p=self.incar_parameters
         if self.spinpol:
@@ -825,6 +830,33 @@ class Vasp:
             raise NotImplementedError('Only Monkhorst-Pack and gamma centered grid supported for restart.')
         else:
             raise NotImplementedError('Only Monkhorst-Pack and gamma centered grid supported for restart.')
+    
+    def read_potcar(self):
+        """ Method that reads the Exchange Correlation functional from POTCAR file.
+        """
+        file = open('POTCAR', 'r')
+        lines = file.readlines()
+        file.close()
+
+        # Search for key 'LEXCH' in POTCAR
+        xc_flag = None
+        for line in lines:
+            key = line.split()[0].upper()
+            if key == 'LEXCH':
+                xc_flag = line.split()[-1].upper()
+                break
+
+        if xc_flag is None:
+            raise ValueError('LEXCH flag not found in POTCAR file.')
+
+        # Values of parameter LEXCH and corresponding XC-functional
+        xc_dict = {'PE':'PBE', '91':'PW91', 'CA':'LDA'}
+
+        if xc_flag not in xc_dict.keys():
+            raise ValueError(
+                'Unknown xc-functional flag found in POTCAR, LEXCH=%s' % xc_flag)
+
+        self.input_parameters['xc'] = xc_dict[xc_flag]
 
 
 class VaspChargeDensity(object):

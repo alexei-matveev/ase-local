@@ -29,11 +29,6 @@ class Movie(gtk.Window):
                    gtk.Button(stock=gtk.STOCK_GO_FORWARD),
                    gtk.Button(stock=gtk.STOCK_GOTO_LAST)]
 
-        for button in buttons:
-            hboxb = button.child.child
-            label = hboxb.get_children()[1]
-            hboxb.remove(label)
-
         buttons[0].connect('clicked', self.click, -10000000)
         buttons[1].connect('clicked', self.click, -1)
         buttons[2].connect('clicked', self.click, 1)
@@ -55,19 +50,24 @@ class Movie(gtk.Window):
         self.time.connect('value-changed', self.new_time)
 
         self.add(vbox)
+
         if gtk.pygtk_version < (2, 12):
             self.set_tip = gtk.Tooltips().set_tip
             self.set_tip(hscale, _('Adjust play time.'))
         else:
             hscale.set_tooltip_text(_('Adjust play time.'))
-
         vbox.show()
         self.show()
         self.gui = gui
         #gui.m=self
         self.direction = 1
         self.id = None
+        gui.register_vulnerable(self)
 
+    def notify_atoms_changed(self):
+        "Called by gui object when the atoms have changed."
+        self.destroy()
+        
     def close(self, event):
         self.stop()
 
@@ -112,3 +112,7 @@ class Movie(gtk.Window):
     def new_time(self, widget):
         if self.id is not None:
             self.play()
+
+if __name__ == '__main__':
+    import os
+    os.system('python gui.py')

@@ -1,10 +1,14 @@
-import sys
 import os
+import sys
 from os.path import basename
 from tarfile import is_tarfile
 from zipfile import is_zipfile
+
 from ase.atoms import Atoms
 from ase.units import Bohr
+from ase.io.trajectory import PickleTrajectory
+
+__all__ = ['read', 'write', 'PickleTrajectory']
 
 
 def read(filename, index=-1, format=None):
@@ -18,8 +22,7 @@ def read(filename, index=-1, format=None):
         number n (counting from zero).
     format: str
         Used to specify the file-format.  If not given, the
-        file-format will be guessed by the *filetype* function. If
-        it's 'babel', will try to use the OpenBabel library.
+        file-format will be guessed by the *filetype* function.
 
     Known formats:
 
@@ -37,16 +40,18 @@ def read(filename, index=-1, format=None):
     Dacapo text output         dacapo-text
     XYZ-file                   xyz
     VASP POSCAR/CONTCAR file   vasp
+    VASP OUTCAR file           vasp_out
     Protein Data Bank          pdb
     FHI-aims geometry file     aims
     FHI-aims output file       aims_out
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
-    TURBOMOLE coord file       (filename==='coord')
+    TURBOMOLE coord file       tmol
     exciting input             exi
     AtomEye configuration      cfg
     WIEN2k structure file      struct
+    DftbPlus input file        dftb
     =========================  ===========
 
     """
@@ -54,7 +59,7 @@ def read(filename, index=-1, format=None):
         p = filename.rfind('@')
         if p != -1:
             try:
-                index = filename[p + 1:]
+                index = string2index(filename[p + 1:])
             except ValueError:
                 pass
             else:
@@ -127,6 +132,10 @@ def read(filename, index=-1, format=None):
         from ase.io.vasp import read_vasp
         return read_vasp(filename)
     
+    if format == 'vasp_out':
+        from ase.io.vasp import read_vasp_out
+        return read_vasp_out(filename)
+    
     if format == 'mol':
         from ase.io.mol import read_mol
         return read_mol(filename)
@@ -140,12 +149,8 @@ def read(filename, index=-1, format=None):
         return read_cif(filename)
 
     if format == 'struct':
-        from ase.io.struct import read_struct
+        from ase.io.wien2k import read_struct
         return read_struct(filename)
-
-    if format == 'babel':
-        from ase.io.babel import read_babel
-        return read_babel(filename, index=index)
 
     if format == 'vti':
         from ase.io.vtkxml import read_vti
@@ -183,7 +188,11 @@ def read(filename, index=-1, format=None):
         from ase.io.cfg import read_cfg
         return read_cfg(filename)
 
-    raise RuntimeError('That can *not* happen!')
+    if format == 'dftb':
+        from ase.io.dftb import read_dftb
+        return read_dftb(filename)
+
+    raise RuntimeError('File format descriptor '+format+' not recognized!')
 
 
 def write(filename, images, format=None, **kwargs):
@@ -195,8 +204,7 @@ def write(filename, images, format=None, **kwargs):
         A single Atoms object or a list of Atoms objects.
     format: str
         Used to specify the file-format.  If not given, the
-        file-format will be taken from suffix of the filename. If
-        given as 'babel', will try to use the OpenBabel library.
+        file-format will be taken from suffix of the filename. 
 
     The accepted output formats:
   
@@ -222,6 +230,7 @@ def write(filename, images, format=None, **kwargs):
     exciting                   exi
     AtomEye configuration      cfg
     WIEN2k structure file      struct
+    DftbPlus input file        dftb
     =========================  ===========
   
     The use of additional keywords is format specific.
@@ -279,6 +288,8 @@ def write(filename, images, format=None, **kwargs):
             filename = sys.stdout
         elif 'POSCAR' in filename or 'CONTCAR' in filename:
             format = 'vasp'
+        elif 'OUTCAR' in filename:
+            format = 'vasp_out'
         else:
             suffix = filename.split('.')[-1]
             format = {}.get(suffix, suffix) # XXX this does not make sense
@@ -305,6 +316,18 @@ def write(filename, images, format=None, **kwargs):
     elif format == 'tmol':
         from ase.io.turbomole import write_turbomole
         write_turbomole(filename, images)
+        return
+    elif format == 'dftb':
+        from ase.io.dftb import write_dftb
+        write_dftb(filename, images)
+        return
+    elif format == 'struct':
+        from ase.io.wien2k import write_struct
+        write_struct(filename, images, **kwargs)
+        return
+    elif format == 'struct':
+        from ase.io.wien2k import write_struct
+        write_struct(filename, images, **kwargs)
         return
 
     format = {'traj': 'trajectory', 'nc': 'netcdf'}.get(format, format)
@@ -390,6 +413,9 @@ def filetype(filename):
     if 'POSCAR' in filename_v or 'CONTCAR' in filename_v:
         return 'vasp'    
 
+    if 'OUTCAR' in filename_v:
+        return 'vasp_out'
+    
     if filename.lower().endswith('.exi'):
         return 'exi'
     
@@ -422,6 +448,10 @@ def filetype(filename):
 
     if lines[0].startswith('$coord'):
         return 'tmol'
+
+    if lines[0].startswith('Geometry'):
+        return 'dftb'
+
     if s3 == '<?x':
         from ase.io.vtkxml import probe_vtkxml
         xmltype = probe_vtkxml(filename)

@@ -13,6 +13,7 @@ import numpy as np
 
 from ase.atom import Atom
 from ase.data import atomic_numbers, chemical_symbols, atomic_masses
+import ase.units as units
 
 class Atoms(object):
     """Atoms object.
@@ -909,7 +910,7 @@ class Atoms(object):
             c = np.dot(v, v2)
             v = np.cross(v, v2)
             s = norm(v)
-            v /= s
+            if s > 0: v /= s
         
         if isinstance(center, str) and center.lower() == 'com':
             center = self.get_center_of_mass()
@@ -971,6 +972,72 @@ class Atoms(object):
         # Move back to the rotation point
         self.positions = np.transpose(rcoords) + center
 
+    def get_dihedral(self,list):
+        """
+        calculate dihedral angle between the vectors list[0]->list[1] and list[2]->list[3], 
+        where list contains the atomic indexes in question. 
+        """
+        # vector 0->1, 1->2, 2->3 and their normalized cross products:
+        a    = self.positions[list[1]]-self.positions[list[0]]
+        b    = self.positions[list[2]]-self.positions[list[1]]
+        c    = self.positions[list[3]]-self.positions[list[2]]
+        bxa  = np.cross(b,a)
+        bxa /= np.sqrt(np.vdot(bxa,bxa))
+        cxb  = np.cross(c,b)
+        cxb /= np.sqrt(np.vdot(cxb,cxb))
+        angle = np.vdot(bxa,cxb)
+        # check for numerical trouble due to finite precision:
+        if angle < -1: angle = -1
+        if angle >  1: angle =  1
+        angle = np.arccos(angle)
+        if (np.vdot(bxa,c)) > 0: angle = 2*np.pi-angle
+        return angle
+
+    def set_dihedral(self,list,angle,mask=None):
+        """
+        set the dihedral angle between vectors list[0]->list[1] and 
+        list[2]->list[3] by changing the atom indexed by list[3]
+        if mask is not None, all the atoms described in mask 
+        (read: the entire subgroup) are moved
+        
+        example: the following defines a very crude 
+        ethane-like molecule and twists one half of it by 30 degrees.
+
+        >>> atoms = Atoms('HHCCHH',[[-1,1,0],[-1,-1,0],[0,0,0],[1,0,0],[2,1,0],[2,-1,0]])
+        >>> atoms.set_dihedral([1,2,3,4],7*pi/6,mask=[0,0,0,1,1,1])
+        """
+        # if not provided, set mask to the last atom in the dihedral description
+        if mask is None:
+            mask = np.zeros(len(self))
+            mask[list[3]] = 1
+        # compute necessary in dihedral change, from current value
+        current =self.get_dihedral(list)
+        diff    = angle - current
+        # do rotation of subgroup by copying it to temporary atoms object and then rotating that
+        axis   = self.positions[list[2]]-self.positions[list[1]]
+        center = self.positions[list[2]]
+        # recursive object definition might not be the most elegant thing, more generally useful might be a rotation function with a mask?
+        group  = Atoms()
+        for i in range(len(self)):
+            if mask[i]:
+                group += self[i]
+        group.translate(-center)
+        group.rotate(axis,diff)
+        group.translate(center)
+        # set positions in original atoms object
+        j = 0
+        for i in range(len(self)):
+            if mask[i]:
+                self.positions[i] = group[j].get_position()
+                j += 1
+        
+    def rotate_dihedral(self,list,angle,mask=None):
+        """ complementing the two routines above: rotate a group by a predefined dihedral angle, 
+        starting from its current configuration
+        """
+        start = self.get_dihedral(list)
+        self.set_dihedral(list,angle+start,mask)
+
     def rattle(self, stdev=0.001, seed=42):
         """Randomly displace atoms.
 
@@ -1022,12 +1089,37 @@ class Atoms(object):
         scaled = np.linalg.solve(self._cell.T, self.arrays['positions'].T).T
         for i in range(3):
             if self._pbc[i]:
+                # Yes, we need to do it twice.
+                # See the scaled_positions.py test
+                scaled[:, i] %= 1.0
                 scaled[:, i] %= 1.0
         return scaled
 
     def set_scaled_positions(self, scaled):
         """Set positions relative to unit cell."""
         self.arrays['positions'][:] = np.dot(scaled, self._cell)
+
+    def get_temperature(self):
+        """Get the temperature. in Kelvin"""
+        ekin = self.get_kinetic_energy() / len(self)
+        return ekin /(1.5*units.kB)
+
+    def get_isotropic_pressure(self, stress):
+        """ get the current calculated pressure, assume isotropic medium.
+            in Bar
+        """
+        if type(stress) == type(1.0) or type(stress) == type(1):
+            return -stress * 1e-5 / units.Pascal
+        elif stress.shape == (3,3):
+            return (-(stress[0, 0] + stress[1, 1] + stress[2, 2]) / 3.0) * \
+                    1e-5 / units.Pascal
+        elif stress.shape == (6,):
+            return (-(stress[0] + stress[1] + stress[2]) / 3.0) * \
+                   1e-5 / units.Pascal
+        else:
+            raise ValueError, "The external stress has the wrong shape."
+
+
 
     def __eq__(self, other):
         """Check for identity of two atoms objects.
@@ -1179,7 +1271,7 @@ def string2vector(v):
         w = np.zeros(3)
         w['xyz'.index(v)] = 1.0
         return w
-    return np.asarray(v, float)
+    return np.array(v, float)
 
 def default(data, dflt):
     """Helper function for setting default values."""
