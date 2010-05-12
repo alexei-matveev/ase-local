@@ -26,7 +26,7 @@ parameters = {
 
 beta = 1.809#(16 * pi / 3)**(1.0 / 3) / 2**0.5
 eta1 = 0.5 / Bohr
-acut = 50.0
+acut = 25.0  # Use the same value as ASAP XXX
 
 class EMT:
 
@@ -50,8 +50,12 @@ class EMT:
             reactivate it with the command
               ase.EMT.disabled = False
             """
-            raise RuntimeError("ase.EMT has been disabled.  See message printed above.")
+            raise RuntimeError('ase.EMT has been disabled.  ' +
+                               'See message printed above.')
         
+    def get_spin_polarized(self):
+        return False
+    
     def initialize(self, atoms):
         self.par = {}
         self.rc = 0.0
@@ -67,9 +71,9 @@ class EMT:
                 gamma1 = 0.0
                 gamma2 = 0.0
                 if p[7] == 'fcc':
-                    for i, n in enumerate([12, 6, 24, 8]):
+                    for i, n in enumerate([12, 6, 24, 12]):
                         r = s0 * beta * sqrt(i + 1)
-                        x = n / (12 * (1.0 + exp(acut * (r - rc)))) # ???? not zero at rc!!!! XXXX
+                        x = n / (12 * (1.0 + exp(acut * (r - rc))))
                         gamma1 += x * exp(-eta2 * (r - beta * s0))
                         gamma2 += x * exp(-kappa / beta * (r - beta * s0))
                 elif p[7] == 'dimer':
@@ -91,8 +95,8 @@ class EMT:
                                'rc': rc,
                                'gamma1': gamma1,
                                'gamma2': gamma2}
-                if rc > self.rc:
-                    self.rc = rc
+                if rc + 0.5 > self.rc:
+                    self.rc = rc + 0.5
 
         self.ksi = {}
         for s1, p1 in self.par.items():
@@ -197,7 +201,7 @@ class EMT:
                                 continue
                             d = Q[a2] - R[a1]
                             r = sqrt(np.dot(d, d))
-                            if r < p1['rc']:
+                            if r < p1['rc'] + 0.5:
                                 Z2 = self.numbers[a2]
                                 self.interact1(a1, a2, d, r, p1, ksi[Z2])
                                 
@@ -206,7 +210,7 @@ class EMT:
             p = self.par[Z]
             try:
                 ds = -log(self.sigma1[a] / 12) / (beta * p['eta2'])
-            except OverflowError:
+            except (OverflowError, ValueError):
                 self.deds[a] = 0.0
                 self.energy -= p['E0']
                 continue
@@ -233,7 +237,7 @@ class EMT:
                                 continue
                             d = Q[a2] - R[a1]
                             r = sqrt(np.dot(d, d))
-                            if r < p1['rc']:
+                            if r < p1['rc'] + 0.5:
                                 Z2 = self.numbers[a2]
                                 self.interact2(a1, a2, d, r, p1, ksi[Z2])
 

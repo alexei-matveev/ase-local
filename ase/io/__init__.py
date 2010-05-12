@@ -3,7 +3,6 @@ import os
 from os.path import basename
 from tarfile import is_tarfile
 from zipfile import is_zipfile
-
 from ase.atoms import Atoms
 from ase.units import Bohr
 
@@ -40,20 +39,26 @@ def read(filename, index=-1, format=None):
     VASP POSCAR/CONTCAR file   vasp
     Protein Data Bank          pdb
     FHI-aims geometry file     aims
+    FHI-aims output file       aims_out
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
+    TURBOMOLE coord file       (filename==='coord')
+    exciting input             exi
+    AtomEye configuration      cfg
+    WIEN2k structure file      struct
     =========================  ===========
 
     """
-    p = filename.rfind('@')
-    if p != -1:
-        try:
-            index = filename[p + 1:]
-        except ValueError:
-            pass
-        else:
-            filename = filename[:p]
+    if isinstance(filename, str):
+        p = filename.rfind('@')
+        if p != -1:
+            try:
+                index = filename[p + 1:]
+            except ValueError:
+                pass
+            else:
+                filename = filename[:p]
 
     if isinstance(index, str):
         index = string2index(index)
@@ -81,6 +86,10 @@ def read(filename, index=-1, format=None):
             atoms.set_initial_magnetic_moments(magmoms)
 
         return atoms
+
+    if format == 'exi':
+        from ase.io.exciting import read_exciting
+        return read_exciting(filename, index)
 
     if format == 'xyz':
         from ase.io.xyz import read_xyz
@@ -130,6 +139,10 @@ def read(filename, index=-1, format=None):
         from ase.io.cif import read_cif
         return read_cif(filename)
 
+    if format == 'struct':
+        from ase.io.struct import read_struct
+        return read_struct(filename)
+
     if format == 'babel':
         from ase.io.babel import read_babel
         return read_babel(filename, index=index)
@@ -149,6 +162,10 @@ def read(filename, index=-1, format=None):
     if format == 'aims':
         from ase.io.aims import read_aims
         return read_aims(filename)
+    
+    if format == 'aims_out':
+        from ase.io.aims import read_aims_output
+        return read_aims_output(filename)
 
     if format == 'iwm':
         from ase.io.iwm import read_iwm
@@ -157,6 +174,14 @@ def read(filename, index=-1, format=None):
     if format == 'Cmdft':
         from ase.io.cmdft import read_I_info
         return read_I_info(filename)
+
+    if format == 'tmol':
+        from ase.io.turbomole import read_turbomole
+        return read_turbomole(filename)
+
+    if format == 'cfg':
+        from ase.io.cfg import read_cfg
+        return read_cfg(filename)
 
     raise RuntimeError('That can *not* happen!')
 
@@ -193,6 +218,10 @@ def write(filename, images, format=None, **kwargs):
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
+    TURBOMOLE coord file       tmol
+    exciting                   exi
+    AtomEye configuration      cfg
+    WIEN2k structure file      struct
     =========================  ===========
   
     The use of additional keywords is format specific.
@@ -201,12 +230,6 @@ def write(filename, images, format=None, **kwargs):
     keyword, which can be used to write a 3D array to the file along
     with the nuclei coordinates.
   
-    The ``eps``, ``png``, and ``pov`` formats are all graphics formats,
-    and accept the additional keywords::
-  
-      rotation='', show_unit_cell=0, radii=None, bbox=None, colors=None,
-      scale=20
-
     The ``vti``, ``vts`` and ``vtu`` formats are all specifically directed
     for use with MayaVi, and the latter is designated for visualization of
     the atoms whereas the two others are intended for volume data. Further,
@@ -215,31 +238,39 @@ def write(filename, images, format=None, **kwargs):
     additionally stores the coordinates of each grid point, thus making it
     useful for volume date in more general unit cells.
 
-    rotation: str
+    The ``eps``, ``png``, and ``pov`` formats are all graphics formats,
+    and accept the additional keywords:
+
+    rotation: str (default '')
       The rotation angles, e.g. '45x,70y,90z'.
-    show_unit_cell: int
+
+    show_unit_cell: int (default 0)
       Can be 0, 1, 2 to either not show, show, or show all of the unit cell.
-    radii: array / float
+
+    radii: array or float (default 1.0)
       An array of same length as the list of atoms indicating the sphere radii.
       A single float specifies a uniform scaling of the default covalent radii.
-    bbox: array
+
+    bbox: array (default None)
       XXX
-    colors: array
+
+    colors: array (default None)
       An array of same length as the list of atoms, indicating the rgb color
-      code for each atom.
-    scale: int
+      code for each atom. Default is the jmol_colors of ase/data/colors.
+
+    scale: int (default 20)
       Number of pixels per Angstrom.
       
-    The ``pov`` format accepts the additional keywords:
+    For the ``pov`` graphics format, ``scale`` should not be specified.
+    The elements of the color array can additionally be strings, or 4
+    and 5 vectors for named colors, rgb + filter, and rgb + filter + transmit
+    specification. This format accepts the additional keywords:
 
     ``run_povray``, ``display``, ``pause``, ``transparent``,
     ``canvas_width``, ``canvas_height``, ``camera_dist``,
     ``image_plane``, ``camera_type``, ``point_lights``,
-    ``area_light``, ``background``, ``textures``, ``celllinewidth``
-
-    For ``pov`` the elements of the color array can also be strings, or 4,
-    and 5 vectors for named colors, rgb + filter, and rgb + filter + transmit
-    specification.
+    ``area_light``, ``background``, ``textures``, ``celllinewidth``,
+    ``bondlinewidth``, ``bondatoms``
     """
     
     if format is None:
@@ -250,7 +281,20 @@ def write(filename, images, format=None, **kwargs):
             format = 'vasp'
         else:
             suffix = filename.split('.')[-1]
-            format = {}.get(suffix, suffix)
+            format = {}.get(suffix, suffix) # XXX this does not make sense
+            # Maybe like this:
+##             format = {'traj': 'trajectory',
+##                       'nc': 'netcdf',
+##                       'exi': 'exciting',
+##                       'in': 'aims',
+##                       'tmol': 'turbomole',
+##                       }.get(suffix, suffix)
+
+    if format == 'exi':
+        from ase.io.exciting import write_exciting
+        write_exciting(filename, images)
+        return
+
 
     if format == 'xyz':
         from ase.io.xyz import write_xyz
@@ -258,6 +302,10 @@ def write(filename, images, format=None, **kwargs):
         return
     elif format == 'in':
         format = 'aims'
+    elif format == 'tmol':
+        from ase.io.turbomole import write_turbomole
+        write_turbomole(filename, images)
+        return
 
     format = {'traj': 'trajectory', 'nc': 'netcdf'}.get(format, format)
     name = 'write_' + format
@@ -273,10 +321,8 @@ def write(filename, images, format=None, **kwargs):
     except ImportError:
         raise TypeError('Unknown format: "%s".' % format)
     
-    try:
-        write(filename, images, **kwargs)
-    except TypeError:
-        write(filename, images)
+    write(filename, images, **kwargs)
+
 
 def string2index(string):
     if ':' not in string:
@@ -316,18 +362,7 @@ def filetype(filename):
             return 'dacapo'
         raise IOError('Unknown netCDF file!')
 
-    if s3 == '<?x':
-        from ase.io.vtkxml import probe_vtkxml
-        xmltype = probe_vtkxml(filename)
-        if xmltype == 'ImageData':
-            return 'vti'
-        elif xmltype == 'StructuredGrid':
-            return 'vts'
-        elif xmltype == 'UnstructuredGrid':
-            return 'vtu'
-        elif xmltype is not None:
-            raise IOError('Unknown VTK XML file!')
-
+    
     if is_zipfile(filename):
         return 'vnl'
 
@@ -355,6 +390,9 @@ def filetype(filename):
     if 'POSCAR' in filename_v or 'CONTCAR' in filename_v:
         return 'vasp'    
 
+    if filename.lower().endswith('.exi'):
+        return 'exi'
+    
     if filename.lower().endswith('.mol'):
         return 'mol'
 
@@ -363,14 +401,37 @@ def filetype(filename):
 
     if filename.lower().endswith('.cif'):
         return 'cif'
+   
+    if filename.lower().endswith('.struct'):
+        return 'struct'
 
     if filename.lower().endswith('.in'):
         return 'aims'
 
+    if filename.lower().endswith('.out'):
+        return 'aims_out'
+
+    if filename.lower().endswith('.cfg'):
+        return 'cfg'
+        
     if os.path.split(filename)[1] == 'atoms.dat':
         return 'iwm'
 
     if filename.endswith('I_info'):
         return 'Cmdft'
+
+    if lines[0].startswith('$coord'):
+        return 'tmol'
+    if s3 == '<?x':
+        from ase.io.vtkxml import probe_vtkxml
+        xmltype = probe_vtkxml(filename)
+        if xmltype == 'ImageData':
+            return 'vti'
+        elif xmltype == 'StructuredGrid':
+            return 'vts'
+        elif xmltype == 'UnstructuredGrid':
+            return 'vtu'
+        elif xmltype is not None:
+            raise IOError('Unknown VTK XML file!')
 
     return 'xyz'

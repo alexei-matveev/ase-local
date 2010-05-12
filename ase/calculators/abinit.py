@@ -29,7 +29,7 @@ class Abinit:
     """
     def __init__(self, label='abinit', xc='LDA', kpts=None, nbands=0,
                  width=0.04*Hartree, ecut=None, charge=0,
-                 pulay=5, mix=0.1, pps='fhi'
+                 pulay=5, mix=0.1, pps='fhi', toldfe=1.0e-6
                  ):
         """Construct ABINIT-calculator object.
 
@@ -86,11 +86,14 @@ class Abinit:
         self.pulay = pulay
         self.mix = mix
         self.pps = pps
+        self.toldfe = toldfe
         if not pps in ['fhi', 'hgh', 'hgh.sc']:
             raise ValueError('Unexpected PP identifier %s' % pps)
 
         self.converged = False
         self.inp = {}
+        self.n_entries_int = 20 # integer entries per line
+        self.n_entries_float = 8 # float entries per line
 
     def update(self, atoms):
         if (not self.converged or
@@ -215,6 +218,14 @@ class Abinit:
 
         abinit = os.environ['ABINIT_SCRIPT']
         locals = {'label': self.label}
+
+        # Now, because (stupidly) abinit when it finds a name it uses nameA
+        # and when nameA exists it uses nameB, etc.
+        # we need to rename our *.txt file to *.txt.bak
+        filename = self.label + '.txt'
+        if islink(filename) or isfile(filename):
+            os.rename(filename, filename+'.bak')
+
         execfile(abinit, {}, locals)
         exitcode = locals['exitcode']
         if exitcode != 0:
@@ -352,7 +363,7 @@ class Abinit:
                     self.types.append(n+1)
         for n, type in enumerate(self.types):
             fh.write(' %d' % (type))
-            if n > 1 and ((n % 20) == 1):
+            if n > 1 and ((n % self.n_entries_int) == 1):
                 fh.write('\n')
         fh.write('\n')
 
@@ -369,7 +380,7 @@ class Abinit:
             fh.write('%d %d %d\n' %  tuple(self.kpts))
 
         fh.write('#Definition of the SCF procedure\n')
-        fh.write('toldfe 1.0d-06\n')
+        fh.write('toldfe %.1g\n' %  self.toldfe)
         fh.write('chkexit 1 # abinit.exit file in the running directory terminates after the current SCF\n')
 
         fh.close()
@@ -380,7 +391,7 @@ class Abinit:
         E_f=None
         filename = self.label + '.txt'
         text = open(filename).read().lower()
-        assert 'ERROR' not in text
+        assert 'error' not in text
         for line in iter(text.split('\n')):
             if line.rfind('fermi (or homo) energy (hartree) =') > -1:
                 E_f = float(line.split('=')[1].strip().split()[0])
@@ -400,13 +411,12 @@ class Abinit:
         # ...
         #
         assert mode in ['eigenvalues' , 'occupations', 'ibz_k_points', 'k_point_weights'], 'mode not in [\'eigenvalues\' , \'occupations\', \'ibz_k_points\', \'k_point_weights\']'
-        n_entries = 8
         # number of lines of eigenvalues/occupations for a kpt
-        n_entry_lines = max(1, int(self.nbands/n_entries))
+        n_entry_lines = max(1, int(self.nbands/self.n_entries_float))
         #
         filename = self.label + '.txt'
         text = open(filename).read().lower()
-        assert 'ERROR' not in text
+        assert 'error' not in text
         lines = iter(text.split('\n'))
         text_list = []
         # find the begining line of eigenvalues
@@ -476,8 +486,8 @@ class Abinit:
         """Read results from ABINIT's text-output file."""
         filename = self.label + '.txt'
         text = open(filename).read().lower()
-        assert 'ERROR' not in text
-        lines = iter(text.split('\n'))
+        assert 'error' not in text
+        assert 'was not enough scf cycles to converge' not in text
         # some consistency ckecks
         for line in iter(text.split('\n')):
             if line.rfind('natom  ') > -1:
@@ -488,12 +498,18 @@ class Abinit:
                 znucl = [float(Z) for Z in line.split()[1:]]
                 for n, Z in enumerate(self.species):
                     assert Z == znucl[n]
-        for line in iter(text.split('\n')):
+        lines = text.split('\n')
+        for n, line in enumerate(lines):
             if line.rfind(' typat  ') > -1:
-                typat = [float(t) for t in line.split()[1:]]
-                for n, t in enumerate(self.types):
-                    assert t == typat[n]
+                nlines = len(self.numbers) / self.n_entries_int
+                typat = [int(t) for t in line.split()[1:]] # first line
+                for nline in range(nlines): # remaining lines
+                    for t in lines[1 + n + nline].split()[:]:
+                        typat.append(int(t))
+        for n, t in enumerate(self.types):
+            assert t == typat[n]
 
+        lines = iter(text.split('\n'))
         # Stress:
         # Printed in the output in the following format [Hartree/Bohr^3]:
         # sigma(1 1)=  4.02063464E-04  sigma(3 2)=  0.00000000E+00
@@ -543,14 +559,6 @@ class Abinit:
                 break
         else:
             raise RuntimeError
-
-        # Now, because (stupidly) abinit when it finds a name it uses nameA
-        # and when nameA exists it uses nameB, etc.
-        # we need to rename our file
-        # (and loose it in case of e.g. QuasiNewton relaxation)!
-        filename_save = filename + '.save' #MDTMP
-        if islink(filename) or isfile(filename): #MDTMP
-            os.rename(filename, filename_save) #MDTMP
 
 def inpify(key):
     return key.lower().replace('_', '').replace('.', '').replace('-', '')

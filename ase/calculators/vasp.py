@@ -86,6 +86,7 @@ keys = [
     'ldipol',     # potential correction mode
     'amix',       #
     'bmix',       # tags for mixing
+    'lmaxmix',    # 
     'time',       # special control tag
     'lwave',      #
     'lcharg',     #
@@ -123,8 +124,9 @@ keys = [
 ]
 
 class Vasp:
-    def __init__(self, restart=None, **kwargs):
-
+    def __init__(self, restart=None, output_template='vasp', track_output=False, 
+                 **kwargs):
+        self.name = 'Vasp'
         self.incar_parameters = {}
         for key in keys:
             self.incar_parameters[key] = None
@@ -153,7 +155,10 @@ class Vasp:
                 kwargs['xc'])
         self.nbands = self.incar_parameters['nbands']
         self.atoms = None
+        self.run_counts = 0
         self.set(**kwargs)
+        self.output_template = output_template
+        self.track_output = track_output
 
     def set(self, **kwargs):
         for key in kwargs:
@@ -290,10 +295,13 @@ class Vasp:
 
     def calculate(self, atoms):
         """Generate necessary files in the working directory and run VASP.
-        
-        If the directory does not exist it will be created.
 
+        The method first write VASP input files, then calls the method
+        which executes VASP. When the VASP run is finished energy, forces, 
+        etc. are read from the VASP output.
         """
+        
+        # Write input
         from ase.io.vasp import write_vasp
         self.initialize(atoms)
         write_vasp('POSCAR', self.atoms_sorted, symbol_count = self.symbol_count)
@@ -301,30 +309,11 @@ class Vasp:
         self.write_potcar()
         self.write_kpoints()
         self.write_sort_file()
-
-        stderr = sys.stderr
-        p=self.input_parameters
-        if p['txt'] is None:
-            sys.stderr = devnull
-        elif p['txt'] == '-':
-            pass
-        elif isinstance(p['txt'], str):
-            sys.stderr = open(p['txt'], 'w')
-
-        if os.environ.has_key('VASP_COMMAND'):
-            vasp = os.environ['VASP_COMMAND']
-            exitcode = os.system(vasp)
-        elif os.environ.has_key('VASP_SCRIPT'):
-            vasp = os.environ['VASP_SCRIPT']
-            locals={}
-            execfile(vasp, {}, locals)
-            exitcode = locals['exitcode']
-        else:
-            raise RuntimeError('Please set either VASP_COMMAND or VASP_SCRIPT environment variable')
-        sys.stderr = stderr
-        if exitcode != 0:
-            raise RuntimeError('Vasp exited with exit code: %d.  ' % exitcode)
-
+        
+        # Execute VASP
+        self.run()
+        
+        # Read output
         atoms_sorted = ase.io.read('CONTCAR', format='vasp')
         p=self.incar_parameters
         if p['ibrion']>-1 and p['nsw']>0:
@@ -343,7 +332,37 @@ class Vasp:
         self.old_input_parameters = self.input_parameters.copy()
         self.converged = self.read_convergence()
         self.stress = self.read_stress()
+        
+    def run(self):
+        """Method which explicitely runs VASP."""
 
+        if self.track_output:
+            self.out = self.output_template+str(self.run_counts)+'.out'
+            self.run_counts += 1
+        else:
+            self.out = self.output_template+'.out'
+        stderr = sys.stderr
+        p=self.input_parameters
+        if p['txt'] is None:
+            sys.stderr = devnull
+        elif p['txt'] == '-':
+            pass
+        elif isinstance(p['txt'], str):
+            sys.stderr = open(p['txt'], 'w')
+        if os.environ.has_key('VASP_COMMAND'):
+            vasp = os.environ['VASP_COMMAND']
+            exitcode = os.system('%s > %s' % (vasp, self.out))
+        elif os.environ.has_key('VASP_SCRIPT'):
+            vasp = os.environ['VASP_SCRIPT']
+            locals={}
+            execfile(vasp, {}, locals)
+            exitcode = locals['exitcode']
+        else:
+            raise RuntimeError('Please set either VASP_COMMAND or VASP_SCRIPT environment variable')
+        sys.stderr = stderr
+        if exitcode != 0:
+            raise RuntimeError('Vasp exited with exit code: %d.  ' % exitcode)
+        
     def restart_load(self):
         """Method which is called upon restart."""
         
@@ -379,7 +398,8 @@ class Vasp:
         """
         files = ['CHG', 'CHGCAR', 'POSCAR', 'INCAR', 'CONTCAR', 'DOSCAR',
                  'EIGENVAL', 'IBZKPT', 'KPOINTS', 'OSZICAR', 'OUTCAR', 'PCDAT',
-                 'POTCAR', 'vasprun.xml', 'WAVECAR', 'XDATCAR']
+                 'POTCAR', 'vasprun.xml', 'WAVECAR', 'XDATCAR',
+                 'PROCAR', 'ase-sort.dat']
         for f in files:
             try:
                 os.remove(f)
@@ -414,8 +434,7 @@ class Vasp:
     def read_stress(self):
         for line in open('OUTCAR'):
             if line.find(' Total  ') != -1:
-                stress = np.array(line.split()[1:],
-                                  dtype=float)[[0, 1, 2, 4, 5, 3]]
+                stress = np.array([float(a) for a in line.split()[1:]])[[0, 1, 2, 4, 5, 3]]
         return stress
 
     def calculation_required(self, atoms, quantities):
@@ -649,7 +668,8 @@ class Vasp:
     def read_magnetic_moments(self, atoms):
         magnetic_moments = np.zeros(len(atoms))
         n = 0
-        for line in open('OUTCAR', 'r'):
+        lines = open('OUTCAR', 'r').readlines()
+        for line in lines:
             if line.rfind('magnetization (x)') > -1:
                 for m in range(len(atoms)):
                     magnetic_moments[m] = float(lines[n + m + 4].split()[4])
@@ -857,7 +877,7 @@ class VaspChargeDensity(object):
         writes out the charge density every 10 steps.
 
         chgdiff is the difference between the spin up charge density
-        and the spin up charge density and is thus only read for a
+        and the spin down charge density and is thus only read for a
         spin-polarized calculation.
 
         aug is the PAW augmentation charges found in CHGCAR. These are

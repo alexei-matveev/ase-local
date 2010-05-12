@@ -130,8 +130,9 @@ class Images:
             f = ((F * D)**2).sum(1)**.5
             fmax = max(f)
             fave = f.mean()
-            e = E[i]
+            epot = E[i]
             ekin = self.K[i]
+            e = epot + ekin
             data = eval(code)
             if i == 0:
                 m = len(data)
@@ -165,9 +166,12 @@ class Images:
                     indices = [indices]
 
         images = [self.get_atoms(i) for i in indices]
-        write(filename, images, 
-              rotation=rotations, show_unit_cell=show_unit_cell,
-              bbox=bbox)
+        try:
+            write(filename, images, 
+                  rotation=rotations, show_unit_cell=show_unit_cell,
+                  bbox=bbox)
+        except:
+            write(filename, images)
 
     def get_atoms(self, frame):
         atoms = Atoms(positions=self.P[frame],

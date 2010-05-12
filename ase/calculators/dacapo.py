@@ -147,10 +147,10 @@ class Dacapo:
     
     def get_pseudo_wave_function(self, band=0, kpt=0, spin=0, pad=True):
         kpt_c = self.get_bz_k_points()[kpt]
-        state = self.calc.GetElectronicStates().GetState(band=n, spin=s,
+        state = self.calc.GetElectronicStates().GetState(band=band, spin=spin,
                                                          kptindex=kpt)
 
-        # Get wf, without bolch phase (Phase = True doesn't do anything!)
+        # Get wf, without bloch phase (Phase = True doesn't do anything!)
         wave = state.GetWavefunctionOnGrid(phase=False)
 
         # Add bloch phase if this is not the Gamma point
@@ -226,6 +226,7 @@ valence = {
 'Pd': 10,
 'Ag': 11,
 'Cd': 12,
+'Ir': 9,
 'Pt': 10,
 'Au': 11,
 }
