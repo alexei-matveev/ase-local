@@ -18,7 +18,7 @@ class ParaGauss:
           input = "input",
           cmdline = "runpg /users/alexei/exe/openmpi/mainscf_V3.1.4b7-64",
           silence = True,
-          writeowninput = False
+          inputlocation = None
           ):
 
 
@@ -41,9 +41,20 @@ class ParaGauss:
       self.input = input
       self.cmdline = cmdline
       self.silence = silence
-      self.writeowninput = writeowninput
 
       self.converged = False
+
+      if inputlocation == None:
+          file = open(self.input, "r")
+      else:
+          if inputlocation.endswith("/"):
+              file = open(inputlocation + self.input, "r")
+          else:
+              file = open(inputlocation + "/" + self.input, "r")
+
+      self.inputstring = file.read()
+      file.close()
+      print self.inputstring
 
     def update(self, atoms):
         """
@@ -125,6 +136,9 @@ class ParaGauss:
         # create gxfile with actual geometry for calculation
         # units of positions should be Bohrs in here, so they are changed
         gxwrite(self.atnums, self.positions/Bohr, self.isyms, inums, iconns, ivars, None, None, loop, file='gxfile' )
+        inputfile = open(self.input, "w")
+        inputfile.write(self.inputstring)
+        inputfile.close()
         # the actual calcualtion
         cmd = self.cmdline + ' ' + self.input
         if self.silence:
