@@ -2,6 +2,7 @@
 
 """
 import os, sys
+from os.path import basename
 import numpy as np2
 from ase.gxfile import gxread, gxwrite
 from ase.units import Bohr, Hartree
@@ -18,7 +19,6 @@ class ParaGauss:
           input = "input",
           cmdline = "runpg /users/alexei/exe/openmpi/mainscf_V3.1.4b7-64",
           silence = True,
-          inputlocation = None
           ):
 
 
@@ -44,17 +44,11 @@ class ParaGauss:
 
       self.converged = False
 
-      if inputlocation == None:
-          file = open(self.input, "r")
-      else:
-          if inputlocation.endswith("/"):
-              file = open(inputlocation + self.input, "r")
-          else:
-              file = open(inputlocation + "/" + self.input, "r")
+      file = open(self.input, "r")
 
       self.inputstring = file.read()
       file.close()
-      print self.inputstring
+      #print self.inputstring
 
     def update(self, atoms):
         """
@@ -136,11 +130,12 @@ class ParaGauss:
         # create gxfile with actual geometry for calculation
         # units of positions should be Bohrs in here, so they are changed
         gxwrite(self.atnums, self.positions/Bohr, self.isyms, inums, iconns, ivars, None, None, loop, file='gxfile' )
-        inputfile = open(self.input, "w")
+        input = basename(self.input)
+        inputfile = open(input, "w")
         inputfile.write(self.inputstring)
         inputfile.close()
         # the actual calcualtion
-        cmd = self.cmdline + ' ' + self.input
+        cmd = self.cmdline + ' ' + input
         if self.silence:
             cmd +=  ' >> ParaGauss.out'
         tty = os.system(cmd)
