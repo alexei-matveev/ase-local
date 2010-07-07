@@ -47,6 +47,12 @@ def read(filename, index=-1, format=None):
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
+    ParaGauss gxfile           gx
+    TURBOMOLE coord file       tmol
+    exciting input             exi
+    AtomEye configuration      cfg
+    WIEN2k structure file      struct
+    DftbPlus input file        dftb
     =========================  ===========
 
     """
@@ -126,7 +132,15 @@ def read(filename, index=-1, format=None):
     if format == 'vasp':
         from ase.io.vasp import read_vasp
         return read_vasp(filename)
-    
+
+    if format == 'vasp_out':
+        from ase.io.vasp import read_vasp_out
+        return read_vasp_out(filename)
+
+    if format == 'gx':
+        from ase.io.gx import read_gx
+        return read_gx(filename)
+
     if format == 'mol':
         from ase.io.mol import read_mol
         return read_mol(filename)
@@ -217,6 +231,12 @@ def write(filename, images, format=None, **kwargs):
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
+    ParaGauss gxfile           gx
+    TURBOMOLE coord file       tmol
+    exciting                   exi
+    AtomEye configuration      cfg
+    WIEN2k structure file      struct
+    DftbPlus input file        dftb
     =========================  ===========
   
     The use of additional keywords is format specific.
@@ -398,6 +418,15 @@ def filetype(filename):
     filename_v = basename(filename) 
     if 'POSCAR' in filename_v or 'CONTCAR' in filename_v:
         return 'vasp'    
+
+    if 'OUTCAR' in filename_v:
+        return 'vasp_out'
+
+    if filename.lower().endswith('.exi'):
+        return 'exi'
+
+    if 'gx' in filename_v:
+        return 'gx'
 
     if filename.lower().endswith('.mol'):
         return 'mol'
