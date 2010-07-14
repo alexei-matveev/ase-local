@@ -169,7 +169,7 @@ class ParaGauss:
             print "ERROR: I quit!!"
             sys.exit(1)
 
-        self.__energy = self.parse_output('o.' + self.input + '/output')
+        self.__energy = self.parse_output('o.' + basename(self.input) + '/output')
 
     def parse_output(self, output): # not actually using |self|
         """
