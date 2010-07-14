@@ -3,7 +3,7 @@ import os
 # import numpy as np
 # from numpy.linalg import eigh, solve
 
-from ase.optimize import Optimizer
+from ase.optimize.optimize import Optimizer
 # from ase.data import atomic_numbers
 from ase.gxfile import gxread, gxwrite, is_dummy
 # conversion factors to Anstrom and eV
