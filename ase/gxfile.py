@@ -295,7 +295,4 @@ def _parse_grad(line):
     return V(grad)
 #enddef
 
-# You need to add "set modeline" and eventually "set modelines=5"
-# to your ~/.vimrc for this to take effect.
-# Dont (accidentally) delete these lines! Unless you do it intentionally ...
 # Default options for vim:sw=4:expandtab:smarttab:autoindent:syntax
