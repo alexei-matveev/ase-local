@@ -75,12 +75,14 @@ class ParaGauss:
         gives energy back (energy is energy calculated with ParaGauss
         in atomic units (energy transformed to ASE units))
         """
+
         self.update(atoms)
+
         if self.__energy == None:
-            print "ParaGauss WARNING: no energy available when energy wanted"
-            print "There seems to be gone something wrong with the energy calculation"
-            print "So I better stop here"
-            sys.exit()
+            print >> sys.stderr, "ERROR: (ParaGauss) no energy available"
+            print >> sys.stderr, "Aborting."
+            raise Exception("ParaGauss: no energy available")
+
         return self.__energy * Hartree
 
     def get_forces(self, atoms):
@@ -88,13 +90,16 @@ class ParaGauss:
         same as get_potential_energy but for forces
         units are transformed
         """
+
         self.update(atoms)
 
         if self.__grads == None :
-            print "ParaGauss WARNING: no forces available when they are wanted"
-            print "There seems to be gone something wrong with the force calculation"
-            print "So I better stop here"
-            sys.exit()
+            print >> sys.stderr, "ERROR: (ParaGauss) no forces available!"
+            print >> sys.stderr, "Try enabling geometry optimization, by setting OPERATIONS_GEO_OPT = true"
+            print >> sys.stderr, "and setting MAX_GEO_ITERATION = 0"
+            print >> sys.stderr, "Aborting."
+            raise Exception("ParaGauss: no forces available")
+
         # note that the forces are negative of the energy gradients:
         return -self.__grads * Hartree / Bohr
 
