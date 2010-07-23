@@ -3,7 +3,7 @@
 __all__ = ["gxread", "gxwrite", "is_dummy"]
 
 from sys import stdout
-from warnings import warn
+# from warnings import warn
 
 # to wrap the 3D vectors as V([x,y,z]):
 # from vector import Vector as V
@@ -122,7 +122,7 @@ def gxread( file='gxfile' ):
             fields = lines.next().split()
             energy = float( fields[0] )
         except StopIteration: # is raised by .next() on EOF
-            warn("gxread: gxfile does not contain energy")
+            # warn("gxread: gxfile does not contain energy")
             raise EOF, "gxread: no energies"
             # or maybe "return atoms, loop, None" right away?
         #end try
