@@ -123,9 +123,9 @@ class ParaGauss:
         if os.path.exists('gxfile'):
             atnums_d, xyz_d, self.isyms, inums, iconns, ivars, grads_dummy, energy_dummy, loop = gxread('gxfile')
             if (atnums_d != self.atnums).any() :
-                print "WARNING: gxfile does not fit!"
-                print "Please delete or change it before restart"
-                sys.exit()
+                print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
+                print >> sys.stderr, "Please delete or change it before restart"
+                raise Exception("gxfile does not fit, delete or adjust!")
         else:
             self.isyms = np2.ones(n)
             inums = np2.zeros(n)
