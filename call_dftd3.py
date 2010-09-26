@@ -11,12 +11,13 @@ system = ase.read('example_h2o.xyz')
 
 #dftd_module.dftd.division(36,6)
 
-a = [[1.,2.1,-0.43 ],[0.235, -4.0, 0.0001 ]]
+coords = [[1.,2.1,-0.43 ],[0.235, -4.0, 0.0001 ]]
+elements = [1, 2]
 #c = dftd_module.d3_energy(system.get_positions())
 #c = dftd_module.d3_energy(a)
 #c = dftd_module.d3_energy(numpy.transpose(numpy.array(a)))
-print numpy.asarray(a)
-c = dftd_module.d3_energy(numpy.asarray(a))
+print numpy.asarray(coords)
+c = dftd_module.d3_energy(numpy.asarray(elements),numpy.asarray(coords))
 
 
 print c

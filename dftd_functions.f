@@ -6,12 +6,15 @@ C Cf2py intent(in,out,copy) a
 C Cf2py integer intent(hide),depend(a) :: n_atom=shape(a,0)
 C Cf2py integer intent(hide),depend(a) ::  xyz=shape(a,1)
 C       print*,'hello'
-      SUBROUTINE d3_energy(coordraw, n_atom, xyz, dftd3_energy)
+      SUBROUTINE d3_energy(znumbers, coordraw, n_atom, xyz,
+     .                                                    dftd3_energy)
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       INTEGER                               :: n_atom, xyz
+      INTEGER                               :: znumbers(n_atom)
       REAL*8                                :: coordraw(n_atom,xyz)
       REAL*8                                :: dftd3_energy 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+Cf2py intent(in) znumbers
 Cf2py intent(in) coordraw
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
@@ -29,8 +32,10 @@ C     Check input
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     get coords in normal storage order
       coords = transpose(coordraw)
-      print*,coords(:,1)
-      print*,coords(:,2)
+
+      DO ind = 1,n_atom
+      print*,znumbers(ind), coords(:,ind)
+      END DO
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       dftd3_energy = 1.0
