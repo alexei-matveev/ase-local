@@ -1,14 +1,50 @@
-C       SUBROUTINE d3_energy(a, n_atom, xyz)
-C       INTEGER I,J
-C       INTEGER n_atom, xyz
-C       REAL*8 A( n_atom, xyz)
-C Cf2py intent(in,out,copy) a
-C Cf2py integer intent(hide),depend(a) :: n_atom=shape(a,0)
-C Cf2py integer intent(hide),depend(a) ::  xyz=shape(a,1)
-C       print*,'hello'
-      SUBROUTINE d3_energy(znumbers, coordraw, n_atom, xyz,
+      SUBROUTINE d2_energy(znumbers, coordraw, n_atom, xyz, func,
+     .                                                    dftd2_energy)
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      character*80                          :: func
+      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: znumbers(n_atom)
+      REAL*8                                :: coordraw(n_atom,xyz)
+      REAL*8                                :: dftd2_energy
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+Cf2py intent(in) znumbers
+Cf2py intent(in) coordraw
+Cf2py intent(in) func
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py intent(out) dftd2_energy
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C     Other Variables...
+      INTEGER                               :: ind
+      REAL*8                                :: coords(xyz, n_atom)
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C     Check input
+      IF (xyz .ne. 3) THEN
+          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          stop
+      END IF
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
+
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C     DO ind = 1,n_atom
+C     print*,znumbers(ind), coords(:,ind)
+C     END DO
+
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      call dftd3(n_atom, coords, znumbers, func, 2, dftd2_energy)
+
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      END SUBROUTINE d2_energy
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE d3_energy(znumbers, coordraw, n_atom, xyz, func,
      .                                                    dftd3_energy)
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      character*80                          :: func
       INTEGER                               :: n_atom, xyz
       INTEGER                               :: znumbers(n_atom)
       REAL*8                                :: coordraw(n_atom,xyz)
@@ -16,6 +52,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 Cf2py intent(in) znumbers
 Cf2py intent(in) coordraw
+Cf2py intent(in) func
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py intent(out) dftd3_energy
@@ -30,16 +67,19 @@ C     Check input
           stop
       END IF
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-C     get coords in normal storage order
-      coords = transpose(coordraw)
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
 
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       DO ind = 1,n_atom
       print*,znumbers(ind), coords(:,ind)
       END DO
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      dftd3_energy = 1.0
+      call dftd3(n_atom, coords, znumbers, func, 3, dftd3_energy)
 
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      print*, dftd3_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       END SUBROUTINE d3_energy
 
@@ -64,7 +104,7 @@ C but WITHOUT ANY WARRANTY; without even the implied warranty of
 C MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 C GNU General Public License for more details.
 
-      subroutine dftd3()
+      subroutine dftd3(n,xyz,iz, func, version, disp)
       implicit none             
       integer maxat,max_elem,maxc                      
 c conversion factors
@@ -168,8 +208,12 @@ c init
       noabc=.true. 
       numgrad=.false.
       tz=.false.
-      func=' none (read from parameter file)'
-      version=3
+c     func=' none (read from parameter file)'
+c     version=3
+c     print*,func
+c     print*,'dftd-d version',version
+c     print*,iz
+c     print*,xyz
 c J/mol nm^6 - > au
       c6conv=1.d-3/2625.4999d0/((0.052917726d0)**6)
 
@@ -189,37 +233,38 @@ c this is alternative to loadc6
       call copyc6(btmp,maxc,max_elem,c6ab,mxc)         
 
 c get coord filename
-      call getarg(1,etmp)
-      inquire(file=etmp,exist=ex)
-      if(.not.ex) call printoptions       
+c     call getarg(1,etmp)
+c     inquire(file=etmp,exist=ex)
+c     if(.not.ex) call printoptions       
 c read coordinates, either TM or xmol file
-      call rdcoord(etmp,n,xyz,iz)
+c     call rdcoord(etmp,n,xyz,iz)
       if(n.lt.1)     call stoprun( 'no atoms' )
       if(n.gt.maxat) call stoprun( 'too many atoms' )
 
       ex=.false.
       ipot=0
 c options
-      do i=1,10
-      call getarg(i,ftmp)
-      if(index(ftmp,'-h')      .ne.0) call printoptions
-      if(index(ftmp,'-grad'   ).ne.0) grad=.true. 
-      if(index(ftmp,'-anal'   ).ne.0) anal=.true. 
-      if(index(ftmp,'-noprint').ne.0) echo=.false.
-      if(index(ftmp,'-abc'    ).ne.0) noabc=.false.
-      if(index(ftmp,'-tz')     .ne.0) tz=.true.
-      if(index(ftmp,'-old')    .ne.0) version=2
-      if(index(ftmp,'-pot')    .ne.0) then
-                                      pot=.true. 
-                                      call getarg(i+1,atmp)
-                                      call readl(atmp,xx,nn)
-                                      ipot=idint(xx(1))
-                                      endif
-      if(index(ftmp,'-func')  .ne.0)  then
-                                      call getarg(i+1,func)
-                                      ex=.true.
-                                      endif
-      enddo
+c     do i=1,10
+c     call getarg(i,ftmp)
+c     if(index(ftmp,'-h')      .ne.0) call printoptions
+c     if(index(ftmp,'-grad'   ).ne.0) grad=.true. 
+c     if(index(ftmp,'-anal'   ).ne.0) anal=.true. 
+c     if(index(ftmp,'-noprint').ne.0) echo=.false.
+c     if(index(ftmp,'-abc'    ).ne.0) noabc=.false.
+c     if(index(ftmp,'-tz')     .ne.0) tz=.true.
+c     if(index(ftmp,'-old')    .ne.0) version=2
+c     if(index(ftmp,'-pot')    .ne.0) then
+c                                     pot=.true. 
+c                                     call getarg(i+1,atmp)
+c                                     call readl(atmp,xx,nn)
+c                                     ipot=idint(xx(1))
+c                                     endif
+c     if(index(ftmp,'-func')  .ne.0)  then
+c                                     call getarg(i+1,func)
+c                                     ex=.true.
+c                                     endif
+c     enddo
+      ex=.true.
 c the analytical E(3) grad is not available yet
       if(grad.and.(.not.noabc))numgrad=.true.
 
@@ -231,23 +276,23 @@ c set parameters for functionals
       endif
 
       if(echo)then
-      write(*,*)' _________________________________'
-      write(*,*)'                                  '
-      write(*,*)'|         DFTD3 V1.3 Rev 1        |'
-      write(*,*)'| S.Grimme, University Muenster   |'
-      write(*,*)'| Fri Jul  2 12:48:21 CEST 2010   |'
-      write(*,*)'|   see dftd3 -h for options      |'
-      write(*,*)' _________________________________'
-      write(*,*)
-      write(*,*)'Please cite DFT-D3 work done with this code as:'
-      write(*,*)'S. Grimme, J. Antony, S. Ehrlich and H. Krieg,'
-      write(*,*)'J. Chem. Phys, 132 (2010), 154104.'
-      write(*,*)'For DFT-D2 the reference is'
-      write(*,*)'S. Grimme, J. Comput. Chem., 27 (2006), 1787-1799'
-      write(*,*)
-      write(*,*)' files read :     '
-      write(*,*)trim(etmp)       
-      if(.not.ex)write(*,*)trim(dtmp)       
+c     write(*,*)' _________________________________'
+c     write(*,*)'                                  '
+c     write(*,*)'|         DFTD3 V1.3 Rev 1        |'
+c     write(*,*)'| S.Grimme, University Muenster   |'
+c     write(*,*)'| Fri Jul  2 12:48:21 CEST 2010   |'
+c     write(*,*)'|   see dftd3 -h for options      |'
+c     write(*,*)' _________________________________'
+c     write(*,*)
+c     write(*,*)'Please cite DFT-D3 work done with this code as:'
+c     write(*,*)'S. Grimme, J. Antony, S. Ehrlich and H. Krieg,'
+c     write(*,*)'J. Chem. Phys, 132 (2010), 154104.'
+c     write(*,*)'For DFT-D2 the reference is'
+c     write(*,*)'S. Grimme, J. Comput. Chem., 27 (2006), 1787-1799'
+c     write(*,*)
+c     write(*,*)' files read :     '
+c     write(*,*)trim(etmp)       
+c     if(.not.ex)write(*,*)trim(dtmp)       
       endif
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
