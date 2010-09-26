@@ -13,8 +13,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       REAL*8                                :: dftd3_energy 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 Cf2py intent(in) coordraw
-Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,0)
-Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py intent(out) dftd3_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     Other Variables...
@@ -22,12 +22,16 @@ C     Other Variables...
       REAL*8                                :: coords(xyz, n_atom)
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     Check input
-      print*,  coordraw(:,1)
-      print*,  coordraw(:,2)
       IF (xyz .ne. 3) THEN
           write(*,*) 'Somethings wrong with coordinate input ... STOP'
           stop
       END IF
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C     get coords in normal storage order
+      coords = transpose(coordraw)
+      print*,coords(:,1)
+      print*,coords(:,2)
+
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       dftd3_energy = 1.0
 
