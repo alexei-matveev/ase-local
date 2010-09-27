@@ -28,9 +28,6 @@ C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-C     DO ind = 1,n_atom
-C     print*,znumbers(ind), coords(:,ind)
-C     END DO
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       call dftd3(n_atom, coords, znumbers, func, 2, dftd2_energy)
@@ -71,15 +68,11 @@ C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      DO ind = 1,n_atom
-      print*,znumbers(ind), coords(:,ind)
-      END DO
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       call dftd3(n_atom, coords, znumbers, func, 3, dftd3_energy)
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      print*, dftd3_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       END SUBROUTINE d3_energy
 
@@ -201,7 +194,8 @@ c k1-k3
 c scale and convert to au
       rcov=k2*rcov/autoang
 c init
-      echo=.true. 
+c     echo=.true. 
+      echo=.false. 
       grad=.false.
       pot =.false.
       anal=.false.
