@@ -17,6 +17,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     Other Variables...
       INTEGER                               :: ind
       REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: pseudograd(xyz, n_atom)
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     Check input
       IF (xyz .ne. 3) THEN
@@ -30,7 +31,8 @@ C     get coords in a.u. and normal storage order
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      call dftd3(n_atom, coords, znumbers, func, 2, dftd2_energy)
+      call dftd3(n_atom, coords, znumbers, func, 2, .false.,
+     .                                        dftd2_energy, pseudograd)
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       END SUBROUTINE d2_energy
@@ -57,6 +59,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     Other Variables...
       INTEGER                               :: ind
       REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: pseudograd(xyz, n_atom)
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C     Check input
       IF (xyz .ne. 3) THEN
@@ -70,7 +73,8 @@ C     get coords in a.u. and normal storage order
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      call dftd3(n_atom, coords, znumbers, func, 3, dftd3_energy)
+      call dftd3(n_atom, coords, znumbers, func, 3, .false.,
+     .                                        dftd3_energy, pseudograd)
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -97,7 +101,7 @@ C but WITHOUT ANY WARRANTY; without even the implied warranty of
 C MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 C GNU General Public License for more details.
 
-      subroutine dftd3(n,xyz,iz, func, version, disp)
+      subroutine dftd3(n,xyz,iz, func, version, grad, disp, dispgrad)
       implicit none             
       integer maxat,max_elem,maxc                      
 c conversion factors
@@ -117,6 +121,7 @@ c coordinates in au
       real*8 xyz(3,maxat)
 c gradient
       real*8 g  (3,maxat)
+      real*8 dispgrad  (3,n)
 c cardinal numbers of elements
       integer   iz(maxat)
 c cut-off radii for all element pairs
@@ -196,7 +201,7 @@ c scale and convert to au
 c init
 c     echo=.true. 
       echo=.false. 
-      grad=.false.
+c     grad=.false.
       pot =.false.
       anal=.false.
       noabc=.true. 
@@ -518,6 +523,8 @@ c check if gdisp yields same energy as edisp
       endif
 c write to energy and gradient files in TM style
       call wregrad(maxat,n,xyz,iz,disp,g)
+c transfer gradients to output variable
+      dispgrad = g(:,1:n)
       endif
       if(echo)write(*,*) 'normal termination of dftd3'
 
