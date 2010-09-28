@@ -19,9 +19,10 @@ system = ase.read('example_h2o.xyz')
 #c = dftd_module.d3_energy(numpy.transpose(numpy.array(a)))
 #print numpy.asarray(coords)
 
-c = dftd_module.d3_energy(system.get_atomic_numbers(), system.get_positions() ,'pbe')
+#c = dftd_module.d3_energy(system.get_atomic_numbers(), system.get_positions() ,'pbe')
 #c = dftd_module.d2_energy(numpy.asarray(elements),numpy.asarray(coords),'pbe')
+c, d = dftd_module.d3_gradients(system.get_atomic_numbers(), system.get_positions() ,'pbe')
 
 
 print ' my ', c
-
+print d

@@ -1,39 +1,37 @@
       SUBROUTINE d2_energy(znumbers, coordraw, n_atom, xyz, func,
      .                                                    dftd2_energy)
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
       character*80                          :: func
       INTEGER                               :: n_atom, xyz
       INTEGER                               :: znumbers(n_atom)
       REAL*8                                :: coordraw(n_atom,xyz)
       REAL*8                                :: dftd2_energy
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
 Cf2py intent(in) znumbers
 Cf2py intent(in) coordraw
 Cf2py intent(in) func
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py intent(out) dftd2_energy
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
 C     Other Variables...
       REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: pseudograd(xyz, n_atom)
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      REAL*8                                :: dummygrads(xyz, n_atom)
+C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
           write(*,*) 'Somethings wrong with coordinate input ... STOP'
           stop
       END IF
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
 C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
-
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
       call dftd3(n_atom, coords, znumbers, func, 2, .false.,
-     .                                        dftd2_energy, pseudograd)
-
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+     .                                        dftd2_energy, dummygrads)
+C----------------------------------------------------------------------
       END SUBROUTINE d2_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
@@ -41,44 +39,126 @@ C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE d3_energy(znumbers, coordraw, n_atom, xyz, func,
      .                                                    dftd3_energy)
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
       character*80                          :: func
       INTEGER                               :: n_atom, xyz
       INTEGER                               :: znumbers(n_atom)
       REAL*8                                :: coordraw(n_atom,xyz)
       REAL*8                                :: dftd3_energy
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
 Cf2py intent(in) znumbers
 Cf2py intent(in) coordraw
 Cf2py intent(in) func
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py intent(out) dftd3_energy
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
 C     Other Variables...
       REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: pseudograd(xyz, n_atom)
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      REAL*8                                :: dummygrads(xyz, n_atom)
+C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
           write(*,*) 'Somethings wrong with coordinate input ... STOP'
           stop
       END IF
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
 C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
-
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
       call dftd3(n_atom, coords, znumbers, func, 3, .false.,
-     .                                        dftd3_energy, pseudograd)
-
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+     .                                        dftd3_energy, dummygrads)
+C----------------------------------------------------------------------
       END SUBROUTINE d3_energy
-
-
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE d2_gradients(znumbers, coordraw, n_atom, xyz, func,
+     .                                   dftd2_energy, dftd2_gradients)
+C----------------------------------------------------------------------
+      character*80                          :: func
+      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: znumbers(n_atom)
+      REAL*8                                :: coordraw(n_atom,xyz)
+      REAL*8                                :: dftd2_energy
+      REAL*8                             :: dftd2_gradients(n_atom,xyz)
+C----------------------------------------------------------------------
+Cf2py intent(in) znumbers
+Cf2py intent(in) coordraw
+Cf2py intent(in) func
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py intent(out) dftd2_energy
+Cf2py intent(out) dftd2_gradients
+C----------------------------------------------------------------------
+C     Other Variables...
+      REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: grads(xyz, n_atom)
+C----------------------------------------------------------------------
+C     Check input
+      IF (xyz .ne. 3) THEN
+          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          stop
+      END IF
+C----------------------------------------------------------------------
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+      call dftd3(n_atom, coords, znumbers, func, 2, .true.,
+     .                                             dftd2_energy, grads)
+      dftd2_gradients = transpose(grads)
+C----------------------------------------------------------------------
+      END SUBROUTINE d2_gradients
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE d3_gradients(znumbers, coordraw, n_atom, xyz, func,
+     .                                   dftd3_energy, dftd3_gradients)
+C----------------------------------------------------------------------
+      character*80                          :: func
+      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: znumbers(n_atom)
+      REAL*8                                :: coordraw(n_atom,xyz)
+      REAL*8                                :: dftd3_energy
+      REAL*8                             :: dftd3_gradients(n_atom,xyz)
+C----------------------------------------------------------------------
+Cf2py intent(in) znumbers
+Cf2py intent(in) coordraw
+Cf2py intent(in) func
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py intent(out) dftd3_energy
+Cf2py intent(out) dftd3_gradients
+C----------------------------------------------------------------------
+C     Other Variables...
+      REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: grads(xyz, n_atom)
+C----------------------------------------------------------------------
+C     Check input
+      IF (xyz .ne. 3) THEN
+          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          stop
+      END IF
+C----------------------------------------------------------------------
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+      call dftd3(n_atom, coords, znumbers, func, 3, .true.,
+     .                                             dftd3_energy, grads)
+      dftd3_gradients = transpose(grads)
+C----------------------------------------------------------------------
+      END SUBROUTINE d3_gradients
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
 C dftd3 program for computing the dispersion energy and forces from
 C cartesian atomic coordinates and atomic numbers as described in
 C S. Grimme, J. Antony, S. Ehrlich and H. Krieg A consistent and
@@ -520,7 +600,7 @@ c check if gdisp yields same energy as edisp
          call stoprun('internal error')
       endif
 c write to energy and gradient files in TM style
-      call wregrad(maxat,n,xyz,iz,disp,g)
+c     call wregrad(maxat,n,xyz,iz,disp,g)
 c transfer gradients to output variable
       dispgrad = g(:,1:n)
       endif
