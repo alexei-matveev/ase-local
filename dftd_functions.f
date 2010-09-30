@@ -778,16 +778,20 @@ C DFT-D2
 
       do iat=1,n-1
          do jat=iat+1,n
-            dx=xyz(1,iat)-xyz(1,jat)
-            dy=xyz(2,iat)-xyz(2,jat)
-            dz=xyz(3,iat)-xyz(3,jat)
-            r2=dx*dx+dy*dy+dz*dz
-c           if(r2.gt.rthr) cycle
-            r=sqrt(r2)
-            c6=c6ab(iz(jat),iz(iat),1,1,1)
-            damp6=1./(1.+exp(-alp6*(r/(rs6*r0ab(iz(jat),iz(iat)))-1.)))
-            r6=r2**3
-            e6 =e6+c6*damp6/r6
+c           consider only if interaction defined by interaction groups
+            IF (imat(ilist(iat),ilist(jat))) THEN
+              dx=xyz(1,iat)-xyz(1,jat)
+              dy=xyz(2,iat)-xyz(2,jat)
+              dz=xyz(3,iat)-xyz(3,jat)
+              r2=dx*dx+dy*dy+dz*dz
+c             if(r2.gt.rthr) cycle
+              r=sqrt(r2)
+              c6=c6ab(iz(jat),iz(iat),1,1,1)
+              damp6=1./(1.
+             .           +exp(-alp6*(r/(rs6*r0ab(iz(jat),iz(iat)))-1.)))
+              r6=r2**3
+              e6 =e6+c6*damp6/r6
+            END IF
          enddo
       enddo
 

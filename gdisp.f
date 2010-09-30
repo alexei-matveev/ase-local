@@ -36,32 +36,35 @@ c R^2 cut-off
       disp=0
       do iat=1,n-1
          do jat=iat+1,n
-            R0=r0ab(iz(jat),iz(iat))*rs6
-            dx=(xyz(1,iat)-xyz(1,jat))
-            dy=(xyz(2,iat)-xyz(2,jat))
-            dz=(xyz(3,iat)-xyz(3,jat))
-            r2  =dx*dx+dy*dy+dz*dz             
-c           if(r2.gt.rthr) cycle
-            r235=r2**3.5                       
-            r   =sqrt(r2)
-            damp6=exp(-alp6*(r/R0-1.0d0))
-            damp1=1.+damp6           
-            c6=c6ab(iz(jat),iz(iat),1,1,1)*s6
-            tmp1=damp6/(damp1*damp1*r235*R0)
-            tmp2=6./(damp1*r*r235)
-            gx1=alp6* dx*tmp1-tmp2*dx
-            gx2=alp6*(-dx)*tmp1+tmp2*dx
-            gy1=alp6* dy*tmp1-tmp2*dy
-            gy2=alp6*(-dy)*tmp1+tmp2*dy
-            gz1=alp6* dz*tmp1-tmp2*dz
-            gz2=alp6*(-dz)*tmp1+tmp2*dz
-            g(1,iat)=g(1,iat)-gx1*c6
-            g(2,iat)=g(2,iat)-gy1*c6
-            g(3,iat)=g(3,iat)-gz1*c6
-            g(1,jat)=g(1,jat)-gx2*c6  
-            g(2,jat)=g(2,jat)-gy2*c6      
-            g(3,jat)=g(3,jat)-gz2*c6      
-            disp=disp+c6*(1./damp1)/r2**3
+c           consider only if interaction defined by interaction groups
+            IF (imat(ilist(iat),ilist(jat))) THEN
+               R0=r0ab(iz(jat),iz(iat))*rs6
+               dx=(xyz(1,iat)-xyz(1,jat))
+               dy=(xyz(2,iat)-xyz(2,jat))
+               dz=(xyz(3,iat)-xyz(3,jat))
+               r2  =dx*dx+dy*dy+dz*dz
+c              if(r2.gt.rthr) cycle
+               r235=r2**3.5
+               r   =sqrt(r2)
+               damp6=exp(-alp6*(r/R0-1.0d0))
+               damp1=1.+damp6
+               c6=c6ab(iz(jat),iz(iat),1,1,1)*s6
+               tmp1=damp6/(damp1*damp1*r235*R0)
+               tmp2=6./(damp1*r*r235)
+               gx1=alp6* dx*tmp1-tmp2*dx
+               gx2=alp6*(-dx)*tmp1+tmp2*dx
+               gy1=alp6* dy*tmp1-tmp2*dy
+               gy2=alp6*(-dy)*tmp1+tmp2*dy
+               gz1=alp6* dz*tmp1-tmp2*dz
+               gz2=alp6*(-dz)*tmp1+tmp2*dz
+               g(1,iat)=g(1,iat)-gx1*c6
+               g(2,iat)=g(2,iat)-gy1*c6
+               g(3,iat)=g(3,iat)-gz1*c6
+               g(1,jat)=g(1,jat)-gx2*c6
+               g(2,jat)=g(2,jat)-gy2*c6
+               g(3,jat)=g(3,jat)-gz2*c6
+               disp=disp+c6*(1./damp1)/r2**3
+            END IF
          enddo
       enddo
       disp=-disp
