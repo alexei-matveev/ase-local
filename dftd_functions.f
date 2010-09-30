@@ -40,7 +40,7 @@ C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
       call dftd3(n_atom, n_group, coords, znumbers, ilist, imat, func,
-     .           3, .true., .true.,
+     .           3, .true., .true., .false.,
      .                                             dftd3_energy, grads)
       dftd3_gradients = transpose(grads)
 C----------------------------------------------------------------------
@@ -69,7 +69,7 @@ C MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 C GNU General Public License for more details.
 
       subroutine dftd3(n, ngroup, xyz, iz, ilist, imat,
-     .                 func, version, grad, numgrad,
+     .                 func, version, grad, numgrad, echo,
      .                                                   disp, dispgrad)
       implicit none
       integer maxat,max_elem,maxc
@@ -138,7 +138,6 @@ c Additional variables for interaction groups
       integer ilist(n)
       logical imat(ngroup,ngroup)
 
-
 c PBE0/def2-QZVP atomic values
       data r2r4 /
      .  8.0589,  3.4698, 29.0974, 14.8517, 11.8799,  7.8715,  5.5588,
@@ -175,7 +174,6 @@ c scale and convert to au
       rcov=k2*rcov/autoang
 c init
 c     echo=.true.
-      echo=.false.
 c     grad=.false.
       pot =.false.
       anal=.false.
@@ -249,7 +247,7 @@ c set parameters for functionals
          call rdpar     (dtmp,version,s6,s18,rs6,rs18,alp)
       endif
 
-      if(echo)then
+c     if(echo)then
 c     write(*,*)' _________________________________'
 c     write(*,*)'                                  '
 c     write(*,*)'|         DFTD3 V1.3 Rev 1        |'
@@ -267,7 +265,7 @@ c     write(*,*)
 c     write(*,*)' files read :     '
 c     write(*,*)trim(etmp)
 c     if(.not.ex)write(*,*)trim(dtmp)
-      endif
+c     endif
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C all calculations start here
