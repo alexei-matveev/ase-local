@@ -40,7 +40,7 @@ C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
       call dftd3(n_atom, n_group, coords, znumbers, ilist, imat, func,
-     .           3, .true.,! .true.,
+     .           3, .true., .true.,
      .                                             dftd3_energy, grads)
       dftd3_gradients = transpose(grads)
 C----------------------------------------------------------------------
@@ -69,7 +69,7 @@ C MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 C GNU General Public License for more details.
 
       subroutine dftd3(n, ngroup, xyz, iz, ilist, imat,
-     .                 func, version, grad,! numgrad,
+     .                 func, version, grad, numgrad,
      .                                                   disp, dispgrad)
       implicit none
       integer maxat,max_elem,maxc
@@ -180,7 +180,7 @@ c     grad=.false.
       pot =.false.
       anal=.false.
       noabc=.true.
-      numgrad=.false.
+c      numgrad=.false.
       tz=.false.
 c     func=' none (read from parameter file)'
 c     version=3
