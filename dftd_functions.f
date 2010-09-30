@@ -377,7 +377,7 @@ c Edisp pot curve for testing. Caution: C6 is not constant along R!
       xyz(3,2)=1.0/autoang
  142  call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       xyz(3,2)=xyz(3,2)+0.02
       disp=-s6*e6-s18*e8
       write(42,*) xyz(3,2)*autoang,disp*autokcal
@@ -390,7 +390,7 @@ c Edisp pot curve for testing. Caution: C6 is not constant along R!
       xyz(3,2)=1.4/autoang
  143  call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       xyz(3,2)=xyz(3,2)+0.02
       write(42,*) xyz(3,2)*autoang,s18*(-e8)*autokcal
       if(xyz(3,2).lt.15) goto 143
@@ -427,7 +427,7 @@ c energy call
 cccccccccccccc
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
 
       e6   = e6   *s6
 
@@ -486,7 +486,7 @@ cccccccccccccccccccccccccc
       call cpu_time(dum1)
       call gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .           s6,s18,rs6,rs8,rs10,alp6,alp8,alp10,noabc,numgrad,
-     .           version,echo,g,gdsp,x)
+     .           version,echo,g,gdsp,x,ngroup,ilist,imat)
       call cpu_time(dum2)
       if(echo)write(*,*) 'time ',dum2-dum1
 c check if gdisp yields same energy as edisp
@@ -741,7 +741,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
       subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .           rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .           e6,e8,e10,e12,e63)
+     .           e6,e8,e10,e12,e63,
+     .           ngroup,ilist,imat)
       implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
@@ -757,6 +758,11 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       real*8 r2ab(n*n),cc6ab(n*n),dmp(n*n),d2(3),t1,t2,t3
       integer*2 icomp(n*n)
       integer lin,ij,ik,jk
+
+c Additional variables for interaction groups
+      integer ngroup
+      integer ilist(n)
+      logical imat(ngroup,ngroup)
 
       e6 =0
       e8 =0

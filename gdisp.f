@@ -4,7 +4,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
       subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .                 s6,s18,rs6,rs8,rs10,alp6,alp8,alp10,noabc,num,
-     .                 version,echo,g,disp,gnorm)
+     .                 version,echo,g,disp,gnorm,
+     .                 ngroup,ilist,imat)
       implicit none  
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
@@ -20,6 +21,11 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       real*8 s10,s8,gC6(3),term,step,dispr,displ,r235,tmp2
       real*8 cn(n),gx1,gy1,gz1,gx2,gy2,gz2,rthr
       real*8 dcn2(3,n),dcn3(3,n,n)               
+
+c Additional variables for interaction groups
+      integer ngroup
+      integer ilist(n)
+      logical imat(ngroup,ngroup)
 
 c R^2 cut-off 
       rthr=2500.
@@ -67,7 +73,7 @@ c           if(r2.gt.rthr) cycle
 
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       disp=-s6*e6-s18*e8-s6*e6abc
 
       step=2.d-5     
@@ -77,7 +83,7 @@ c           if(r2.gt.rthr) cycle
       xyz(j,i)=xyz(j,i)+step        
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       dispr=-s6*e6-s18*e8-s6*e6abc
       xyz(j,i)=xyz(j,i)-2*step      
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
