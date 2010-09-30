@@ -1,7 +1,7 @@
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE d3_gradients(znumbers, coordraw, ilist, imat, func,
-     .                        n_atom, xyz, n_group, 
+     .                        n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
 C----------------------------------------------------------------------
       character*80                          :: func
@@ -39,7 +39,8 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      call dftd3(n_atom, coords, znumbers, func, 3, .true.,
+      call dftd3(n_atom, n_group, coords, znumbers, ilist, imat, func,
+     .           3, .true.,! .true.,
      .                                             dftd3_energy, grads)
       dftd3_gradients = transpose(grads)
 C----------------------------------------------------------------------
@@ -67,7 +68,9 @@ C but WITHOUT ANY WARRANTY; without even the implied warranty of
 C MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 C GNU General Public License for more details.
 
-      subroutine dftd3(n,xyz,iz, func, version, grad, disp, dispgrad)
+      subroutine dftd3(n, ngroup, xyz, iz, ilist, imat,
+     .                 func, version, grad,! numgrad,
+     .                                                   disp, dispgrad)
       implicit none
       integer maxat,max_elem,maxc
 c conversion factors
@@ -129,6 +132,12 @@ c local and dummy variables
       real*8  x,y,dispr,displ,gdsp,dum,xx(10),dum6(86)
       real*8  dum1,dum2
       logical ex,pot
+
+c Additional variables for interaction groups
+      integer ngroup
+      integer ilist(n)
+      logical imat(ngroup,ngroup)
+
 
 c PBE0/def2-QZVP atomic values
       data r2r4 /
