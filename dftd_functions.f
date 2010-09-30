@@ -1,138 +1,26 @@
-      SUBROUTINE d2_energy(znumbers, coordraw, n_atom, xyz, func,
-     .                                                    dftd2_energy)
-C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz
-      INTEGER                               :: znumbers(n_atom)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd2_energy
-C----------------------------------------------------------------------
-Cf2py intent(in) znumbers
-Cf2py intent(in) coordraw
-Cf2py intent(in) func
-Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
-Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
-Cf2py intent(out) dftd2_energy
-C----------------------------------------------------------------------
-C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: dummygrads(xyz, n_atom)
-C----------------------------------------------------------------------
-C     Check input
-      IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
-          stop
-      END IF
-C----------------------------------------------------------------------
-C     get coords in a.u. and normal storage order
-      coords = transpose(coordraw)/0.52917726d0
-C----------------------------------------------------------------------
-C
-C----------------------------------------------------------------------
-      call dftd3(n_atom, coords, znumbers, func, 2, .false.,
-     .                                        dftd2_energy, dummygrads)
-C----------------------------------------------------------------------
-      END SUBROUTINE d2_energy
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_energy(znumbers, coordraw, n_atom, xyz, func,
-     .                                                    dftd3_energy)
-C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz
-      INTEGER                               :: znumbers(n_atom)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd3_energy
-C----------------------------------------------------------------------
-Cf2py intent(in) znumbers
-Cf2py intent(in) coordraw
-Cf2py intent(in) func
-Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
-Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
-Cf2py intent(out) dftd3_energy
-C----------------------------------------------------------------------
-C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: dummygrads(xyz, n_atom)
-C----------------------------------------------------------------------
-C     Check input
-      IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
-          stop
-      END IF
-C----------------------------------------------------------------------
-C     get coords in a.u. and normal storage order
-      coords = transpose(coordraw)/0.52917726d0
-C----------------------------------------------------------------------
-C
-C----------------------------------------------------------------------
-      call dftd3(n_atom, coords, znumbers, func, 3, .false.,
-     .                                        dftd3_energy, dummygrads)
-C----------------------------------------------------------------------
-      END SUBROUTINE d3_energy
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-C
-C
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d2_gradients(znumbers, coordraw, n_atom, xyz, func,
-     .                                   dftd2_energy, dftd2_gradients)
-C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz
-      INTEGER                               :: znumbers(n_atom)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd2_energy
-      REAL*8                             :: dftd2_gradients(n_atom,xyz)
-C----------------------------------------------------------------------
-Cf2py intent(in) znumbers
-Cf2py intent(in) coordraw
-Cf2py intent(in) func
-Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
-Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
-Cf2py intent(out) dftd2_energy
-Cf2py intent(out) dftd2_gradients
-C----------------------------------------------------------------------
-C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: grads(xyz, n_atom)
-C----------------------------------------------------------------------
-C     Check input
-      IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
-          stop
-      END IF
-C----------------------------------------------------------------------
-C     get coords in a.u. and normal storage order
-      coords = transpose(coordraw)/0.52917726d0
-C----------------------------------------------------------------------
-C
-C----------------------------------------------------------------------
-      call dftd3(n_atom, coords, znumbers, func, 2, .true.,
-     .                                             dftd2_energy, grads)
-      dftd2_gradients = transpose(grads)
-C----------------------------------------------------------------------
-      END SUBROUTINE d2_gradients
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-C
-C
-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_gradients(znumbers, coordraw, n_atom, xyz, func,
+      SUBROUTINE d3_gradients(znumbers, coordraw, ilist, imat, func,
+     .                        n_atom, xyz, n_group, 
      .                                   dftd3_energy, dftd3_gradients)
 C----------------------------------------------------------------------
       character*80                          :: func
       INTEGER                               :: n_atom, xyz
       INTEGER                               :: znumbers(n_atom)
+      INTEGER                               :: ilist(n_atom)
+      LOGICAL                               :: imat(n_group,n_group)
       REAL*8                                :: coordraw(n_atom,xyz)
       REAL*8                                :: dftd3_energy
       REAL*8                             :: dftd3_gradients(n_atom,xyz)
 C----------------------------------------------------------------------
 Cf2py intent(in) znumbers
 Cf2py intent(in) coordraw
+Cf2py intent(in) ilist
+Cf2py intent(in) imat
 Cf2py intent(in) func
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)
 Cf2py intent(out) dftd3_energy
 Cf2py intent(out) dftd3_gradients
 C----------------------------------------------------------------------
