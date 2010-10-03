@@ -1,5 +1,5 @@
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d2_energies(zvals, coordraw, ilist, imat, func,
+      SUBROUTINE d2_energy(zvals, coordraw, ilist, imat, func,
      .                        n_atom, xyz, n_group,
      .                                                     dftd2_energy)
 C----------------------------------------------------------------------
@@ -42,12 +42,12 @@ C----------------------------------------------------------------------
      .                                             dftd2_energy, grads)
       dftd2_energy = 0
 C----------------------------------------------------------------------
-      END SUBROUTINE d2_energies
+      END SUBROUTINE d2_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_energies(zvals, coordraw, ilist, imat, func,
+      SUBROUTINE d3_energy(zvals, coordraw, ilist, imat, func,
      .                        n_atom, xyz, n_group,
      .                                   dftd3_energy)
 C----------------------------------------------------------------------
@@ -90,7 +90,7 @@ C----------------------------------------------------------------------
      .                                             dftd3_energy, grads)
       dftd3_energy = 0
 C----------------------------------------------------------------------
-      END SUBROUTINE d3_energies
+      END SUBROUTINE d3_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
@@ -135,7 +135,6 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      dftd3_energy = 0
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           2, .true., .false., .false.,
      .                                             dftd2_energy, grads)
@@ -186,7 +185,6 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      dftd3_energy = 0
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           3, .true., .false., .false.,
      .                                             dftd3_energy, grads)
