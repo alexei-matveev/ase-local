@@ -25,7 +25,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 c Additional variables for interaction groups
       integer ngroup
       integer ilist(n)
-      logical imat(ngroup,ngroup)
+      logical imat(0:ngroup, 0:ngroup)
 
 c R^2 cut-off 
       rthr=2500.
@@ -73,7 +73,6 @@ c              if(r2.gt.rthr) cycle
 
       if(num) then
       if(echo)write(*,*) 'doing numerical gradient O(N^3) ...'
-
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
@@ -91,7 +90,7 @@ c              if(r2.gt.rthr) cycle
       xyz(j,i)=xyz(j,i)-2*step      
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       displ=-s6*e6-s18*e8-s6*e6abc
       g(j,i)=0.5*(dispr-displ)/step  
       xyz(j,i)=xyz(j,i)+step        
@@ -116,6 +115,8 @@ c precompute for analytical part
          z1=xyz(3,iat)
          do jat=1,n
             if(iat.eq.jat) cycle
+c           consider only if interaction defined by interaction groups
+            IF (.not. imat(ilist(iat),ilist(jat))) cycle
             x2=xyz(1,jat)
             y2=xyz(2,jat)
             z2=xyz(3,jat)
@@ -206,6 +207,7 @@ c    &       -11.025D0*C6*R42**2/(1.D0+6.D0*t10)*s10/r10
          z1=xyz(3,jat)
             do kat=1,jat-1
             if(iat.eq.kat) cycle
+            IF (.not. imat(ilist(jat),ilist(kat))) cycle
             x2=xyz(1,kat)
             y2=xyz(2,kat)
             z2=xyz(3,kat)

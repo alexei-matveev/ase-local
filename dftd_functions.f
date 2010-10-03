@@ -1,26 +1,173 @@
-C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_gradients(znumbers, coordraw, ilist, imat, func,
+      SUBROUTINE d2_energies(zvals, coordraw, ilist, imat, func,
      .                        n_atom, xyz, n_group,
-     .                                   dftd3_energy, dftd3_gradients)
+     .                                                     dftd2_energy)
 C----------------------------------------------------------------------
       character*80                          :: func
       INTEGER                               :: n_atom, xyz
-      INTEGER                               :: znumbers(n_atom)
+      INTEGER                               :: zvals(n_atom)
       INTEGER                               :: ilist(n_atom)
-      LOGICAL                               :: imat(n_group,n_group)
+      LOGICAL                               :: imat(0:n_group,0:n_group)
       REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd3_energy
-      REAL*8                             :: dftd3_gradients(n_atom,xyz)
+      REAL*8                                :: dftd2_energy
 C----------------------------------------------------------------------
-Cf2py intent(in) znumbers
+Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
-Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)
+Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
+Cf2py intent(out) dftd2_energy
+C----------------------------------------------------------------------
+C     Other Variables...
+      REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: grads(xyz, n_atom)
+C----------------------------------------------------------------------
+C     Check input
+      IF (xyz .ne. 3) THEN
+          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          stop
+      END IF
+C----------------------------------------------------------------------
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+      dftd3_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           2, .false., .false., .false.,
+     .                                             dftd2_energy, grads)
+      dftd2_energy = 0
+C----------------------------------------------------------------------
+      END SUBROUTINE d2_energies
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE d3_energies(zvals, coordraw, ilist, imat, func,
+     .                        n_atom, xyz, n_group,
+     .                                   dftd3_energy)
+C----------------------------------------------------------------------
+      character*80                          :: func
+      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: zvals(n_atom)
+      INTEGER                               :: ilist(n_atom)
+      LOGICAL                               :: imat(0:n_group,0:n_group)
+      REAL*8                                :: coordraw(n_atom,xyz)
+      REAL*8                                :: dftd3_energy
+C----------------------------------------------------------------------
+Cf2py intent(in) zvals
+Cf2py intent(in) coordraw
+Cf2py intent(in) ilist
+Cf2py intent(in) imat
+Cf2py intent(in) func
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
+Cf2py intent(out) dftd3_energy
+C----------------------------------------------------------------------
+C     Other Variables...
+      REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: grads(xyz, n_atom)
+C----------------------------------------------------------------------
+C     Check input
+      IF (xyz .ne. 3) THEN
+          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          stop
+      END IF
+C----------------------------------------------------------------------
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+      dftd3_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           3, .false., .false., .false.,
+     .                                             dftd3_energy, grads)
+      dftd3_energy = 0
+C----------------------------------------------------------------------
+      END SUBROUTINE d3_energies
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE d2_gradients(zvals, coordraw, ilist, imat, func,
+     .                        n_atom, xyz, n_group,
+     .                                   dftd2_energy, dftd2_gradients)
+C----------------------------------------------------------------------
+      character*80                          :: func
+      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: zvals(n_atom)
+      INTEGER                               :: ilist(n_atom)
+      LOGICAL                               :: imat(0:n_group,0:n_group)
+      REAL*8                                :: coordraw(n_atom,xyz)
+      REAL*8                                :: dftd2_energy
+      REAL*8                             :: dftd2_gradients(n_atom,xyz)
+C----------------------------------------------------------------------
+Cf2py intent(in) zvals
+Cf2py intent(in) coordraw
+Cf2py intent(in) ilist
+Cf2py intent(in) imat
+Cf2py intent(in) func
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
+Cf2py intent(out) dftd2_energy
+Cf2py intent(out) dftd2_gradients
+C----------------------------------------------------------------------
+C     Other Variables...
+      REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: grads(xyz, n_atom)
+C----------------------------------------------------------------------
+C     Check input
+      IF (xyz .ne. 3) THEN
+          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          stop
+      END IF
+C----------------------------------------------------------------------
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+      dftd3_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           2, .true., .false., .false.,
+     .                                             dftd2_energy, grads)
+C
+      dftd2_gradients = transpose(grads)
+C----------------------------------------------------------------------
+      END SUBROUTINE d2_gradients
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE d3_gradients(zvals, coordraw, ilist, imat, func,
+     .                        n_atom, xyz, n_group,
+     .                                   dftd3_energy, dftd3_gradients)
+C----------------------------------------------------------------------
+      character*80                          :: func
+      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: zvals(n_atom)
+      INTEGER                               :: ilist(n_atom)
+      LOGICAL                               :: imat(0:n_group,0:n_group)
+      REAL*8                                :: coordraw(n_atom,xyz)
+      REAL*8                                :: dftd3_energy
+      REAL*8                             :: dftd3_gradients(n_atom,xyz)
+C----------------------------------------------------------------------
+Cf2py intent(in) zvals
+Cf2py intent(in) coordraw
+Cf2py intent(in) ilist
+Cf2py intent(in) imat
+Cf2py intent(in) func
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
 Cf2py intent(out) dftd3_energy
 Cf2py intent(out) dftd3_gradients
 C----------------------------------------------------------------------
@@ -39,12 +186,66 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      call dftd3(n_atom, n_group, coords, znumbers, ilist, imat, func,
-     .           3, .true., .true., .false.,
+      dftd3_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           3, .true., .false., .false.,
      .                                             dftd3_energy, grads)
+C
       dftd3_gradients = transpose(grads)
 C----------------------------------------------------------------------
       END SUBROUTINE d3_gradients
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE d3_num_gradients(zvals, coordraw, ilist, imat, func,
+     .                            n_atom, xyz, n_group,
+     .                                   dftd3_energy, dftd3_gradients)
+C----------------------------------------------------------------------
+      character*80                          :: func
+      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: zvals(n_atom)
+      INTEGER                               :: ilist(n_atom)
+      LOGICAL                               :: imat(0:n_group,0:n_group)
+      REAL*8                                :: coordraw(n_atom,xyz)
+      REAL*8                                :: dftd3_energy
+      REAL*8                             :: dftd3_gradients(n_atom,xyz)
+C----------------------------------------------------------------------
+Cf2py intent(in) zvals
+Cf2py intent(in) coordraw
+Cf2py intent(in) ilist
+Cf2py intent(in) imat
+Cf2py intent(in) func
+Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
+Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
+Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
+Cf2py intent(out) dftd3_energy
+Cf2py intent(out) dftd3_gradients
+C----------------------------------------------------------------------
+C     Other Variables...
+      REAL*8                                :: coords(xyz, n_atom)
+      REAL*8                                :: grads(xyz, n_atom)
+C----------------------------------------------------------------------
+C     Check input
+      IF (xyz .ne. 3) THEN
+          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          stop
+      END IF
+C----------------------------------------------------------------------
+C     get coords in a.u. and normal storage order
+      coords = transpose(coordraw)/0.52917726d0
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+      dftd3_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           3, .true., .true., .false.,
+     .                                             dftd3_energy, grads)
+      print*,'num',grads
+      dftd3_energy = 0
+      dftd3_gradients = transpose(grads)
+C----------------------------------------------------------------------
+      END SUBROUTINE d3_num_gradients
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
@@ -136,7 +337,7 @@ c local and dummy variables
 c Additional variables for interaction groups
       integer ngroup
       integer ilist(n)
-      logical imat(ngroup,ngroup)
+      logical imat(0:ngroup, 0:ngroup)
 
 c PBE0/def2-QZVP atomic values
       data r2r4 /
@@ -762,7 +963,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 c Additional variables for interaction groups
       integer ngroup
       integer ilist(n)
-      logical imat(ngroup,ngroup)
+      logical imat(0:ngroup,0:ngroup)
 
       e6 =0
       e8 =0
@@ -788,7 +989,7 @@ c             if(r2.gt.rthr) cycle
               r=sqrt(r2)
               c6=c6ab(iz(jat),iz(iat),1,1,1)
               damp6=1./(1.
-             .           +exp(-alp6*(r/(rs6*r0ab(iz(jat),iz(iat)))-1.)))
+     .                   +exp(-alp6*(r/(rs6*r0ab(iz(jat),iz(iat)))-1.)))
               r6=r2**3
               e6 =e6+c6*damp6/r6
             END IF
@@ -802,42 +1003,44 @@ C DFT-D3
       icomp=0
       do iat=1,n-1
          do jat=iat+1,n
-            dx=xyz(1,iat)-xyz(1,jat)
-            dy=xyz(2,iat)-xyz(2,jat)
-            dz=xyz(3,iat)-xyz(3,jat)
-            r2=dx*dx+dy*dy+dz*dz
+c           consider only if interaction defined by interaction groups
+            IF (imat(ilist(iat),ilist(jat))) THEN
+              dx=xyz(1,iat)-xyz(1,jat)
+              dy=xyz(2,iat)-xyz(2,jat)
+              dz=xyz(3,iat)-xyz(3,jat)
+              r2=dx*dx+dy*dy+dz*dz
 c cutoff
 c           if(r2.gt.rthr) cycle
-            r =sqrt(r2)
-            rr=r0ab(iz(jat),iz(iat))/r
+              r =sqrt(r2)
+              rr=r0ab(iz(jat),iz(iat))/r
 c damping
-            tmp=rs6*rr
-            damp6 =1.d0/( 1.d0+6.d0*tmp**alp6 )
-            tmp=rs8*rr
-            damp8 =1.d0/( 1.d0+6.d0*tmp**alp8 )
+              tmp=rs6*rr
+              damp6 =1.d0/( 1.d0+6.d0*tmp**alp6 )
+              tmp=rs8*rr
+              damp8 =1.d0/( 1.d0+6.d0*tmp**alp8 )
 c get C6
-            call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),
-     .                                    cn(iat),cn(jat),c6)
-            if(.not.noabc)then
-            ij=lin(jat,iat)
-            icomp(ij)=1
+              call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),
+     .                                      cn(iat),cn(jat),c6)
+              if(.not.noabc)then
+              ij=lin(jat,iat)
+              icomp(ij)=1
 c store C6 for C9, calc as sqrt
-            cc6ab(ij)=sqrt(c6)
+              cc6ab(ij)=sqrt(c6)
 c store R^2 for abc
-            r2ab(ij)=r2
+              r2ab(ij)=r2
 c store for abc damping
-            dmp(ij)=(1./rr)**(1./3.)
-            endif
+              dmp(ij)=(1./rr)**(1./3.)
+              endif
 
-            r6=r2**3
+              r6=r2**3
 
-            e6 =e6+c6*damp6/r6
+              e6 =e6+c6*damp6/r6
 
 c stored in main as sqrt
-            c8 =3.0d0*c6*r2r4(iz(iat))*r2r4(iz(jat))
-            r8 =r6*r2
+              c8 =3.0d0*c6*r2r4(iz(iat))*r2r4(iz(jat))
+              r8 =r6*r2
 
-            e8 =e8+c8*damp8/r8
+              e8 =e8+c8*damp8/r8
 
 c           r10=r8*r2
 c           c10=(49.0d0/40.0d0)*c8*c8/c6
@@ -846,7 +1049,7 @@ c           c12=c6*(c10/c8)**3
 c           e12=e12+c12*damp8 /(r10*r2)
 c           c14=c8*(c12/c10)**3
 c           e12=e12+c14*damp8 /(r10*r2*r2)
-
+            END IF
          enddo
       enddo
 
