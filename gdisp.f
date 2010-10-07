@@ -3,9 +3,13 @@ C compute gradient
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
       subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .                 s6,s18,rs6,rs8,rs10,alp6,alp8,alp10,noabc,num,
+     .                 s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,num,
      .                 version,echo,g,disp,gnorm,
      .                 ngroup,ilist,imat)
+c     subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+c    .                 s6,s18,rs6,rs8,rs10,alp6,alp8,alp10,noabc,num,
+c    .                 version,echo,g,disp,gnorm,
+c    .                 ngroup,ilist,imat)
       implicit none  
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
@@ -74,7 +78,7 @@ c              if(r2.gt.rthr) cycle
       if(num) then
       if(echo)write(*,*) 'doing numerical gradient O(N^3) ...'
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+     .     rs6,rs8,rs10,alp6,alp8,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       disp=-s6*e6-s18*e8-s6*e6abc
 
@@ -84,12 +88,12 @@ c              if(r2.gt.rthr) cycle
       do j=1,3
       xyz(j,i)=xyz(j,i)+step        
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+     .     rs6,rs8,rs10,alp6,alp8,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       dispr=-s6*e6-s18*e8-s6*e6abc
       xyz(j,i)=xyz(j,i)-2*step      
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+     .     rs6,rs8,rs10,alp6,alp8,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       displ=-s6*e6-s18*e8-s6*e6abc
       g(j,i)=0.5*(dispr-displ)/step  

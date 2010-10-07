@@ -3,8 +3,10 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
      .                        n_atom, xyz, n_group,
      .                                                     dftd2_energy)
 C----------------------------------------------------------------------
+      IMPLICIT none
+C----------------------------------------------------------------------
       character*80                          :: func
-      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: n_atom, xyz, n_group
       INTEGER                               :: zvals(n_atom)
       INTEGER                               :: ilist(n_atom)
       LOGICAL                               :: imat(0:n_group,0:n_group)
@@ -36,11 +38,21 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      dftd3_energy = 0
+      dftd2_energy = 0
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           2, .false., .false., .false.,
      .                                             dftd2_energy, grads)
+      print*, dftd2_energy
       dftd2_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           2, .false., .false., .false.,
+     .                                             dftd2_energy, grads)
+      print*, dftd2_energy
+      dftd2_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           2, .false., .false., .false.,
+     .                                             dftd2_energy, grads)
+      print*, dftd2_energy
 C----------------------------------------------------------------------
       END SUBROUTINE d2_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -51,8 +63,10 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
      .                        n_atom, xyz, n_group,
      .                                   dftd3_energy)
 C----------------------------------------------------------------------
+      IMPLICIT none
+C----------------------------------------------------------------------
       character*80                          :: func
-      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: n_atom, xyz, n_group
       INTEGER                               :: zvals(n_atom)
       INTEGER                               :: ilist(n_atom)
       LOGICAL                               :: imat(0:n_group,0:n_group)
@@ -88,7 +102,17 @@ C----------------------------------------------------------------------
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           3, .false., .false., .false.,
      .                                             dftd3_energy, grads)
+      print*,'e1', dftd3_energy
       dftd3_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           3, .false., .false., .false.,
+     .                                             dftd3_energy, grads)
+      print*,'e2', dftd3_energy
+      dftd3_energy = 0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           3, .false., .false., .false.,
+     .                                             dftd3_energy, grads)
+      print*,'e3', dftd3_energy
 C----------------------------------------------------------------------
       END SUBROUTINE d3_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -100,8 +124,10 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
      .                        n_atom, xyz, n_group,
      .                                   dftd2_energy, dftd2_gradients)
 C----------------------------------------------------------------------
+      IMPLICIT none
+C----------------------------------------------------------------------
       character*80                          :: func
-      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: n_atom, xyz, n_group
       INTEGER                               :: zvals(n_atom)
       INTEGER                               :: ilist(n_atom)
       LOGICAL                               :: imat(0:n_group,0:n_group)
@@ -150,8 +176,10 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
      .                        n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
 C----------------------------------------------------------------------
+      IMPLICIT none
+C----------------------------------------------------------------------
       character*80                          :: func
-      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: n_atom, xyz, n_group
       INTEGER                               :: zvals(n_atom)
       INTEGER                               :: ilist(n_atom)
       LOGICAL                               :: imat(0:n_group,0:n_group)
@@ -185,9 +213,18 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
+      dftd3_energy =0.0
+      grads = 0.0
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           3, .true., .false., .false.,
      .                                             dftd3_energy, grads)
+      print*,'c1',dftd3_energy, grads
+      dftd3_energy =0.0
+      grads = 0.0
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
+     .           3, .true., .false., .false.,
+     .                                             dftd3_energy, grads)
+      print*,'c2',dftd3_energy, grads
 C
       dftd3_gradients = transpose(grads)
 C----------------------------------------------------------------------
@@ -200,8 +237,10 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
      .                            n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
 C----------------------------------------------------------------------
+      IMPLICIT none
+C----------------------------------------------------------------------
       character*80                          :: func
-      INTEGER                               :: n_atom, xyz
+      INTEGER                               :: n_atom, xyz, n_group
       INTEGER                               :: zvals(n_atom)
       INTEGER                               :: ilist(n_atom)
       LOGICAL                               :: imat(0:n_group,0:n_group)
@@ -282,16 +321,16 @@ c coversion factors
       parameter (autoang =0.52917726d0)
       parameter (autokcal=627.509541d0)
 c DFT-D version
-      integer version
+      integer, intent(in) :: version
 c number of atoms
-      integer n
+      integer, intent(in) :: n
 c coordinates in au
-      real*8 xyz(3,maxat)
+      real*8, intent(in)  :: xyz(3,maxat)
 c gradient
       real*8 g  (3,maxat)
-      real*8 dispgrad  (3,n)
+      real*8, intent(out) :: dispgrad  (3,n)
 c cardinal numbers of elements
-      integer   iz(maxat)
+      integer, intent(in) :: iz(maxat)
 c cut-off radii for all element pairs
       real*8 r0ab(max_elem,max_elem)
 c C6 for all element pairs
@@ -307,38 +346,46 @@ c covalent radii
 c atomic <r^2>/<r^4> values
       real*8 r2r4(max_elem)
 c energies
-      real*8 e6, e8, e10, e12, disp, e6abc
+      real*8 e6, e8, e10, e12, e6abc
+      real*8, intent(out) :: disp
 c THE PARAMETERS OF THE METHOD (not all a "free")
-      real*8 rs6, rs8, rs10, s6, s18, alp6, alp8, alp10, s42, rs18, alp
+c     real*8 rs6, rs8, rs10, s6, s18, alp6, alp8, alp10, s42, rs18, alp
+      real*8 rs6, rs8, rs10, s6, s18, alp6, alp8, alp10, rs18, alp
 c printout option
-      logical echo
+      logical, intent(in) :: echo
 c grad ?
-      logical grad
+      logical, intent(in) :: grad
 c analyse results ?
       logical anal
 c third-order term?
       logical noabc
 c gradient calctype
-      logical numgrad
+      logical, intent(in) :: numgrad
 c special parameters
       logical tz
 
 c local and dummy variables
-      character*80 atmp,btmp,ctmp,dtmp,etmp,ftmp,func
+c     character*80 atmp,btmp,ctmp,dtmp,etmp,ftmp,func
+      character*80 dtmp,func
       character*2  esym
-      integer i,j,z,nn,iat,jat,i1,i2
-      integer ida(max_elem),ipot,scomp
-      real*8  x,y,dispr,displ,gdsp,dum,xx(10),dum6(86)
+c     integer i,j,z,nn,iat,jat,i1,i2
+      integer i,j,z,iat,jat
+c     integer ida(max_elem),ipot,scomp
+      integer ida(max_elem),ipot
+c     real*8  x,y,dispr,displ,gdsp,dum,xx(10),dum6(86)
+      real*8  x,gdsp,dum,dum6(86)
       real*8  dum1,dum2
       logical ex,pot
 
 c Additional variables for interaction groups
-      integer ngroup
-      integer ilist(n)
-      logical imat(0:ngroup, 0:ngroup)
+      integer, intent(in) :: ngroup
+      integer, intent(in) :: ilist(n)
+      logical, intent(in) :: imat(0:ngroup, 0:ngroup)
 
+c atomic <r^2>/<r^4> values should be consistent with r2r4
+      real*8 :: r2r4_const(max_elem) ! dont change this!!
 c PBE0/def2-QZVP atomic values
-      data r2r4 /
+      data r2r4_const /
      .  8.0589,  3.4698, 29.0974, 14.8517, 11.8799,  7.8715,  5.5588,
      .  4.7566,  3.8025,  3.1036, 26.1552, 17.2304, 17.7210, 12.7442,
      .  9.5361,  8.1652,  6.7463,  5.6004, 29.2012, 22.3934, 19.0598,
@@ -353,9 +400,12 @@ c PBE0/def2-QZVP atomic values
      .  7.8496,  7.3278,  7.4820, 13.5124, 11.6554, 10.0959,  9.7340,
      .  8.8584,  8.0125, 29.8135, 26.3157, 19.1885, 15.8542, 16.1305,
      . 15.6161, 15.1226, 16.1576 /
+c
+c covalent radii
+      real*8 rcov_const(max_elem) ! dont change this!!
 c covalent radii (taken from Pyykko and Atsumi, Chem. Eur. J. 15, 2009, 188-197)
 c values for metals decreased by 10 %
-      data rcov/
+      data rcov_const/
      .  0.32, 0.46, 1.20, 0.94, 0.77, 0.75, 0.71, 0.63, 0.64, 0.67
      ., 1.40, 1.25, 1.13, 1.04, 1.10, 1.02, 0.99, 0.96, 1.76, 1.54
      ., 1.33, 1.22, 1.21, 1.10, 1.07, 1.04, 1.00, 0.99, 1.01, 1.09
@@ -370,21 +420,24 @@ c values for metals decreased by 10 %
 c k1-k3
       include 'param.inc'
 c scale and convert to au
-      rcov=k2*rcov/autoang
-c init
+      rcov=k2*rcov_const/autoang
+c init variables
+      r2r4 = r2r4_const
+      e6 = 0.0
+      e8 = 0.0
+      e10 = 0.0
+      e12 = 0.0
+      e6abc = 0.0
+c init flags
 c     echo=.true.
 c     grad=.false.
       pot =.false.
       anal=.false.
       noabc=.true.
-c      numgrad=.false.
+c     numgrad=.false.
       tz=.false.
 c     func=' none (read from parameter file)'
 c     version=3
-c     print*,func
-c     print*,'dftd-d version',version
-c     print*,iz
-c     print*,xyz
 c J/mol nm^6 - > au
       c6conv=1.d-3/2625.4999d0/((0.052917726d0)**6)
 
@@ -401,7 +454,7 @@ c     call loadc6(btmp,maxc,max_elem,c6ab,mxc)
 
 c C6 hard-coded (c6ab.dat not used)
 c this is alternative to loadc6
-      call copyc6(btmp,maxc,max_elem,c6ab,mxc)
+      call copyc6(maxc,max_elem,c6ab,mxc)
 
 c get coord filename
 c     call getarg(1,etmp)
@@ -437,7 +490,7 @@ c                                     endif
 c     enddo
       ex=.true.
 c the analytical E(3) grad is not available yet
-      if(grad.and.(.not.noabc))numgrad=.true.
+c     if(grad.and.(.not.noabc))numgrad=.true.
 
 c set parameters for functionals
       if(ex) then
@@ -556,45 +609,45 @@ c*********************************************************************
 c*********************************************************************
 c testing code
 c output of C6=f(CN)
-      if(pot.and.ipot.gt.100)then
-      x=0
-      do i=1,100
-      call getc6(maxc,max_elem,c6ab,mxc,ipot-100,ipot-100,
-     .                              x,x,C6)
-      write(2,*) x,c6
-      x=x+0.05
-      enddo
-      stop
-      endif
+c      if(pot.and.ipot.gt.100)then
+c     x=0
+c     do i=1,100
+c     call getc6(maxc,max_elem,c6ab,mxc,ipot-100,ipot-100,
+c    .                              x,x,C6)
+c     write(2,*) x,c6
+c     x=x+0.05
+c     enddo
+c     stop
+c     endif
 c Edisp pot curve for testing. Caution: C6 is not constant along R!
-      if(pot)then
-      write(*,*) 'Computing Edisp potential curve for atom ',ipot
-      xyz=0
-      iz(1)=ipot
-      iz(2)=ipot
-      n=2
-      xyz(3,2)=1.0/autoang
- 142  call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
-      xyz(3,2)=xyz(3,2)+0.02
-      disp=-s6*e6-s18*e8
-      write(42,*) xyz(3,2)*autoang,disp*autokcal
-      write(43,*) xyz(3,2)        ,disp*autokcal
-      call ncoord(n,rcov,iz,xyz,cn)
-      call getc6(maxc,max_elem,c6ab,mxc,iz(1),iz(2),cn(1),cn(2),c6)
-      write(2,*)xyz(3,2)*autoang,c6
-      if(xyz(3,2).lt.20) goto 142
-      write(42,*)
-      xyz(3,2)=1.4/autoang
- 143  call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
-     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
-      xyz(3,2)=xyz(3,2)+0.02
-      write(42,*) xyz(3,2)*autoang,s18*(-e8)*autokcal
-      if(xyz(3,2).lt.15) goto 143
-      stop 'pot curve done'
-      endif
+c     if(pot)then
+c     write(*,*) 'Computing Edisp potential curve for atom ',ipot
+c     xyz=0
+c     iz(1)=ipot
+c     iz(2)=ipot
+c     n=2
+c     xyz(3,2)=1.0/autoang
+c142  call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+c    .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+c    .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
+c     xyz(3,2)=xyz(3,2)+0.02
+c     disp=-s6*e6-s18*e8
+c     write(42,*) xyz(3,2)*autoang,disp*autokcal
+c     write(43,*) xyz(3,2)        ,disp*autokcal
+c     call ncoord(n,rcov,iz,xyz,cn)
+c     call getc6(maxc,max_elem,c6ab,mxc,iz(1),iz(2),cn(1),cn(2),c6)
+c     write(2,*)xyz(3,2)*autoang,c6
+c     if(xyz(3,2).lt.20) goto 142
+c     write(42,*)
+c     xyz(3,2)=1.4/autoang
+c143  call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+c    .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+c    .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
+c     xyz(3,2)=xyz(3,2)+0.02
+c     write(42,*) xyz(3,2)*autoang,s18*(-e8)*autokcal
+c     if(xyz(3,2).lt.15) goto 143
+c     stop 'pot curve done'
+c      endif
 c end testing code
 c*********************************************************************
 c*********************************************************************
@@ -625,7 +678,7 @@ cccccccccccccc
 c energy call
 cccccccccccccc
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+     .     rs6,rs8,alp6,alp8,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
 
       e6   = e6   *s6
@@ -673,8 +726,11 @@ cccccccccccccccccccccccccc
 c analyse Edisp pair terms
 cccccccccccccccccccccccccc
       if(anal)
+c    .call adisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+c    .           rs6,rs8,rs10,alp6,alp8,alp10,version,autokcal,
+c    .           s6,s18,disp*autokcal)
      .call adisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .           rs6,rs8,rs10,alp6,alp8,alp10,version,autokcal,
+     .           rs6,rs8,alp6,alp8,version,autokcal,
      .           s6,s18,disp*autokcal)
 
 cccccccccccccccccccccccccc
@@ -684,7 +740,7 @@ cccccccccccccccccccccccccc
       g=0
       call cpu_time(dum1)
       call gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .           s6,s18,rs6,rs8,rs10,alp6,alp8,alp10,noabc,numgrad,
+     .           s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,numgrad,
      .           version,echo,g,gdsp,x,ngroup,ilist,imat)
       call cpu_time(dum2)
       if(echo)write(*,*) 'time ',dum2-dum1
@@ -938,21 +994,28 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C compute energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
+C     subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+C    .           rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+C    .           e6,e8,e10,e12,e63,
+C    .           ngroup,ilist,imat)
       subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .           rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
+     .           rs6,rs8,alp6,alp8,version,noabc,
      .           e6,e8,e10,e12,e63,
      .           ngroup,ilist,imat)
       implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
-      real*8 rs6,rs8,rs10,alp6,alp8,alp10,rcov(max_elem)
+c     real*8 rs6,rs8,rs10,alp6,alp8,alp10,rcov(max_elem)
+      real*8 rs6,rs8,alp6,alp8,rcov(max_elem)
       real*8 c6ab(max_elem,max_elem,maxc,maxc,3)
       real*8 e6, e8, e10, e12, e63
       logical noabc
 
       integer iat,jat,kat
-      real*8 r,r2,r6,r8,tmp,alp,dx,dy,dz,c6,c8,c10,ang,rav
-      real*8 damp6,damp8,damp10,rr,thr,c9,r42,c12,r10,c14,rthr
+c     real*8 r,r2,r6,r8,tmp,alp,dx,dy,dz,c6,c8,c10,ang,rav
+      real*8 r,r2,r6,r8,tmp,dx,dy,dz,c6,c8,ang,rav
+c     real*8 damp6,damp8,damp10,rr,thr,c9,r42,c12,r10,c14,rthr
+      real*8 damp6,damp8,rr,c9,rthr
       real*8 cn(n)
       real*8 r2ab(n*n),cc6ab(n*n),dmp(n*n),d2(3),t1,t2,t3
       integer*2 icomp(n*n)
@@ -1095,19 +1158,26 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C analyse all pairs
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
+C     subroutine adisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+C    .                rs6,rs8,rs10,alp6,alp8,alp10,version,autokcal,
+C    .                s6,s18,etot)
       subroutine adisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .                rs6,rs8,rs10,alp6,alp8,alp10,version,autokcal,
+     .                rs6,rs8,alp6,alp8,version,autokcal,
      .                s6,s18,etot)
       implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*),s6
-      real*8 rs6,rs8,rs10,alp6,alp8,alp10,autokcal,etot,s18
+c     real*8 rs6,rs8,rs10,alp6,alp8,alp10,autokcal,etot,s18
+      real*8 rs6,rs8,alp6,alp8,autokcal,etot,s18
       real*8 c6ab(max_elem,max_elem,maxc,maxc,3),rcov(max_elem)
 
       integer iat,jat,i,j,k,nbin
-      real*8 R0,r,r2,r6,r8,tmp,alp,dx,dy,dz,c6,c8,c10
-      real*8 damp6,damp8,damp10,r42,rr,check,rthr
-      real*8 cn(n),i6,e6,e8,e10,edisp
+c     real*8 R0,r,r2,r6,r8,tmp,alp,dx,dy,dz,c6,c8,c10
+      real*8 R0,r,r2,r6,r8,tmp,dx,dy,dz,c6,c8
+c     real*8 damp6,damp8,damp10,r42,rr,check,rthr
+      real*8 damp6,damp8,r42,rr,check,rthr
+c     real*8 cn(n),i6,e6,e8,e10,edisp
+      real*8 cn(n),e6,e8,edisp
       real*8 dist(15),li(15,2)
       real*8 ed(n,n),xx(50),eg(10000)
       integer grplist(100,50)
@@ -1314,7 +1384,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
 c the exponential is sensitive to numerics
 c when nci or ncj is much larger than cn1/cn2
-      real*8  cn1,cn2,r,rsum,csum,tmp,tmp1
+c     real*8  cn1,cn2,r,rsum,csum,tmp,tmp1
+      real*8  cn1,cn2,r,rsum,csum,tmp1
       include 'param.inc'
 
       c6mem=-1.d+99
@@ -1352,7 +1423,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       subroutine ncoord(natoms,rcov,iz,xyz,cn)
       implicit none
       include 'param.inc'
-      integer iz(*),natoms,i,max_elem
+c     integer iz(*),natoms,i,max_elem
+      integer iz(*),natoms,i
       real*8 xyz(3,*),cn(*),rcov(94)
 
       integer iat
@@ -1388,7 +1460,8 @@ c special grad routine
       real*8  rcov(94)
 
       integer iat,jjj
-      real*8 dx,dy,dz,r,damp,rr,rco
+c     real*8 dx,dy,dz,r,damp,rr,rco
+      real*8 dx,dy,dz,r,damp,rr
 
       cn=0.0d0
       do jjj=1,2
@@ -1416,7 +1489,8 @@ c special grad routine
       real*8  xyz(3,*),cn
       real*8  rcov(94)
 
-      real*8 dx,dy,dz,r,damp,rr
+c     real*8 dx,dy,dz,r,damp,rr
+      real*8 dx,dy,dz,r,rr
 
 c contribution of kat to CN of i
             dx=xyz(1,kat)-xyz(1,i)
@@ -1437,11 +1511,13 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       integer maxc,max_elem,maxci(max_elem)
       real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
       character*(*) fname
-      character*1  atmp
+c     character*1  atmp
       character*80 btmp
 
-      real*8  x,y,f,cn1,cn2,cmax,xx(10)
-      integer iat,jat,i,n,l,j,k,il,iadr,jadr,nn
+c     real*8  x,y,f,cn1,cn2,cmax,xx(10)
+      real*8  y,cn1,cn2
+c     integer iat,jat,i,n,l,j,k,il,iadr,jadr,nn
+      integer iat,jat,iadr,jadr
 
       c6ab=-1
       maxci=0
@@ -2804,7 +2880,7 @@ C
          IF(N.LE.NINE.AND.N.GE.IZERO) C1=C1*10.0D0+N-IZERO
          IF(N.EQ.MINUS)ONE=-1.0D0
    31 CONTINUE
-   61 CONTINUE
+c  61 CONTINUE
    70 READAA=READAA*10**(ONE*C1)
       RETURN
       END
