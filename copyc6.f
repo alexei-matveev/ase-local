@@ -6,11 +6,12 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       implicit none
       integer maxc,max_elem,maxci(max_elem),nlines
       real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
-      character*(*) fname
-      character*1  atmp 
-      character*80 btmp 
-      real*8  x,y,f,cn1,cn2,cmax,xx(10),kekse
-      integer iat,jat,i,n,l,j,k,il,iadr,jadr,nn,kk
+c     character*(*) fname
+c     character*1  atmp
+c     character*80 btmp
+c     real*8  x,y,f,cn1,cn2,cmax,xx(10),kekse
+c     integer iat,jat,i,n,l,j,k,il,iadr,jadr,nn,kk
+      integer iat,jat,iadr,jadr,nn,kk
       include 'pars.inc'
       c6ab=-1
       maxci=0
