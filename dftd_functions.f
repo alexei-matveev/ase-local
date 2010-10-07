@@ -38,21 +38,11 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      dftd2_energy = 0
+      dftd2_energy = 0.0
+C
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           2, .false., .false., .false.,
      .                                             dftd2_energy, grads)
-      print*, dftd2_energy
-      dftd2_energy = 0
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           2, .false., .false., .false.,
-     .                                             dftd2_energy, grads)
-      print*, dftd2_energy
-      dftd2_energy = 0
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           2, .false., .false., .false.,
-     .                                             dftd2_energy, grads)
-      print*, dftd2_energy
 C----------------------------------------------------------------------
       END SUBROUTINE d2_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -89,7 +79,7 @@ C     Other Variables...
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          write(*,*) 'Something is wrong with coordinate input ...'
           stop
       END IF
 C----------------------------------------------------------------------
@@ -98,21 +88,11 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      dftd3_energy = 0
+      dftd3_energy = 0.0
+C
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           3, .false., .false., .false.,
      .                                             dftd3_energy, grads)
-      print*,'e1', dftd3_energy
-      dftd3_energy = 0
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           3, .false., .false., .false.,
-     .                                             dftd3_energy, grads)
-      print*,'e2', dftd3_energy
-      dftd3_energy = 0
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           3, .false., .false., .false.,
-     .                                             dftd3_energy, grads)
-      print*,'e3', dftd3_energy
 C----------------------------------------------------------------------
       END SUBROUTINE d3_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -152,7 +132,7 @@ C     Other Variables...
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          write(*,*) 'Something is wrong with coordinate input ...'
           stop
       END IF
 C----------------------------------------------------------------------
@@ -161,6 +141,9 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
+      dftd2_energy = 0.0
+      grads        = 0.0
+C
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           2, .true., .false., .false.,
      .                                             dftd2_energy, grads)
@@ -204,7 +187,7 @@ C     Other Variables...
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          write(*,*) 'Something is wrong with coordinate input ...'
           stop
       END IF
 C----------------------------------------------------------------------
@@ -213,18 +196,12 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      dftd3_energy =0.0
-      grads = 0.0
+      dftd3_energy = 0.0
+      grads        = 0.0
+C
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           3, .true., .false., .false.,
      .                                             dftd3_energy, grads)
-      print*,'c1',dftd3_energy, grads
-      dftd3_energy =0.0
-      grads = 0.0
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           3, .true., .false., .false.,
-     .                                             dftd3_energy, grads)
-      print*,'c2',dftd3_energy, grads
 C
       dftd3_gradients = transpose(grads)
 C----------------------------------------------------------------------
@@ -265,7 +242,7 @@ C     Other Variables...
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          write(*,*) 'Something is wrong with coordinate input ...'
           stop
       END IF
 C----------------------------------------------------------------------
@@ -274,12 +251,13 @@ C     get coords in a.u. and normal storage order
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
-      dftd3_energy = 0
+      dftd3_energy = 0.0
+      grads        = 0.0
+C
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           3, .true., .true., .false.,
      .                                             dftd3_energy, grads)
-      print*,'num',grads
-      dftd3_energy = 0
+C
       dftd3_gradients = transpose(grads)
 C----------------------------------------------------------------------
       END SUBROUTINE d3_num_gradients
