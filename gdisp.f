@@ -2,26 +2,30 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C compute gradient
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
-      subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .                 s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,num,
-     .                 version,echo,g,disp,gnorm,
-     .                 ngroup,ilist,imat)
 c     subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
 c    .                 s6,s18,rs6,rs8,rs10,alp6,alp8,alp10,noabc,num,
 c    .                 version,echo,g,disp,gnorm,
 c    .                 ngroup,ilist,imat)
+      subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+     .                 s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,num,
+     .                 version,echo,g,disp,gnorm,
+     .                 ngroup,ilist,imat)
       implicit none  
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
       real*8 c6ab(max_elem,max_elem,maxc,maxc,3)
       real*8 g(3,*),s6,s18,rcov(max_elem)
-      real*8 rs6,rs8,rs10,alp10,alp8,alp6        
+c     real*8 rs6,rs8,rs10,alp10,alp8,alp6
+      real*8 rs6,rs8,rs10,alp8,alp6
       logical noabc,num,echo
  
       integer iat,jat,i,j,kat
-      real*8 R0,C6,alp,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc  
-      real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,r12,t6,t8,t10,damp1
-      real*8 damp6,damp8,damp10,e6,e8,e10,e12,gnorm,tmp1
+c     real*8 R0,C6,alp,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc  
+      real*8 R0,C6,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc  
+c     real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,r12,t6,t8,t10,damp1
+      real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,t6,t8,damp1
+c     real*8 damp6,damp8,damp10,e6,e8,e10,e12,gnorm,tmp1
+      real*8 damp6,damp8,e6,e8,e10,e12,gnorm,tmp1
       real*8 s10,s8,gC6(3),term,step,dispr,displ,r235,tmp2
       real*8 cn(n),gx1,gy1,gz1,gx2,gy2,gz2,rthr
       real*8 dcn2(3,n),dcn3(3,n,n)               
@@ -134,7 +138,9 @@ c dC6(iat,jat)/dxyz_iat
 c     call grdc6iji(max_elem,maxc,n,xyz,cn,rcov,iz,c6ab,mxc,
 c    .              iat,jat,iat,gC6)
 c analytically
-      call anagrdc6(max_elem,maxc,n,xyz,cn,dcn2,dcn3,rcov,iz,c6ab,mxc,
+c     call anagrdc6(max_elem,maxc,n,xyz,cn,dcn2,dcn3,rcov,iz,c6ab,mxc,
+c    .              iat,jat,iat,gC6)
+      call anagrdc6(max_elem,maxc,n,cn,dcn2,dcn3,iz,c6ab,mxc,
      .              iat,jat,iat,gC6)
 
 
@@ -222,7 +228,9 @@ c dC6(jat,kat)/dxyz_iat
 c     call grdc6ijk(max_elem,maxc,n,xyz,cn,rcov,iz,c6ab,mxc,
 c    .              jat,kat,iat,gC6)
 c analytically
-      call anagrdc6(max_elem,maxc,n,xyz,cn,dcn2,dcn3,rcov,iz,c6ab,mxc,
+c     call anagrdc6(max_elem,maxc,n,xyz,cn,dcn2,dcn3,rcov,iz,c6ab,mxc,
+c    .              jat,kat,iat,gC6)
+      call anagrdc6(max_elem,maxc,n,cn,dcn2,dcn3,iz,c6ab,mxc,
      .              jat,kat,iat,gC6)
 
       dx = (x1-x2)**2
@@ -285,11 +293,13 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       subroutine ncoorda(natoms,rcov,iz,xyz,cn,dcn2,dcn3)
       implicit none
       include 'param.inc'
-      integer iz(*),natoms,i,max_elem
+c     integer iz(*),natoms,i,max_elem
+      integer iz(*),natoms,i
       real*8 xyz(3,*),cn(*),dcn2(3,natoms),rcov(94)
       real*8 dcn3(3,natoms,natoms)
       integer iat
-      real*8 dx,dy,dz,r,damp,xn,rr,rrr,rco,tmp1,tmp2,tmp3
+c     real*8 dx,dy,dz,r,damp,xn,rr,rrr,rco,tmp1,tmp2,tmp3
+      real*8 dx,dy,dz,r,xn,rr,rrr,rco,tmp1,tmp2,tmp3
 
       dcn2=0.0d0
       dcn3=0.0d0
@@ -327,12 +337,15 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 c calculate dC6/dr analytically
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
-      subroutine anagrdc6(max_elem,maxc,n,dum,cn,dcn2,dcn3,
-     .           rcov,iz,c6ab,mxc,iat,jat,kat,anag)
+c     subroutine anagrdc6(max_elem,maxc,n,dum,cn,dcn2,dcn3,
+c    .           rcov,iz,c6ab,mxc,iat,jat,kat,anag)
+      subroutine anagrdc6(max_elem,maxc,n,cn,dcn2,dcn3,
+     .           iz,c6ab,mxc,iat,jat,kat,anag)
       implicit   none
       include    'param.inc'
       integer    n,iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
-      real*8     cn(*),dcn2(3,n),dum(3,*),anag(3),rcov(max_elem)
+c     real*8     cn(*),dcn2(3,n),dum(3,*),anag(3),rcov(max_elem)
+      real*8     cn(*),dcn2(3,n),anag(3)
       real*8     c6ab(max_elem,max_elem,maxc,maxc,3)
       real*8     term1,term2,term3
       real*8     dterm2(3),dterm3(3),dcn3(3,n,n)
@@ -379,14 +392,18 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C gradient of C6(iat,jat) wrt to xyz of kat or iat                          
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
-      subroutine grdc6iji(max_elem,maxc,n,dum,cn,
+c     subroutine grdc6iji(max_elem,maxc,n,dum,cn,
+c    .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
+      subroutine grdc6iji(max_elem,maxc,n,dum,
      .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
       implicit none  
       integer n,iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
-      real*8  cn(*),dum(3,*),g(3),rcov(max_elem)
+c     real*8  cn(*),dum(3,*),g(3),rcov(max_elem)
+      real*8  dum(3,*),g(3),rcov(max_elem)
       real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
 
-      real*8 xi,xj,c6r,c6l,st,xxx(2),yi,yj,x0i,x0j
+c     real*8 xi,xj,c6r,c6l,st,xxx(2),yi,yj,x0i,x0j
+      real*8 xi,xj,c6r,c6l,st,xxx(2)
       integer j,jjj(2)
 
       jjj(1)=iat
@@ -415,14 +432,18 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       end
       
 
-      subroutine grdc6ijk(max_elem,maxc,n,dum,cn,
+c     subroutine grdc6ijk(max_elem,maxc,n,dum,cn,
+c    .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
+      subroutine grdc6ijk(max_elem,maxc,dum,cn,
      .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
       implicit none  
-      integer n,iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
+c     integer n,iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
+      integer iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
       real*8  cn(*),dum(3,*),g(3),rcov(max_elem)
       real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
 
-      real*8 xi,xj,c6r,c6l,st,xxx(2),yi,yj,x0i,x0j
+C     real*8 xi,xj,c6r,c6l,st,xxx(2),yi,yj,x0i,x0j
+      real*8 xi,xj,c6r,c6l,st,yi,yj,x0i,x0j
       integer j
 
 c x0 is the contribution of kat to the CN of iat and jat
