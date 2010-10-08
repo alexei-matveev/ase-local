@@ -26,6 +26,9 @@ def d3_pbc(atoms, functional):
     # Check input i.e. if interactionlist and interactionmatrix are set properly
     interactionlist, interactionmatrix = check_interaction_group_input(N_atoms, interactionlist, interactionmatrix)
     #
+    # Calculate the coordination numbers for atoms in the unit cell
+    get_coordination_numbers(atoms)
+
     # Start with Calculatio
     dispersion_correction, gradient_contribution = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional)
     #
@@ -84,7 +87,44 @@ def get_interaction_controls(atoms):
     #
     return interactionlist, interactionmatrix
 # End of function get_interaction_controls
-
+#
+#
+# Outsourced from dftd_functions.f and gdisp.f
+def get_coordination_numbers(atoms, t_vec = np.array([0., 0., 0.])):
+    #
+    # Initialize
+    xyz = atoms.get_positions() / AU_TO_ANG
+    cn  = np.zeros(len(atoms.get_atomic_numbers()))
+    #
+    for ind_i in range(0, len(atoms.get_atomic_numbers())):
+        xn = 0.0
+        for ind_iat in range(0, len(atoms.get_atomic_numbers())):
+	    if ind_i != ind_iat:
+	        #
+                dx = xyz[ind_iat,0] - xyz[ind_i,0] + t_vec[0]
+                dy = xyz[ind_iat,1] - xyz[ind_i,1] + t_vec[1]
+                dz = xyz[ind_iat,2] - xyz[ind_i,2] + t_vec[2]
+		#
+		# Absolute distance
+		r = np.sqrt(dx * dx + dy * dy + dz * dz)
+		#
+		# Covalent distance in Bohr
+		rco = get_rcov_values(atoms.get_atomic_numbers()[ind_i]) + get_rcov_values(atoms.get_atomic_numbers()[ind_iat])
+		#
+		# Ratio covalent to absolute distance
+		rr = rco / r
+		#
+		# counting function exponential has a better long-range behavior than MHGs inverse damping
+		damp = 1.0 / (1.0 + np.exp(- K1_PARAMETER * (rr - 1.0)))
+		#
+		# add
+		xn = xn + damp
+        #
+	# Transfer
+        cn[ind_i] = xn
+    #
+#end get_coordination_numbers
+#
 def get_rcov_values(z_number):
     #
     rcov_raw_data = np.array([ None ,  # 0
