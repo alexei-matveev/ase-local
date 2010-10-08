@@ -10,7 +10,7 @@ c    .                 ngroup,ilist,imat)
      .                 s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,num,
      .                 version,echo,g,disp,gnorm,
      .                 ngroup,ilist,imat)
-      implicit none  
+      implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
       real*8 c6ab(max_elem,max_elem,maxc,maxc,3)
@@ -18,27 +18,27 @@ c    .                 ngroup,ilist,imat)
 c     real*8 rs6,rs8,rs10,alp10,alp8,alp6
       real*8 rs6,rs8,rs10,alp8,alp6
       logical noabc,num,echo
- 
+
       integer iat,jat,i,j,kat
-c     real*8 R0,C6,alp,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc  
-      real*8 R0,C6,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc  
+c     real*8 R0,C6,alp,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc
+      real*8 R0,C6,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc
 c     real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,r12,t6,t8,t10,damp1
       real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,t6,t8,damp1
 c     real*8 damp6,damp8,damp10,e6,e8,e10,e12,gnorm,tmp1
       real*8 damp6,damp8,e6,e8,e10,e12,gnorm,tmp1
       real*8 s10,s8,gC6(3),term,step,dispr,displ,r235,tmp2
       real*8 cn(n),gx1,gy1,gz1,gx2,gy2,gz2,rthr
-      real*8 dcn2(3,n),dcn3(3,n,n)               
+      real*8 dcn2(3,n),dcn3(3,n,n)
 
 c Additional variables for interaction groups
       integer ngroup
       integer ilist(n)
       logical imat(0:ngroup, 0:ngroup)
 
-c R^2 cut-off 
+c R^2 cut-off
       rthr=2500.
 
-      if(echo)write(*,*) 
+      if(echo)write(*,*)
       if(version.eq.2)then
       if(echo)write(*,*) 'doing analytical gradient O(N^2) ...'
       disp=0
@@ -86,22 +86,22 @@ c              if(r2.gt.rthr) cycle
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       disp=-s6*e6-s18*e8-s6*e6abc
 
-      step=2.d-5     
+      step=2.d-5
 
       do i=1,n
       do j=1,3
-      xyz(j,i)=xyz(j,i)+step        
+      xyz(j,i)=xyz(j,i)+step
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       dispr=-s6*e6-s18*e8-s6*e6abc
-      xyz(j,i)=xyz(j,i)-2*step      
+      xyz(j,i)=xyz(j,i)-2*step
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,rs10,alp6,alp8,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
       displ=-s6*e6-s18*e8-s6*e6abc
-      g(j,i)=0.5*(dispr-displ)/step  
-      xyz(j,i)=xyz(j,i)+step        
+      g(j,i)=0.5*(dispr-displ)/step
+      xyz(j,i)=xyz(j,i)+step
       enddo
       enddo
 
@@ -133,7 +133,7 @@ c stored as sqrt
             r42=r2r4(iz(iat))*r2r4(iz(jat))
             call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),
      .                                    cn(iat),cn(jat),C6)
-           
+
 c dC6(iat,jat)/dxyz_iat
 c     call grdc6iji(max_elem,maxc,n,xyz,cn,rcov,iz,c6ab,mxc,
 c    .              iat,jat,iat,gC6)
@@ -156,7 +156,7 @@ c     if(r2.gt.rthr) cycle
       damp8 =1.d0/( 1.d0+6.d0*t8 )
 c     t10 = (r/(rs10*R0))**(-alp10)
 c     damp10=1.d0/( 1.d0+6.d0*t10 )
- 
+
       r4 = r2**2
       r6 = r2*r4
       r8 = r4**2
@@ -176,7 +176,7 @@ c    &       -33.075D0*C6*R42**2*damp10*damp10*s10/r12*t10*alp10*dx
 c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dx
       g(1,iat)=g(1,iat)+term
 
-      dy = 2.D0*y1-2.D0*y2       
+      dy = 2.D0*y1-2.D0*y2
 
       term = -3.D0*damp6*damp6*s6*C6/r8*t6*alp6*dy
      &       -1.D0*damp6*s6*gC6(2)/r6
@@ -224,7 +224,7 @@ c    &       -11.025D0*C6*R42**2/(1.D0+6.D0*t10)*s10/r10
             R0=r0ab(iz(kat),iz(jat))
             R42=r2r4(iz(jat))*r2r4(iz(kat))
 
-c dC6(jat,kat)/dxyz_iat 
+c dC6(jat,kat)/dxyz_iat
 c     call grdc6ijk(max_elem,maxc,n,xyz,cn,rcov,iz,c6ab,mxc,
 c    .              jat,kat,iat,gC6)
 c analytically
@@ -389,90 +389,90 @@ c     real*8     cn(*),dcn2(3,n),dum(3,*),anag(3),rcov(max_elem)
 
 
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-C gradient of C6(iat,jat) wrt to xyz of kat or iat                          
+C gradient of C6(iat,jat) wrt to xyz of kat or iat
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
 c     subroutine grdc6iji(max_elem,maxc,n,dum,cn,
 c    .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
-      subroutine grdc6iji(max_elem,maxc,n,dum,
-     .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
-      implicit none  
-      integer n,iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
+c     subroutine grdc6iji(max_elem,maxc,n,dum,
+c    .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
+c     implicit none
+c     integer n,iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
 c     real*8  cn(*),dum(3,*),g(3),rcov(max_elem)
-      real*8  dum(3,*),g(3),rcov(max_elem)
-      real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
+c     real*8  dum(3,*),g(3),rcov(max_elem)
+c     real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
 
 c     real*8 xi,xj,c6r,c6l,st,xxx(2),yi,yj,x0i,x0j
-      real*8 xi,xj,c6r,c6l,st,xxx(2)
-      integer j,jjj(2)
+c     real*8 xi,xj,c6r,c6l,st,xxx(2)
+c     integer j,jjj(2)
 
-      jjj(1)=iat
-      jjj(2)=jat
+c     jjj(1)=iat
+c     jjj(2)=jat
 
-      st=1.d-5       
-      do j=1,3
-        dum(j,kat)=dum(j,kat)+st
+c     st=1.d-5
+c     do j=1,3
+c       dum(j,kat)=dum(j,kat)+st
 
-        call ncoord12(n,rcov,iz,dum,jjj,xxx)
-        xi=xxx(1)
-        xj=xxx(2)
-        call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6r)
+c       call ncoord12(n,rcov,iz,dum,jjj,xxx)
+c       xi=xxx(1)
+c       xj=xxx(2)
+c       call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6r)
 
-        dum(j,kat)=dum(j,kat)-st*2.0d0
+c       dum(j,kat)=dum(j,kat)-st*2.0d0
 
-        call ncoord12(n,rcov,iz,dum,jjj,xxx)
-        xi=xxx(1)
-        xj=xxx(2)
-        call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6l)
-        g(j)=0.5d0*(c6r-c6l)/st
+c       call ncoord12(n,rcov,iz,dum,jjj,xxx)
+c       xi=xxx(1)
+c       xj=xxx(2)
+c       call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6l)
+c       g(j)=0.5d0*(c6r-c6l)/st
 
-        dum(j,kat)=dum(j,kat)+st
-      enddo
-      
-      end
-      
+c       dum(j,kat)=dum(j,kat)+st
+c     enddo
+c
+c     end
+c
 
 c     subroutine grdc6ijk(max_elem,maxc,n,dum,cn,
 c    .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
-      subroutine grdc6ijk(max_elem,maxc,dum,cn,
-     .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
-      implicit none  
+c     subroutine grdc6ijk(max_elem,maxc,dum,cn,
+c    .           rcov,iz,c6ab,mxc,iat,jat,kat,g)
+c     implicit none
 c     integer n,iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
-      integer iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
-      real*8  cn(*),dum(3,*),g(3),rcov(max_elem)
-      real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
+c     integer iz(*),max_elem,maxc,iat,jat,kat,mxc(max_elem)
+c     real*8  cn(*),dum(3,*),g(3),rcov(max_elem)
+c     real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
 
-C     real*8 xi,xj,c6r,c6l,st,xxx(2),yi,yj,x0i,x0j
-      real*8 xi,xj,c6r,c6l,st,yi,yj,x0i,x0j
-      integer j
+c     real*8 xi,xj,c6r,c6l,st,xxx(2),yi,yj,x0i,x0j
+c     real*8 xi,xj,c6r,c6l,st,yi,yj,x0i,x0j
+c     integer j
 
 c x0 is the contribution of kat to the CN of iat and jat
-      call ncoord11(iat,kat,rcov,iz,dum,x0i)
-      call ncoord11(jat,kat,rcov,iz,dum,x0j)
+c     call ncoord11(iat,kat,rcov,iz,dum,x0i)
+c     call ncoord11(jat,kat,rcov,iz,dum,x0j)
 
-      st=1.d-5       
-      do j=1,3
-        dum(j,kat)=dum(j,kat)+st
+c     st=1.d-5
+c     do j=1,3
+c       dum(j,kat)=dum(j,kat)+st
 
-        call ncoord11(iat,kat,rcov,iz,dum,yi)
-        call ncoord11(jat,kat,rcov,iz,dum,yj)
-        xi=cn(iat)-x0i+yi
-        xj=cn(jat)-x0j+yj
+c       call ncoord11(iat,kat,rcov,iz,dum,yi)
+c       call ncoord11(jat,kat,rcov,iz,dum,yj)
+c       xi=cn(iat)-x0i+yi
+c       xj=cn(jat)-x0j+yj
 
-        call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6r)
+c       call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6r)
 
-        dum(j,kat)=dum(j,kat)-st*2.0d0
+c       dum(j,kat)=dum(j,kat)-st*2.0d0
 
-        call ncoord11(iat,kat,rcov,iz,dum,yi)
-        call ncoord11(jat,kat,rcov,iz,dum,yj)
-        xi=cn(iat)-x0i+yi
-        xj=cn(jat)-x0j+yj
+c       call ncoord11(iat,kat,rcov,iz,dum,yi)
+c       call ncoord11(jat,kat,rcov,iz,dum,yj)
+c       xi=cn(iat)-x0i+yi
+c       xj=cn(jat)-x0j+yj
 
-        call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6l)
-        g(j)=0.5d0*(c6r-c6l)/st
+c       call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),xi,xj,c6l)
+c       g(j)=0.5d0*(c6r-c6l)/st
 
-        dum(j,kat)=dum(j,kat)+st
-      enddo
-      
-      end
+c       dum(j,kat)=dum(j,kat)+st
+c     enddo
+c
+c     end
 
