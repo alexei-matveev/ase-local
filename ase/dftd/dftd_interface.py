@@ -35,16 +35,18 @@ def d3_pbc(atoms, functional):
     interactionlist, interactionmatrix = check_interaction_group_input(N_atoms, interactionlist, interactionmatrix)
     #
     # Define function for lattice summation of coordination numbers
-    def func(t_vec):
-         return get_coordination_numbers(atoms, t_vec)
+    def func_get_cn(t_vec):
+        tmp_func = np.empty((3,), dtype = object)
+        tmp_func = get_coordination_numbers(atoms, t_vec)
+        return tmp_func
     #
     # Calculate the coordination numbers for atoms in the unit cell
-    cndcn2dcn3 = lattice_sum(func, positions, elem_cell, periodic_directions, 8.)
+    cn_dcn2_dcn3 = lattice_sum(func_get_cn, positions, elem_cell, periodic_directions,6.)
     #
     # Transform coordination number results
-    cn   = cndcn2dcn3[0,0]
-    dcn2 = cndcn2dcn3[0,1]
-    dcn3 = cndcn2dcn3[0,2]
+    cn   = cn_dcn2_dcn3[0]
+    dcn2 = cn_dcn2_dcn3[1]
+    dcn3 = cn_dcn2_dcn3[2]
     #
     # Start with Calculation
     dispersion_correction, gradient_contribution = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional)
@@ -105,32 +107,33 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
     #
 
     # Initialization of output data by call for the 000 cell
-    f = np.array([func(np.array([0.,0.,0.]))], dtype=object)
+    f = func(np.array([0.,0.,0.]))
     #
     # Running over all residual copies in the box
     u = 0
     v = 0
     #
+#   print f[0,0]
     for w in xrange(-box[2], 0):
         t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
         t2 = np.dot(t_vec, t_vec)
         if t2 > cutoff**2: continue
-        f1 = np.array([func(t_vec)], dtype=object)
-        f       += f1
+        f  += func(t_vec)
+#       print f[0,0]
     for w in xrange(1, box[2] + 1):
         t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
         t2 = np.dot(t_vec, t_vec)
         if t2 > cutoff**2: continue
-        f1 = np.array([func(t_vec)], dtype=object)
-        f       += f1
+        f  += func(t_vec)
+#       print f[0,0]
     #
     for v in xrange(-box[1], 0):
         for w in xrange(-box[2], box[2] + 1):
             t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
             t2 = np.dot(t_vec, t_vec)
             if t2 > cutoff**2: continue
-            f1 = np.array([func(t_vec)], dtype=object)
-            f       += f1
+            f  += func(t_vec)
+#           print f[0,0]
         #
         v = -v
         #
@@ -138,8 +141,8 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
             t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
             t2 = np.dot(t_vec, t_vec)
             if t2 > cutoff**2: continue
-            f1 = np.array([func(t_vec)], dtype=object)
-            f       += f1
+            f  += func(t_vec)
+#           print f[0,0]
     #
     for u in xrange(-box[0], 0):
         for v in xrange(-box[1], box[1] + 1):
@@ -147,8 +150,8 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
                 t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
                 t2 = np.dot(t_vec, t_vec)
                 if t2 > cutoff**2: continue
-                f1 = np.array([func(t_vec)], dtype=object)
-                f       += f1
+                f  += func(t_vec)
+#               print f[0,0]
         #
         u = -u
         #
@@ -157,8 +160,8 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
                 t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
                 t2 = np.dot(t_vec, t_vec)
                 if t2 > cutoff**2: continue
-                f1 = np.array([func(t_vec)], dtype=object)
-                f       += f1
+                f  += func(t_vec)
+#               print f[0,0]
     #
     return f
     #
