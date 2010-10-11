@@ -9,7 +9,7 @@ c    .                 ngroup,ilist,imat)
       subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .                 s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,num,
      .                 version,echo,g,disp,gnorm,
-     .                 ngroup,ilist,imat)
+     .                 ngroup,ilist,imat,cn,dcn2,dcn3)
       implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
@@ -27,13 +27,15 @@ c     real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,r12,t6,t8,t10,damp1
 c     real*8 damp6,damp8,damp10,e6,e8,e10,e12,gnorm,tmp1
       real*8 damp6,damp8,e6,e8,e10,e12,gnorm,tmp1
       real*8 s10,s8,gC6(3),term,step,dispr,displ,r235,tmp2
-      real*8 cn(n),gx1,gy1,gz1,gx2,gy2,gz2,rthr
-      real*8 dcn2(3,n),dcn3(3,n,n)
+c     real*8 cn(n),gx1,gy1,gz1,gx2,gy2,gz2,rthr
+      real*8 gx1,gy1,gz1,gx2,gy2,gz2,rthr
+c     real*8 dcn2(3,n),dcn3(3,n,n)
 
 c Additional variables for interaction groups
-      integer ngroup
-      integer ilist(n)
-      logical imat(0:ngroup, 0:ngroup)
+      integer, intent(in) :: ngroup
+      integer, intent(in) :: ilist(n)
+      logical, intent(in) :: imat(0:ngroup, 0:ngroup)
+      real*8,  intent(in) :: cn(n), dcn2(3,n), dcn3(3,n,n)
 
 c R^2 cut-off
       rthr=2500.
@@ -110,7 +112,8 @@ c              if(r2.gt.rthr) cycle
       if(echo)write(*,*) 'doing analytical gradient O(N^3) ...'
 c     call ncoord (n,rcov,iz,xyz,cn)
 c precompute for analytical part
-      call ncoorda(n,rcov,iz,xyz,cn,dcn2,dcn3)
+c Skipping this, as cn is provided from outside
+c     call ncoorda(n,rcov,iz,xyz,cn,dcn2,dcn3)
 
       s8 =s18
       s10=s18

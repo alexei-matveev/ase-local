@@ -31,8 +31,10 @@ Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
 Cf2py intent(out) dftd2_energy
 C----------------------------------------------------------------------
 C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: grads(xyz, n_atom)
+      REAL*8                          :: coords(xyz, n_atom)
+      REAL*8                          :: dcn2(xyz, n_atom)
+      REAL*8                          :: dcn3(xyz, n_atom, n_atom)
+      REAL*8                          :: grads(xyz, n_atom)
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
@@ -42,13 +44,18 @@ C     Check input
 C----------------------------------------------------------------------
 C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
+      dcn2   = transpose(dcn2raw)
+      dcn3(1,:,:)   = transpose(dcn3raw(:,:,1))
+      dcn3(2,:,:)   = transpose(dcn3raw(:,:,2))
+      dcn3(3,:,:)   = transpose(dcn3raw(:,:,3))
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
       dftd2_energy = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           2, .false., .false., .false.,
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+     .           cn, dcn2, dcn3,
+     .           func, 2, .false., .false., .true.,
      .                                             dftd2_energy, grads)
 C
 C----------------------------------------------------------------------
@@ -89,8 +96,10 @@ Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
 Cf2py intent(out) dftd3_energy
 C----------------------------------------------------------------------
 C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: grads(xyz, n_atom)
+      REAL*8                          :: coords(xyz, n_atom)
+      REAL*8                          :: dcn2(xyz, n_atom)
+      REAL*8                          :: dcn3(xyz, n_atom, n_atom)
+      REAL*8                          :: grads(xyz, n_atom)
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
@@ -100,13 +109,18 @@ C     Check input
 C----------------------------------------------------------------------
 C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
+      dcn2   = transpose(dcn2raw)
+      dcn3(1,:,:)   = transpose(dcn3raw(:,:,1))
+      dcn3(2,:,:)   = transpose(dcn3raw(:,:,2))
+      dcn3(3,:,:)   = transpose(dcn3raw(:,:,3))
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
       dftd3_energy = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           3, .false., .false., .false.,
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+     .           cn, dcn2, dcn3,
+     .           func, 3, .false., .false., .true.,
      .                                             dftd3_energy, grads)
 C
 C----------------------------------------------------------------------
@@ -149,8 +163,10 @@ Cf2py intent(out) dftd2_energy
 Cf2py intent(out) dftd2_gradients
 C----------------------------------------------------------------------
 C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: grads(xyz, n_atom)
+      REAL*8                          :: coords(xyz, n_atom)
+      REAL*8                          :: dcn2(xyz, n_atom)
+      REAL*8                          :: dcn3(xyz, n_atom, n_atom)
+      REAL*8                          :: grads(xyz, n_atom)
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
@@ -160,14 +176,20 @@ C     Check input
 C----------------------------------------------------------------------
 C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
+C     in principle unnecessary for this model
+      dcn2   = transpose(dcn2raw)
+      dcn3(1,:,:)   = transpose(dcn3raw(:,:,1))
+      dcn3(2,:,:)   = transpose(dcn3raw(:,:,2))
+      dcn3(3,:,:)   = transpose(dcn3raw(:,:,3))
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
       dftd2_energy = 0.0
       grads        = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           2, .true., .false., .false.,
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+     .           cn, dcn2, dcn3,
+     .           func, 2, .true., .false., .false.,
      .                                             dftd2_energy, grads)
 C
       dftd2_gradients = transpose(grads)
@@ -211,8 +233,10 @@ Cf2py intent(out) dftd3_energy
 Cf2py intent(out) dftd3_gradients
 C----------------------------------------------------------------------
 C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: grads(xyz, n_atom)
+      REAL*8                          :: coords(xyz, n_atom)
+      REAL*8                          :: dcn2(xyz, n_atom)
+      REAL*8                          :: dcn3(xyz, n_atom, n_atom)
+      REAL*8                          :: grads(xyz, n_atom)
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
@@ -222,14 +246,19 @@ C     Check input
 C----------------------------------------------------------------------
 C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
+      dcn2   = transpose(dcn2raw)
+      dcn3(1,:,:)   = transpose(dcn3raw(:,:,1))
+      dcn3(2,:,:)   = transpose(dcn3raw(:,:,2))
+      dcn3(3,:,:)   = transpose(dcn3raw(:,:,3))
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
       dftd3_energy = 0.0
       grads        = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           3, .true., .false., .false.,
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+     .           cn, dcn2, dcn3,
+     .           func, 3, .true., .false., .false.,
      .                                             dftd3_energy, grads)
 C
       dftd3_gradients = transpose(grads)
@@ -273,8 +302,10 @@ Cf2py intent(out) dftd3_energy
 Cf2py intent(out) dftd3_gradients
 C----------------------------------------------------------------------
 C     Other Variables...
-      REAL*8                                :: coords(xyz, n_atom)
-      REAL*8                                :: grads(xyz, n_atom)
+      REAL*8                          :: coords(xyz, n_atom)
+      REAL*8                          :: dcn2(xyz, n_atom)
+      REAL*8                          :: dcn3(xyz, n_atom, n_atom)
+      REAL*8                          :: grads(xyz, n_atom)
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
@@ -284,14 +315,19 @@ C     Check input
 C----------------------------------------------------------------------
 C     get coords in a.u. and normal storage order
       coords = transpose(coordraw)/0.52917726d0
+      dcn2   = transpose(dcn2raw)
+      dcn3(1,:,:)   = transpose(dcn3raw(:,:,1))
+      dcn3(2,:,:)   = transpose(dcn3raw(:,:,2))
+      dcn3(3,:,:)   = transpose(dcn3raw(:,:,3))
 C----------------------------------------------------------------------
 C
 C----------------------------------------------------------------------
       dftd3_energy = 0.0
       grads        = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
-     .           3, .true., .true., .false.,
+      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+     .           cn, dcn2, dcn3,
+     .           func, 3, .true., .true., .false.,
      .                                             dftd3_energy, grads)
 C
       dftd3_gradients = transpose(grads)
@@ -320,7 +356,7 @@ C but WITHOUT ANY WARRANTY; without even the implied warranty of
 C MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 C GNU General Public License for more details.
 
-      subroutine dftd3(n, ngroup, xyz, iz, ilist, imat,
+      subroutine dftd3(n, ngroup, xyz, iz, ilist, imat, cn, dcn2, dcn3,
      .                 func, version, grad, numgrad, echo,
      .                                                   disp, dispgrad)
       implicit none
@@ -354,7 +390,10 @@ c how many different C6 for one element
 c C6810
       real*8 c6,c8,c10
 c coordination numbers of the atoms
-      real*8 cn(maxat)
+      real*8, intent(in)  :: cn(n)
+      real*8              :: cn2(n)
+c ... and their derivatives
+      real*8, intent(in)  :: dcn2(3,n), dcn3(3,n,n)
 c covalent radii
       real*8 rcov(max_elem)
 c atomic <r^2>/<r^4> values
@@ -538,7 +577,8 @@ C all calculations start here
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
 c CNs for output
-      call ncoord(n,rcov,iz,xyz,cn)
+c Skipping this, as cn is provided from outside
+c     call ncoord(n,rcov,iz,xyz,cn)
 
       if(version.eq.2)then
           if(echo)write(*,'(''loading DFT-DV2 parameters ...'')')
@@ -693,7 +733,7 @@ c energy call
 cccccccccccccc
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .     rs6,rs8,alp6,alp8,version,noabc,
-     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat,cn)
 
       e6   = e6   *s6
 
@@ -755,7 +795,7 @@ cccccccccccccccccccccccccc
       call cpu_time(dum1)
       call gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .           s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,numgrad,
-     .           version,echo,g,gdsp,x,ngroup,ilist,imat)
+     .           version,echo,g,gdsp,x,ngroup,ilist,imat,cn,dcn2,dcn3)
       call cpu_time(dum2)
       if(echo)write(*,*) 'time ',dum2-dum1
 c check if gdisp yields same energy as edisp
@@ -1015,7 +1055,7 @@ C    .           ngroup,ilist,imat)
       subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
      .           rs6,rs8,alp6,alp8,version,noabc,
      .           e6,e8,e10,e12,e63,
-     .           ngroup,ilist,imat)
+     .           ngroup,ilist,imat, cn)
       implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
@@ -1030,15 +1070,16 @@ c     real*8 r,r2,r6,r8,tmp,alp,dx,dy,dz,c6,c8,c10,ang,rav
       real*8 r,r2,r6,r8,tmp,dx,dy,dz,c6,c8,ang,rav
 c     real*8 damp6,damp8,damp10,rr,thr,c9,r42,c12,r10,c14,rthr
       real*8 damp6,damp8,rr,c9,rthr
-      real*8 cn(n)
+c     real*8 cn(n)
       real*8 r2ab(n*n),cc6ab(n*n),dmp(n*n),d2(3),t1,t2,t3
       integer*2 icomp(n*n)
       integer lin,ij,ik,jk
 
 c Additional variables for interaction groups
-      integer ngroup
-      integer ilist(n)
-      logical imat(0:ngroup,0:ngroup)
+      integer, intent(in) :: ngroup
+      integer, intent(in) :: ilist(n)
+      logical, intent(in) :: imat(0:ngroup,0:ngroup)
+      real*8,  intent(in) :: cn(n)
 
       e6 =0
       e8 =0
@@ -1073,7 +1114,8 @@ c             if(r2.gt.rthr) cycle
 
       else
 C DFT-D3
-      call ncoord(n,rcov,iz,xyz,cn)
+c Skipping this, as cn is provided from outside
+c     call ncoord(n,rcov,iz,xyz,cn)
 
       icomp=0
       do iat=1,n-1
