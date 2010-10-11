@@ -112,38 +112,33 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
     # Running over all residual copies in the box
     u = 0
     v = 0
-    #
-#   print f[0,0]
+    # u, v = 0 case. Summation over w, with w != 0
     for w in xrange(-box[2], 0):
         t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
         t2 = np.dot(t_vec, t_vec)
         if t2 > cutoff**2: continue
         f  += func(t_vec)
-#       print f[0,0]
     for w in xrange(1, box[2] + 1):
         t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
         t2 = np.dot(t_vec, t_vec)
         if t2 > cutoff**2: continue
         f  += func(t_vec)
-#       print f[0,0]
     #
+    # u = 0 case. Summation over v and w, with v != 0
     for v in xrange(-box[1], 0):
         for w in xrange(-box[2], box[2] + 1):
             t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
             t2 = np.dot(t_vec, t_vec)
             if t2 > cutoff**2: continue
             f  += func(t_vec)
-#           print f[0,0]
-        #
-        v = -v
         #
         for w in xrange(-box[2], box[2] + 1):
-            t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
+            t_vec = u * elem_cell[0] - v * elem_cell[1] + w * elem_cell[2]
             t2 = np.dot(t_vec, t_vec)
             if t2 > cutoff**2: continue
             f  += func(t_vec)
-#           print f[0,0]
     #
+    # General case. Summation over u, v, and w, with u != 0
     for u in xrange(-box[0], 0):
         for v in xrange(-box[1], box[1] + 1):
             for w in xrange(-box[2], box[2] + 1):
@@ -151,17 +146,13 @@ def lattice_sum(func, positions, elem_cell=np.eye(3), periodic_directions=(False
                 t2 = np.dot(t_vec, t_vec)
                 if t2 > cutoff**2: continue
                 f  += func(t_vec)
-#               print f[0,0]
-        #
-        u = -u
         #
         for v in xrange(-box[1], box[1] + 1):
             for w in xrange(-box[2], box[2] + 1):
-                t_vec = u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
+                t_vec = -u * elem_cell[0] + v * elem_cell[1] + w * elem_cell[2]
                 t2 = np.dot(t_vec, t_vec)
                 if t2 > cutoff**2: continue
                 f  += func(t_vec)
-#               print f[0,0]
     #
     return f
     #
