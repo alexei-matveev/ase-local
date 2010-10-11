@@ -49,7 +49,7 @@ def d3_pbc(atoms, functional):
     dcn3 = cn_dcn2_dcn3[2]
     #
     # Start with Calculation
-    dispersion_correction, gradient_contribution = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional)
+    dispersion_correction, gradient_contribution = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
     #
     # return results in a.u.
     return dispersion_correction, gradient_contribution

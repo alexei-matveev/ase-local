@@ -1,23 +1,30 @@
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE d2_energy(zvals, coordraw, ilist, imat, func,
+     .                        cn, dcn2raw, dcn3raw,
      .                        n_atom, xyz, n_group,
-     .                                                     dftd2_energy)
+     .                                                    dftd2_energy)
 C----------------------------------------------------------------------
       IMPLICIT none
 C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz, n_group
-      INTEGER                               :: zvals(n_atom)
-      INTEGER                               :: ilist(n_atom)
-      LOGICAL                               :: imat(0:n_group,0:n_group)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd2_energy
+      character*80                    :: func
+      INTEGER                         :: n_atom, xyz, n_group
+      INTEGER                         :: zvals(n_atom)
+      INTEGER                         :: ilist(n_atom)
+      LOGICAL                         :: imat(0:n_group,0:n_group)
+      REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: cn(n_atom)
+      REAL*8                          :: dcn2raw(n_atom,xyz)
+      REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
+      REAL*8                          :: dftd2_energy
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
+Cf2py intent(in) cn
+Cf2py intent(in) dcn2raw
+Cf2py intent(in) dcn3raw
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
@@ -29,7 +36,7 @@ C     Other Variables...
 C----------------------------------------------------------------------
 C     Check input
       IF (xyz .ne. 3) THEN
-          write(*,*) 'Somethings wrong with coordinate input ... STOP'
+          write(*,*) 'Something is wrong with coordinate input ...'
           stop
       END IF
 C----------------------------------------------------------------------
@@ -43,6 +50,7 @@ C
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           2, .false., .false., .false.,
      .                                             dftd2_energy, grads)
+C
 C----------------------------------------------------------------------
       END SUBROUTINE d2_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
@@ -50,24 +58,31 @@ C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE d3_energy(zvals, coordraw, ilist, imat, func,
+     .                        cn, dcn2raw, dcn3raw,
      .                        n_atom, xyz, n_group,
-     .                                   dftd3_energy)
+     .                                                    dftd3_energy)
 C----------------------------------------------------------------------
       IMPLICIT none
 C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz, n_group
-      INTEGER                               :: zvals(n_atom)
-      INTEGER                               :: ilist(n_atom)
-      LOGICAL                               :: imat(0:n_group,0:n_group)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd3_energy
+      character*80                    :: func
+      INTEGER                         :: n_atom, xyz, n_group
+      INTEGER                         :: zvals(n_atom)
+      INTEGER                         :: ilist(n_atom)
+      LOGICAL                         :: imat(0:n_group,0:n_group)
+      REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: cn(n_atom)
+      REAL*8                          :: dcn2raw(n_atom,xyz)
+      REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
+      REAL*8                          :: dftd3_energy
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
+Cf2py intent(in) cn
+Cf2py intent(in) dcn2raw
+Cf2py intent(in) dcn3raw
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
@@ -93,33 +108,40 @@ C
       call dftd3(n_atom, n_group, coords, zvals, ilist, imat, func,
      .           3, .false., .false., .false.,
      .                                             dftd3_energy, grads)
+C
 C----------------------------------------------------------------------
       END SUBROUTINE d3_energy
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
-C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE d2_gradients(zvals, coordraw, ilist, imat, func,
+     .                        cn, dcn2raw, dcn3raw,
      .                        n_atom, xyz, n_group,
      .                                   dftd2_energy, dftd2_gradients)
 C----------------------------------------------------------------------
       IMPLICIT none
 C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz, n_group
-      INTEGER                               :: zvals(n_atom)
-      INTEGER                               :: ilist(n_atom)
-      LOGICAL                               :: imat(0:n_group,0:n_group)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd2_energy
-      REAL*8                             :: dftd2_gradients(n_atom,xyz)
+      character*80                    :: func
+      INTEGER                         :: n_atom, xyz, n_group
+      INTEGER                         :: zvals(n_atom)
+      INTEGER                         :: ilist(n_atom)
+      LOGICAL                         :: imat(0:n_group,0:n_group)
+      REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: cn(n_atom)
+      REAL*8                          :: dcn2raw(n_atom,xyz)
+      REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
+      REAL*8                          :: dftd2_energy
+      REAL*8                          :: dftd2_gradients(n_atom,xyz)
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
+Cf2py intent(in) cn
+Cf2py intent(in) dcn2raw
+Cf2py intent(in) dcn3raw
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
@@ -156,25 +178,32 @@ C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE d3_gradients(zvals, coordraw, ilist, imat, func,
+     .                        cn, dcn2raw, dcn3raw,
      .                        n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
 C----------------------------------------------------------------------
       IMPLICIT none
 C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz, n_group
-      INTEGER                               :: zvals(n_atom)
-      INTEGER                               :: ilist(n_atom)
-      LOGICAL                               :: imat(0:n_group,0:n_group)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd3_energy
-      REAL*8                             :: dftd3_gradients(n_atom,xyz)
+      character*80                    :: func
+      INTEGER                         :: n_atom, xyz, n_group
+      INTEGER                         :: zvals(n_atom)
+      INTEGER                         :: ilist(n_atom)
+      LOGICAL                         :: imat(0:n_group,0:n_group)
+      REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: cn(n_atom)
+      REAL*8                          :: dcn2raw(n_atom,xyz)
+      REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
+      REAL*8                          :: dftd3_energy
+      REAL*8                          :: dftd3_gradients(n_atom,xyz)
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
+Cf2py intent(in) cn
+Cf2py intent(in) dcn2raw
+Cf2py intent(in) dcn3raw
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
@@ -211,25 +240,32 @@ C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
       SUBROUTINE d3_num_gradients(zvals, coordraw, ilist, imat, func,
-     .                            n_atom, xyz, n_group,
+     .                        cn, dcn2raw, dcn3raw,
+     .                        n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
 C----------------------------------------------------------------------
       IMPLICIT none
 C----------------------------------------------------------------------
-      character*80                          :: func
-      INTEGER                               :: n_atom, xyz, n_group
-      INTEGER                               :: zvals(n_atom)
-      INTEGER                               :: ilist(n_atom)
-      LOGICAL                               :: imat(0:n_group,0:n_group)
-      REAL*8                                :: coordraw(n_atom,xyz)
-      REAL*8                                :: dftd3_energy
-      REAL*8                             :: dftd3_gradients(n_atom,xyz)
+      character*80                    :: func
+      INTEGER                         :: n_atom, xyz, n_group
+      INTEGER                         :: zvals(n_atom)
+      INTEGER                         :: ilist(n_atom)
+      LOGICAL                         :: imat(0:n_group,0:n_group)
+      REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: cn(n_atom)
+      REAL*8                          :: dcn2raw(n_atom,xyz)
+      REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
+      REAL*8                          :: dftd3_energy
+      REAL*8                          :: dftd3_gradients(n_atom,xyz)
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
+Cf2py intent(in) cn
+Cf2py intent(in) dcn2raw
+Cf2py intent(in) dcn3raw
 Cf2py integer intent(hide),depend(coordraw) :: xyz=shape(coordraw,1)
 Cf2py integer intent(hide),depend(coordraw) :: n_atom=shape(coordraw,0)
 Cf2py integer intent(hide),depend(imat)     :: n_group=shape(imat,1)-1
