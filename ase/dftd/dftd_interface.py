@@ -49,7 +49,18 @@ def d3_pbc(atoms, functional):
     dcn3 = cn_dcn2_dcn3[2]
     #
     # Start with Calculation
-    dispersion_correction, gradient_contribution = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+    def func_get_dftd3(t_vec):
+        # tmp_func contains dispersion_correction and gradient_contribution
+        tmp_func = np.empty((2,), dtype = object)
+	#
+        tmp_func = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+	#
+        return tmp_func
+    #
+    edisp_gdisp = lattice_sum(func_get_dftd3, positions, elem_cell, periodic_directions, 30.)
+    #
+    dispersion_correction = edisp_gdisp[0]
+    gradient_contribution = edisp_gdisp[1]
     #
     # return results in a.u.
     return dispersion_correction, gradient_contribution
@@ -342,3 +353,43 @@ def get_interaction_controls(atoms):
     #
     return interactionlist, interactionmatrix
 # End of function get_interaction_controls
+#
+#
+#
+#
+#
+#
+#   # Adapting variables
+#   atomic_numbers2  = np.append(atoms.get_atomic_numbers(),atoms.get_atomic_numbers())
+#   interactionlist2 = np.append(interactionlist, interactionlist + len(interactionmatrix))
+#   imat_up = np.append(np.zeros((len(interactionmatrix),len(interactionmatrix)),dtype=bool), interactionmatrix, axis=1)
+#   imat_dn = np.append(interactionmatrix, np.zeros((len(interactionmatrix),len(interactionmatrix)),dtype=bool), axis=1)
+#   interactionmatrix2 = np.append(imat_up, imat_dn, axis=0)
+#   # does this make sense??????????????????????????????????
+#   cn_2    = np.append(cn, cn)
+#   dcn2_2  = np.append(dcn2,dcn2, axis=0)
+#   dcn3_2  = np.append(np.append(dcn3,dcn3 , axis=1), np.append(dcn3,dcn3 , axis=1), axis=0)
+#
+#
+#   def func_get_dftd3(t_vec):
+#       # tmp_func contains dispersion_correction and gradient_contribution
+#       tmp_func = np.empty((2,), dtype = object)
+#       #
+#       if np.dot(t_vec, t_vec) == 0.0:
+#          # Considering the (0,0,0)-reference copy
+#          tmp_func = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+#          print dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+#       else:
+#          # Considering all other copies
+#          positions2 = np.append(atoms.get_positions(), atoms.get_positions() + t_vec, axis=0)
+#          #
+#          # Call for "double system"
+#          tmp_func2 = dftd3_gradients(atomic_numbers2, positions2, interactionlist2, interactionmatrix2, functional, cn_2, dcn2_2, dcn3_2)
+#          #
+#          tmp_func[0] = tmp_func2[0]
+#          print tmp_func2
+#          tmp_func = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+
+#	   tmp_func[1] = tmp_func2[1]
+#       #
+#       return tmp_func

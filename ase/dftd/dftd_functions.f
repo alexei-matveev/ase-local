@@ -1,7 +1,7 @@
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d2_energy(zvals, coordraw, ilist, imat, func,
-     .                        cn, dcn2raw, dcn3raw,
-     .                        n_atom, xyz, n_group,
+      SUBROUTINE d2_energy(zvals, coordraw, tvec, ilist, imat, func,
+     .                     cn, dcn2raw, dcn3raw,
+     .                     n_atom, xyz, n_group,
      .                                                    dftd2_energy)
 C----------------------------------------------------------------------
       IMPLICIT none
@@ -12,6 +12,7 @@ C----------------------------------------------------------------------
       INTEGER                         :: ilist(n_atom)
       LOGICAL                         :: imat(0:n_group,0:n_group)
       REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: tvec(xyz)
       REAL*8                          :: cn(n_atom)
       REAL*8                          :: dcn2raw(n_atom,xyz)
       REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
@@ -19,6 +20,7 @@ C----------------------------------------------------------------------
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
+Cf2py intent(in) tvec
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
@@ -64,9 +66,9 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_energy(zvals, coordraw, ilist, imat, func,
-     .                        cn, dcn2raw, dcn3raw,
-     .                        n_atom, xyz, n_group,
+      SUBROUTINE d3_energy(zvals, coordraw, tvec, ilist, imat, func,
+     .                     cn, dcn2raw, dcn3raw,
+     .                     n_atom, xyz, n_group,
      .                                                    dftd3_energy)
 C----------------------------------------------------------------------
       IMPLICIT none
@@ -77,6 +79,7 @@ C----------------------------------------------------------------------
       INTEGER                         :: ilist(n_atom)
       LOGICAL                         :: imat(0:n_group,0:n_group)
       REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: tvec(xyz)
       REAL*8                          :: cn(n_atom)
       REAL*8                          :: dcn2raw(n_atom,xyz)
       REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
@@ -84,6 +87,7 @@ C----------------------------------------------------------------------
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
+Cf2py intent(in) tvec
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
@@ -129,7 +133,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d2_gradients(zvals, coordraw, ilist, imat, func,
+      SUBROUTINE d2_gradients(zvals, coordraw, tvec, ilist, imat, func,
      .                        cn, dcn2raw, dcn3raw,
      .                        n_atom, xyz, n_group,
      .                                   dftd2_energy, dftd2_gradients)
@@ -142,6 +146,7 @@ C----------------------------------------------------------------------
       INTEGER                         :: ilist(n_atom)
       LOGICAL                         :: imat(0:n_group,0:n_group)
       REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: tvec(xyz)
       REAL*8                          :: cn(n_atom)
       REAL*8                          :: dcn2raw(n_atom,xyz)
       REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
@@ -150,6 +155,7 @@ C----------------------------------------------------------------------
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
+Cf2py intent(in) tvec
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
@@ -199,7 +205,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_gradients(zvals, coordraw, ilist, imat, func,
+      SUBROUTINE d3_gradients(zvals, coordraw, tvec, ilist, imat, func,
      .                        cn, dcn2raw, dcn3raw,
      .                        n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
@@ -212,6 +218,7 @@ C----------------------------------------------------------------------
       INTEGER                         :: ilist(n_atom)
       LOGICAL                         :: imat(0:n_group,0:n_group)
       REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: tvec(xyz)
       REAL*8                          :: cn(n_atom)
       REAL*8                          :: dcn2raw(n_atom,xyz)
       REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
@@ -220,6 +227,7 @@ C----------------------------------------------------------------------
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
+Cf2py intent(in) tvec
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
@@ -268,9 +276,9 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_num_gradients(zvals, coordraw, ilist, imat, func,
-     .                        cn, dcn2raw, dcn3raw,
-     .                        n_atom, xyz, n_group,
+      SUBROUTINE d3_num_gradients(zvals,coordraw,tvec,ilist,imat,func,
+     .                            cn, dcn2raw, dcn3raw,
+     .                            n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
 C----------------------------------------------------------------------
       IMPLICIT none
@@ -281,6 +289,7 @@ C----------------------------------------------------------------------
       INTEGER                         :: ilist(n_atom)
       LOGICAL                         :: imat(0:n_group,0:n_group)
       REAL*8                          :: coordraw(n_atom,xyz)
+      REAL*8                          :: tvec(xyz)
       REAL*8                          :: cn(n_atom)
       REAL*8                          :: dcn2raw(n_atom,xyz)
       REAL*8                          :: dcn3raw(n_atom,n_atom,xyz)
@@ -289,6 +298,7 @@ C----------------------------------------------------------------------
 C----------------------------------------------------------------------
 Cf2py intent(in) zvals
 Cf2py intent(in) coordraw
+Cf2py intent(in) tvec
 Cf2py intent(in) ilist
 Cf2py intent(in) imat
 Cf2py intent(in) func
