@@ -391,7 +391,6 @@ c C6810
       real*8 c6,c8,c10
 c coordination numbers of the atoms
       real*8, intent(in)  :: cn(n)
-      real*8              :: cn2(n)
 c ... and their derivatives
       real*8, intent(in)  :: dcn2(3,n), dcn3(3,n,n)
 c covalent radii
@@ -731,7 +730,7 @@ c check if all parameters have been loaded and are resonable
 cccccccccccccc
 c energy call
 cccccccccccccc
-      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
      .     rs6,rs8,alp6,alp8,version,noabc,
      .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat,cn)
 
@@ -1052,7 +1051,7 @@ C     subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
 C    .           rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
 C    .           e6,e8,e10,e12,e63,
 C    .           ngroup,ilist,imat)
-      subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+      subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
      .           rs6,rs8,alp6,alp8,version,noabc,
      .           e6,e8,e10,e12,e63,
      .           ngroup,ilist,imat, cn)
@@ -1060,7 +1059,7 @@ C    .           ngroup,ilist,imat)
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
 c     real*8 rs6,rs8,rs10,alp6,alp8,alp10,rcov(max_elem)
-      real*8 rs6,rs8,alp6,alp8,rcov(max_elem)
+      real*8 rs6,rs8,alp6,alp8
       real*8 c6ab(max_elem,max_elem,maxc,maxc,3)
       real*8 e6, e8, e10, e12, e63
       logical noabc
