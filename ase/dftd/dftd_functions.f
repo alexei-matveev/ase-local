@@ -347,6 +347,9 @@ C----------------------------------------------------------------------
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
 C dftd3 program for computing the dispersion energy and forces from
 C cartesian atomic coordinates and atomic numbers as described in
 C S. Grimme, J. Antony, S. Ehrlich and H. Krieg A consistent and
@@ -815,7 +818,7 @@ cccccccccccccccccccccccccc
 c check if gdisp yields same energy as edisp
       if(abs(disp-gdsp).gt.1.d-9) then
          write(*,*) disp,gdsp
-         call stoprun('internal error')
+         call stoprun('edisp and gdisp yield different energies')
       endif
 c write to energy and gradient files in TM style
 c     call wregrad(maxat,n,xyz,iz,disp,g)

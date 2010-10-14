@@ -45,6 +45,9 @@ c R^2 cut-off
 
       if(echo)write(*,*)
       if(version.eq.2)then
+        !
+        ! DFT-D3 ANALYTICAL GRADIENTS
+        !
       if(echo)write(*,*) 'doing analytical gradient O(N^2) ...'
       disp=0
       do iat=1,n-1
@@ -85,6 +88,9 @@ c              if(r2.gt.rthr) cycle
       endif
 
       if(num) then
+        !
+        ! DFT-D3 NUMERICAL GRADIENTS
+        !
       if(echo)write(*,*) 'doing numerical gradient O(N^3) ...'
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
      .     rs6,rs8,alp6,alp8,version,noabc,
@@ -112,6 +118,9 @@ c              if(r2.gt.rthr) cycle
       enddo
 
       else
+        !
+        ! DFT-D3 ANALYTICAL GRADIENTS
+        !
 
       if(echo)write(*,*) 'doing analytical gradient O(N^3) ...'
 c     call ncoord (n,rcov,iz,xyz,cn)
@@ -125,9 +134,9 @@ c     call ncoorda(n,rcov,iz,xyz,cn,dcn2,dcn3)
       disp=0
 
       do iat=1,n-1
-         x1=xyz(1,iat)
-         y1=xyz(2,iat)
-         z1=xyz(3,iat)
+         x1 = xyz(1,iat)
+         y1 = xyz(2,iat)
+         z1 = xyz(3,iat)
          do jat=iat+1,n
             if(iat.eq.jat) cycle
 c           consider only if interaction defined by interaction groups
@@ -182,8 +191,8 @@ c     r12 = r6**2
 c    &       -11.025D0*gC6(1)*R42**2*damp10*s10/r10
 c    &       -33.075D0*C6*R42**2*damp10*damp10*s10/r12*t10*alp10*dx
 c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dx
-      g(1,iat)=g(1,iat)+term
-      g(1,jat)=g(1,jat)-term
+      g(1,iat) = g(1,iat) + term
+      g(1,jat) = g(1,jat) - term
 
       dy = 2.D0*y1-2.D0*y2
 
@@ -196,8 +205,8 @@ c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dx
 c    &       -11.025D0*gC6(2)*R42**2*damp10*s10/r10
 c    &       -33.075D0*C6*R42**2*damp10*damp10*s10/r12*t10*alp10*dy
 c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dy
-      g(2,iat)=g(2,iat)+term
-      g(2,jat)=g(2,jat)-term
+      g(2,iat) = g(2,iat) + term
+      g(2,jat) = g(2,jat) - term
 
       dz = 2.D0*z1-2.D0*z2
 
@@ -210,8 +219,8 @@ c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dy
 c    &       -11.025D0*gC6(3)*R42**2*damp10*s10/r10
 c    &       -33.075D0*C6*R42**2*damp10*damp10*s10/r12*t10*alp10*dz
 c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dz
-      g(3,iat)=g(3,iat)+term
-      g(3,jat)=g(3,jat)-term
+      g(3,iat) = g(3,iat) + term
+      g(3,jat) = g(3,jat) - term
 
 c     term = -1.D0/(1.D0+6.D0*t6)*s6*C6/r6
 c    &       -3.D0/(1.D0+6.D0*t8)*s8*C6*R42/r8
@@ -225,9 +234,9 @@ c     endif
          enddo
          do jat=2,n
          if(iat.eq.jat) cycle
-         x1=xyz(1,jat)+ tvec(1)
-         y1=xyz(2,jat)+ tvec(2)
-         z1=xyz(3,jat)+ tvec(3)
+         x1 = xyz(1,jat) + tvec(1)
+         y1 = xyz(2,jat) + tvec(2)
+         z1 = xyz(3,jat) + tvec(3)
             do kat=1,jat-1
             if(iat.eq.kat) cycle
             IF (.not. imat(ilist(jat),ilist(kat))) cycle
@@ -268,20 +277,20 @@ c     r12 = r6**2
       term = -1.D0*damp6*s6*gC6(1)/r6
      &       -3.D0*damp8*s8*gC6(1)*R42/r8
 c    &       -11.025D0*gC6(1)*R42**2*damp10*s10/r10
-        g(1,iat)=g(1,iat)+term
-        g(1,jat)=g(1,jat)-term
+        g(1,iat) = g(1,iat) + term
+        g(1,jat) = g(1,jat) - term
 
       term = -1.D0*damp6*s6*gC6(2)/r6
      &       -3.D0*damp8*s8*gC6(2)*R42/r8
 c    &       -11.025D0*gC6(2)*R42**2*damp10*s10/r10
-        g(2,iat)=g(2,iat)+term
-        g(2,jat)=g(2,jat)-term
+        g(2,iat) = g(2,iat) + term
+        g(2,jat) = g(2,jat) - term
 
       term = -1.D0*damp6*s6*gC6(3)/r6
      &       -3.D0*damp8*s8*gC6(3)*R42/r8
 c    &       -11.025D0*gC6(3)*R42**2*damp10*s10/r10
-        g(3,iat)=g(3,iat)+term
-        g(3,jat)=g(3,jat)-term
+        g(3,iat) = g(3,iat) + term
+        g(3,jat) = g(3,jat) - term
 
             enddo
          enddo

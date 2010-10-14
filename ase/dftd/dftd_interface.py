@@ -37,12 +37,13 @@ def d3_pbc(atoms, functional):
     #
     # Define function for lattice summation of coordination numbers
     def func_get_cn(t_vec):
+        # tmp_func contains cn, dcn2, and dcn3
         tmp_func = np.empty((3,), dtype = object)
         tmp_func = get_coordination_numbers(atoms, t_vec)
         return tmp_func
     #
     # Calculate the coordination numbers for atoms in the unit cell
-    cn_dcn2_dcn3 = lattice_sum(func_get_cn, positions, elem_cell, periodic_directions,6.)
+    cn_dcn2_dcn3 = lattice_sum(func_get_cn, positions, elem_cell, periodic_directions, 6.)
     #
     # Transform coordination number results
     cn   = cn_dcn2_dcn3[0]
@@ -58,23 +59,21 @@ def d3_pbc(atoms, functional):
 	#
         return tmp_func
     #
-    # Start with Calculation
-    def func_get_dftd3_num(t_vec):
-        # tmp_func contains dispersion_correction and gradient_contribution
-        tmp_func = np.empty((2,), dtype = object)
-        tmp_func = dftd3_num_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
-	#
-        return tmp_func
+#   # Start with Calculation of numerical gradients (test purposes)
+#   def func_get_dftd3_num(t_vec):
+#       # tmp_func contains dispersion_correction and gradient_contribution
+#       tmp_func = np.empty((2,), dtype = object)
+#       tmp_func = dftd3_num_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+#       #
+#       return tmp_func
+#   edisp_gdisp_num = lattice_sum(func_get_dftd3_num, positions, elem_cell, periodic_directions, DF_CUTOFF_RADIUS)
+#   dispersion_correction_num = edisp_gdisp_num[0]
+#   gradient_contribution_num = edisp_gdisp_num[1]
     #
     edisp_gdisp     = lattice_sum(func_get_dftd3, positions, elem_cell, periodic_directions, DF_CUTOFF_RADIUS)
-    edisp_gdisp_num = lattice_sum(func_get_dftd3_num, positions, elem_cell, periodic_directions, DF_CUTOFF_RADIUS)
     #
     dispersion_correction     = edisp_gdisp[0]
     gradient_contribution     = edisp_gdisp[1]
-    dispersion_correction_num = edisp_gdisp_num[0]
-    gradient_contribution_num = edisp_gdisp_num[1]
-    print gradient_contribution
-    print gradient_contribution- gradient_contribution_num
     #
     # return results in a.u.
     return dispersion_correction, gradient_contribution

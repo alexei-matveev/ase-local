@@ -28,4 +28,4 @@ $(EXE): $(INTERFACE)
 
 
 clean:
-	rm -f $(EXE:=.so) $(INTERFACE) *.o
+	rm -f $(EXE:=.so) $(INTERFACE) *.o *.pyc
