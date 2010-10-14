@@ -55,7 +55,7 @@ C
 C----------------------------------------------------------------------
       dftd2_energy = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+      call dftd3(n_atom, n_group, coords, tvec, zvals, ilist, imat,
      .           cn, dcn2, dcn3,
      .           func, 2, .false., .false., .true.,
      .                                             dftd2_energy, grads)
@@ -122,7 +122,7 @@ C
 C----------------------------------------------------------------------
       dftd3_energy = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+      call dftd3(n_atom, n_group, coords, tvec, zvals, ilist, imat,
      .           cn, dcn2, dcn3,
      .           func, 3, .false., .false., .true.,
      .                                             dftd3_energy, grads)
@@ -193,7 +193,7 @@ C----------------------------------------------------------------------
       dftd2_energy = 0.0
       grads        = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+      call dftd3(n_atom, n_group, coords, tvec, zvals, ilist, imat,
      .           cn, dcn2, dcn3,
      .           func, 2, .true., .false., .false.,
      .                                             dftd2_energy, grads)
@@ -264,7 +264,7 @@ C----------------------------------------------------------------------
       dftd3_energy = 0.0
       grads        = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+      call dftd3(n_atom, n_group, coords, tvec, zvals, ilist, imat,
      .           cn, dcn2, dcn3,
      .           func, 3, .true., .false., .false.,
      .                                             dftd3_energy, grads)
@@ -276,7 +276,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-      SUBROUTINE d3_num_gradients(zvals,coordraw,tvec,ilist,imat,func,
+      SUBROUTINE d3_num_gradients(zvals, coordraw, tvec, ilist, imat,
+     .                            func,
      .                            cn, dcn2raw, dcn3raw,
      .                            n_atom, xyz, n_group,
      .                                   dftd3_energy, dftd3_gradients)
@@ -335,7 +336,7 @@ C----------------------------------------------------------------------
       dftd3_energy = 0.0
       grads        = 0.0
 C
-      call dftd3(n_atom, n_group, coords, zvals, ilist, imat,
+      call dftd3(n_atom, n_group, coords, tvec, zvals, ilist, imat,
      .           cn, dcn2, dcn3,
      .           func, 3, .true., .true., .false.,
      .                                             dftd3_energy, grads)
@@ -366,7 +367,8 @@ C but WITHOUT ANY WARRANTY; without even the implied warranty of
 C MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 C GNU General Public License for more details.
 
-      subroutine dftd3(n, ngroup, xyz, iz, ilist, imat, cn, dcn2, dcn3,
+      subroutine dftd3(n, ngroup, xyz, tvec, iz, ilist, imat,
+     .                 cn, dcn2, dcn3,
      .                 func, version, grad, numgrad, echo,
      .                                                   disp, dispgrad)
       implicit none
@@ -386,6 +388,8 @@ c number of atoms
       integer, intent(in) :: n
 c coordinates in au
       real*8, intent(in)  :: xyz(3,maxat)
+c translation vector in au
+      real*8, intent(in)  :: tvec(3)
 c gradient
       real*8 g  (3,maxat)
       real*8, intent(out) :: dispgrad  (3,n)
@@ -742,7 +746,7 @@ c energy call
 cccccccccccccc
       call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
      .     rs6,rs8,alp6,alp8,version,noabc,
-     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat,cn)
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat,cn,tvec)
 
       e6   = e6   *s6
 
@@ -788,13 +792,13 @@ c this file for tmer2 read tool
 cccccccccccccccccccccccccc
 c analyse Edisp pair terms
 cccccccccccccccccccccccccc
-      if(anal)
+c     if(anal)
 c    .call adisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
 c    .           rs6,rs8,rs10,alp6,alp8,alp10,version,autokcal,
 c    .           s6,s18,disp*autokcal)
-     .call adisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .           rs6,rs8,alp6,alp8,version,autokcal,
-     .           s6,s18,disp*autokcal)
+c    .call adisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
+c    .           rs6,rs8,alp6,alp8,version,autokcal,
+c    .           s6,s18,disp*autokcal)
 
 cccccccccccccccccccccccccc
 c gradient
@@ -802,9 +806,10 @@ cccccccccccccccccccccccccc
       if(grad)then
       g=0
       call cpu_time(dum1)
-      call gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .           s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,numgrad,
-     .           version,echo,g,gdsp,x,ngroup,ilist,imat,cn,dcn2,dcn3)
+      call gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
+     .           s6,s18,rs6,rs8,alp6,alp8,noabc,numgrad,
+     .           version,echo,g,gdsp,x,
+     .           ngroup,ilist,imat,cn,dcn2,dcn3,tvec)
       call cpu_time(dum2)
       if(echo)write(*,*) 'time ',dum2-dum1
 c check if gdisp yields same energy as edisp
@@ -1061,10 +1066,10 @@ C     subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
 C    .           rs6,rs8,rs10,alp6,alp8,alp10,version,noabc,
 C    .           e6,e8,e10,e12,e63,
 C    .           ngroup,ilist,imat)
-      subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
+      subroutine edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,
      .           rs6,rs8,alp6,alp8,version,noabc,
      .           e6,e8,e10,e12,e63,
-     .           ngroup,ilist,imat, cn)
+     .           ngroup,ilist,imat,cn,tvec)
       implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
       real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
@@ -1089,6 +1094,7 @@ c Additional variables for interaction groups
       integer, intent(in) :: ilist(n)
       logical, intent(in) :: imat(0:ngroup,0:ngroup)
       real*8,  intent(in) :: cn(n)
+      real*8              :: tvec(3)
 
       e6 =0
       e8 =0
@@ -1106,9 +1112,9 @@ C DFT-D2
          do jat=iat+1,n
 c           consider only if interaction defined by interaction groups
             IF (imat(ilist(iat),ilist(jat))) THEN
-              dx=xyz(1,iat)-xyz(1,jat)
-              dy=xyz(2,iat)-xyz(2,jat)
-              dz=xyz(3,iat)-xyz(3,jat)
+              dx=xyz(1,iat)-xyz(1,jat)-tvec(1)
+              dy=xyz(2,iat)-xyz(2,jat)-tvec(2)
+              dz=xyz(3,iat)-xyz(3,jat)-tvec(3)
               r2=dx*dx+dy*dy+dz*dz
 c             if(r2.gt.rthr) cycle
               r=sqrt(r2)
@@ -1131,9 +1137,9 @@ c     call ncoord(n,rcov,iz,xyz,cn)
          do jat=iat+1,n
 c           consider only if interaction defined by interaction groups
             IF (imat(ilist(iat),ilist(jat))) THEN
-              dx=xyz(1,iat)-xyz(1,jat)
-              dy=xyz(2,iat)-xyz(2,jat)
-              dz=xyz(3,iat)-xyz(3,jat)
+              dx=xyz(1,iat)-xyz(1,jat)-tvec(1)
+              dy=xyz(2,iat)-xyz(2,jat)-tvec(2)
+              dz=xyz(3,iat)-xyz(3,jat)-tvec(3)
               r2=dx*dx+dy*dy+dz*dz
 c cutoff
 c           if(r2.gt.rthr) cycle

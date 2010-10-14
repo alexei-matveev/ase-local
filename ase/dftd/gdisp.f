@@ -6,22 +6,23 @@ c     subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
 c    .                 s6,s18,rs6,rs8,rs10,alp6,alp8,alp10,noabc,num,
 c    .                 version,echo,g,disp,gnorm,
 c    .                 ngroup,ilist,imat)
-      subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .                 s6,s18,rs6,rs8,rs10,alp6,alp8,noabc,num,
+      subroutine gdisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,
+     .                 s6,s18,rs6,rs8,alp6,alp8,noabc,num,
      .                 version,echo,g,disp,gnorm,
-     .                 ngroup,ilist,imat,cn,dcn2,dcn3)
+     .                 ngroup,ilist,imat,cn,dcn2,dcn3,tvec)
       implicit none
       integer n,iz(*),max_elem,maxc,version,mxc(max_elem)
-      real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(*)
+      real*8 xyz(3,*),r0ab(max_elem,max_elem),r2r4(max_elem)
       real*8 c6ab(max_elem,max_elem,maxc,maxc,3)
-      real*8 g(3,*),s6,s18,rcov(max_elem)
+c     real*8 g(3,*),s6,s18,rcov(max_elem)
+      real*8 g(3,*),s6,s18
 c     real*8 rs6,rs8,rs10,alp10,alp8,alp6
-      real*8 rs6,rs8,rs10,alp8,alp6
+      real*8 rs6,rs8,alp8,alp6
       logical noabc,num,echo
 
       integer iat,jat,i,j,kat
 c     real*8 R0,C6,alp,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc
-      real*8 R0,C6,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc
+      real*8 R0,C6,C8,R42,disp,x1,y1,z1,x2,y2,z2,rr,e6abc
 c     real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,r12,t6,t8,t10,damp1
       real*8 dx,dy,dz,r2,r,r4,r6,r8,r10,t6,t8,damp1
 c     real*8 damp6,damp8,damp10,e6,e8,e10,e12,gnorm,tmp1
@@ -36,6 +37,8 @@ c Additional variables for interaction groups
       integer, intent(in) :: ilist(n)
       logical, intent(in) :: imat(0:ngroup, 0:ngroup)
       real*8,  intent(in) :: cn(n), dcn2(3,n), dcn3(3,n,n)
+c translation vector in au
+      real*8, intent(in)  :: tvec(3)
 
 c R^2 cut-off
       rthr=2500.
@@ -49,9 +52,9 @@ c R^2 cut-off
 c           consider only if interaction defined by interaction groups
             IF (imat(ilist(iat),ilist(jat))) THEN
                R0=r0ab(iz(jat),iz(iat))*rs6
-               dx=(xyz(1,iat)-xyz(1,jat))
-               dy=(xyz(2,iat)-xyz(2,jat))
-               dz=(xyz(3,iat)-xyz(3,jat))
+               dx=(xyz(1,iat)-xyz(1,jat)+tvec(1))
+               dy=(xyz(2,iat)-xyz(2,jat)+tvec(2))
+               dz=(xyz(3,iat)-xyz(3,jat)+tvec(3))
                r2  =dx*dx+dy*dy+dz*dz
 c              if(r2.gt.rthr) cycle
                r235=r2**3.5
@@ -83,9 +86,10 @@ c              if(r2.gt.rthr) cycle
 
       if(num) then
       if(echo)write(*,*) 'doing numerical gradient O(N^3) ...'
-      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,version,noabc,
-     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
+      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
+     .     rs6,rs8,alp6,alp8,version,noabc,
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat,cn,tvec)
+
       disp=-s6*e6-s18*e8-s6*e6abc
 
       step=2.d-5
@@ -93,14 +97,14 @@ c              if(r2.gt.rthr) cycle
       do i=1,n
       do j=1,3
       xyz(j,i)=xyz(j,i)+step
-      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,version,noabc,
-     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
+      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
+     .     rs6,rs8,alp6,alp8,version,noabc,
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat,cn,tvec)
       dispr=-s6*e6-s18*e8-s6*e6abc
       xyz(j,i)=xyz(j,i)-2*step
-      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,rcov,
-     .     rs6,rs8,rs10,alp6,alp8,version,noabc,
-     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat)
+      call edisp(max_elem,maxc,n,xyz,iz,c6ab,mxc,r2r4,r0ab,!rcov,
+     .     rs6,rs8,alp6,alp8,version,noabc,
+     .     e6,e8,e10,e12,e6abc,ngroup,ilist,imat,cn,tvec)
       displ=-s6*e6-s18*e8-s6*e6abc
       g(j,i)=0.5*(dispr-displ)/step
       xyz(j,i)=xyz(j,i)+step
@@ -120,22 +124,23 @@ c     call ncoorda(n,rcov,iz,xyz,cn,dcn2,dcn3)
 
       disp=0
 
-      do iat=1,n
+      do iat=1,n-1
          x1=xyz(1,iat)
          y1=xyz(2,iat)
          z1=xyz(3,iat)
-         do jat=1,n
+         do jat=iat+1,n
             if(iat.eq.jat) cycle
 c           consider only if interaction defined by interaction groups
             IF (.not. imat(ilist(iat),ilist(jat))) cycle
-            x2=xyz(1,jat)
-            y2=xyz(2,jat)
-            z2=xyz(3,jat)
+            x2 = xyz(1,jat) + tvec(1)
+            y2 = xyz(2,jat) + tvec(2)
+            z2 = xyz(3,jat) + tvec(3)
             R0=r0ab(iz(jat),iz(iat))
 c stored as sqrt
             r42=r2r4(iz(iat))*r2r4(iz(jat))
             call getc6(maxc,max_elem,c6ab,mxc,iz(iat),iz(jat),
      .                                    cn(iat),cn(jat),C6)
+            C8 = 3.0d0*C6*r42
 
 c dC6(iat,jat)/dxyz_iat
 c     call grdc6iji(max_elem,maxc,n,xyz,cn,rcov,iz,c6ab,mxc,
@@ -178,6 +183,7 @@ c    &       -11.025D0*gC6(1)*R42**2*damp10*s10/r10
 c    &       -33.075D0*C6*R42**2*damp10*damp10*s10/r12*t10*alp10*dx
 c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dx
       g(1,iat)=g(1,iat)+term
+      g(1,jat)=g(1,jat)-term
 
       dy = 2.D0*y1-2.D0*y2
 
@@ -191,6 +197,7 @@ c    &       -11.025D0*gC6(2)*R42**2*damp10*s10/r10
 c    &       -33.075D0*C6*R42**2*damp10*damp10*s10/r12*t10*alp10*dy
 c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dy
       g(2,iat)=g(2,iat)+term
+      g(2,jat)=g(2,jat)-term
 
       dz = 2.D0*z1-2.D0*z2
 
@@ -204,26 +211,29 @@ c    &       -11.025D0*gC6(3)*R42**2*damp10*s10/r10
 c    &       -33.075D0*C6*R42**2*damp10*damp10*s10/r12*t10*alp10*dz
 c    &       +55.125D0*C6*R42**2*damp10*s10/r12*dz
       g(3,iat)=g(3,iat)+term
+      g(3,jat)=g(3,jat)-term
 
-      term = -1.D0/(1.D0+6.D0*t6)*s6*C6/r6
-     &       -3.D0/(1.D0+6.D0*t8)*s8*C6*R42/r8
+c     term = -1.D0/(1.D0+6.D0*t6)*s6*C6/r6
+c    &       -3.D0/(1.D0+6.D0*t8)*s8*C6*R42/r8
+      term = -s8*C8*damp8/r8-s6*damp6*c6/r6
+
 c    &       -11.025D0*C6*R42**2/(1.D0+6.D0*t10)*s10/r10
-      if(iat.gt.jat)then
+c     if(iat.gt.jat)then ! OMIT THIS! now doing distinct pairs
          disp=disp+term
-      endif
+c     endif
 
          enddo
          do jat=2,n
          if(iat.eq.jat) cycle
-         x1=xyz(1,jat)
-         y1=xyz(2,jat)
-         z1=xyz(3,jat)
+         x1=xyz(1,jat)+ tvec(1)
+         y1=xyz(2,jat)+ tvec(2)
+         z1=xyz(3,jat)+ tvec(3)
             do kat=1,jat-1
             if(iat.eq.kat) cycle
             IF (.not. imat(ilist(jat),ilist(kat))) cycle
-            x2=xyz(1,kat)
-            y2=xyz(2,kat)
-            z2=xyz(3,kat)
+            x2 = xyz(1,kat)
+            y2 = xyz(2,kat)
+            z2 = xyz(3,kat)
             R0=r0ab(iz(kat),iz(jat))
             R42=r2r4(iz(jat))*r2r4(iz(kat))
 
@@ -259,16 +269,19 @@ c     r12 = r6**2
      &       -3.D0*damp8*s8*gC6(1)*R42/r8
 c    &       -11.025D0*gC6(1)*R42**2*damp10*s10/r10
         g(1,iat)=g(1,iat)+term
+        g(1,jat)=g(1,jat)-term
 
       term = -1.D0*damp6*s6*gC6(2)/r6
      &       -3.D0*damp8*s8*gC6(2)*R42/r8
 c    &       -11.025D0*gC6(2)*R42**2*damp10*s10/r10
         g(2,iat)=g(2,iat)+term
+        g(2,jat)=g(2,jat)-term
 
       term = -1.D0*damp6*s6*gC6(3)/r6
      &       -3.D0*damp8*s8*gC6(3)*R42/r8
 c    &       -11.025D0*gC6(3)*R42**2*damp10*s10/r10
         g(3,iat)=g(3,iat)+term
+        g(3,jat)=g(3,jat)-term
 
             enddo
          enddo

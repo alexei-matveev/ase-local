@@ -6,6 +6,7 @@ from ase.dftd.dft_d2_native import maxdist
 from ase.dftd.dft_d2_native import minbox
 from ase.dftd.dftd_module import d2_gradients as dftd2_gradients
 from ase.dftd.dftd_module import d3_gradients as dftd3_gradients
+from ase.dftd.dftd_module import d3_num_gradients as dftd3_num_gradients
 
 # General parameters
 AU_TO_ANG    = 0.52917726
@@ -57,10 +58,23 @@ def d3_pbc(atoms, functional):
 	#
         return tmp_func
     #
-    edisp_gdisp = lattice_sum(func_get_dftd3, positions, elem_cell, periodic_directions, 30.)
+    # Start with Calculation
+    def func_get_dftd3_num(t_vec):
+        # tmp_func contains dispersion_correction and gradient_contribution
+        tmp_func = np.empty((2,), dtype = object)
+        tmp_func = dftd3_num_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+	#
+        return tmp_func
     #
-    dispersion_correction = edisp_gdisp[0]
-    gradient_contribution = edisp_gdisp[1]
+    edisp_gdisp     = lattice_sum(func_get_dftd3, positions, elem_cell, periodic_directions, DF_CUTOFF_RADIUS)
+    edisp_gdisp_num = lattice_sum(func_get_dftd3_num, positions, elem_cell, periodic_directions, DF_CUTOFF_RADIUS)
+    #
+    dispersion_correction     = edisp_gdisp[0]
+    gradient_contribution     = edisp_gdisp[1]
+    dispersion_correction_num = edisp_gdisp_num[0]
+    gradient_contribution_num = edisp_gdisp_num[1]
+    print gradient_contribution
+    print gradient_contribution- gradient_contribution_num
     #
     # return results in a.u.
     return dispersion_correction, gradient_contribution
