@@ -14,8 +14,50 @@ K1_PARAMETER = 16.0
 DF_CUTOFF_RADIUS = 30.0
 #
 #
-def d3_pbc(atoms, functional):
+def d2_pbc(atoms, functional):
     """Main function making the DFT-D2 correction available for
+    isolated systems.
+
+    """
+    dispersion_correction = 0.0
+    gradient_contribution = 0.0
+    #
+    # Obtain data about system
+    atom_numbers                       = atoms.get_atomic_numbers()
+    positions                          = atoms.get_positions()
+    periodic_directions                = atoms.get_pbc()
+    elem_cell                          = atoms.get_cell()
+    interactionlist, interactionmatrix = get_interaction_controls(atoms)
+    #
+    # Number of atoms within a single copy
+    N_atoms = len(positions)
+    #
+    # Check input i.e. if interactionlist and interactionmatrix are set properly
+    interactionlist, interactionmatrix = check_interaction_group_input(N_atoms, interactionlist, interactionmatrix)
+    #
+    #
+    # Start with Calculation
+    def func_get_dftd2(t_vec):
+        # tmp_func contains dispersion_correction and gradient_contribution
+        tmp_func = np.empty((2,), dtype = object)
+	#
+        tmp_func = dftd2_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+	#
+        return tmp_func
+    #
+    edisp_gdisp     = lattice_sum(func_get_dftd2, positions, elem_cell, periodic_directions, DF_CUTOFF_RADIUS)
+    #
+    dispersion_correction     = edisp_gdisp[0]
+    gradient_contribution     = edisp_gdisp[1]
+    #
+    # return results in a.u.
+    return dispersion_correction, gradient_contribution
+    #
+# End of function d2_pbc
+#
+#
+def d3_pbc(atoms, functional):
+    """Main function making the DFT-D3 correction available for
     isolated systems.
 
     """
