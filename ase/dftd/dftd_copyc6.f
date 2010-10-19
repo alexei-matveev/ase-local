@@ -2,7 +2,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 c copy from machine generated data statements inside pars.f
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
-      subroutine copyc6(maxc,max_elem,c6ab,maxci)
+      subroutine copy_c6(maxc,max_elem,c6ab,maxci)
       implicit none
       integer maxc,max_elem,maxci(max_elem),nlines
       real*8  c6ab(max_elem,max_elem,maxc,maxc,3)

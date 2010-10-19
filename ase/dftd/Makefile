@@ -2,7 +2,7 @@ EXE = dftd_module
 
 all: $(EXE)
 
-SOURCES = dftd_functions.f copyc6.f gdisp.f
+SOURCES = dftd_functions.f dftd_copyc6.f dftd_energy_and_gradients.f
 INTERFACE = dftd_functions.pyf
 
 FC = gfortran

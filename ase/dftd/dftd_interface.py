@@ -2,6 +2,7 @@
 import numpy as np
 from math import sqrt, exp, ceil
 from ase.dftd.dft_d2_native import check_interaction_group_input
+from ase.dftd.dft_d2_native import dft_d_pbc
 from ase.dftd.dft_d2_native import maxdist
 from ase.dftd.dft_d2_native import minbox
 from ase.dftd.dftd_module import d2_gradients as dftd2_gradients
@@ -41,7 +42,7 @@ def d2_pbc(atoms, functional):
         # tmp_func contains dispersion_correction and gradient_contribution
         tmp_func = np.empty((2,), dtype = object)
 	#
-        tmp_func = dftd2_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+        tmp_func = dftd2_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional)
 	#
         return tmp_func
     #
@@ -96,8 +97,13 @@ def d3_pbc(atoms, functional):
     def func_get_dftd3(t_vec):
         # tmp_func contains dispersion_correction and gradient_contribution
         tmp_func = np.empty((2,), dtype = object)
+        tmp_func2 = np.empty((2,), dtype = object)
 	#
         tmp_func = dftd3_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn, dcn2, dcn3)
+#       tmp_func2 = dftd3_num_gradients(atoms.get_atomic_numbers(), atoms.get_positions(), t_vec, interactionlist, interactionmatrix, functional, cn)
+########print t_vec
+########print tmp_func
+########print tmp_func2
 	#
         return tmp_func
     #
@@ -112,7 +118,7 @@ def d3_pbc(atoms, functional):
 #   dispersion_correction_num = edisp_gdisp_num[0]
 #   gradient_contribution_num = edisp_gdisp_num[1]
     #
-    edisp_gdisp     = lattice_sum(func_get_dftd3, positions, elem_cell, periodic_directions, DF_CUTOFF_RADIUS)
+    edisp_gdisp     = lattice_sum(func_get_dftd3, positions, elem_cell, periodic_directions, 1.0)
     #
     dispersion_correction     = edisp_gdisp[0]
     gradient_contribution     = edisp_gdisp[1]
