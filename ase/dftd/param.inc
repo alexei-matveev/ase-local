@@ -1,8 +1,8 @@
       real*8 k1,k2,k3
 
 c global ad hoc parameters
-      parameter (k1=16.0)
-      parameter (k2=4./3.) 
+      parameter (k1=16.0d0)
+      parameter (k2=4.0d0/3.0d0) 
 
 c reasonable choices are between 3 and 5
 c this gives smoth curves with maxima around the integer values
@@ -11,5 +11,5 @@ c for the free atom. This also yields to larger CN for atoms
 c in larger molecules but with the same chem. environment
 c which is physically not right
 c values >5 might lead to bumps in the potential
-      parameter (k3=-4.) 
+      parameter (k3=-4.0d0) 
 

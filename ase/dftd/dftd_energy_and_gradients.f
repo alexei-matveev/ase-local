@@ -73,7 +73,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             !
             ! Everything is set... start calculation
             damp6 = 1.0d0
-                  + exp(-alp6 * (r / R0) - 1.0d0)
+     .            + exp(-alp6 * (r / R0 - 1.0d0))
             !
             ! Energy
             disp = disp - c6 / (damp6 * r6) * 0.5d0
@@ -98,6 +98,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             !
             ! Screening for identical atoms
             IF (r2 .lt. 0.01d0) cycle
+            IF (r2 .gt. 60.01d0) cycle
             !
             ! get vdW parameters
             R0  = r0ab(iz(iat),iz(jat))
@@ -407,14 +408,75 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
           END DO ! jat
         END DO ! iat
         !
-        print*,'m', gdsp
-        do iat=1,n
-        print*, dispgrad(:,iat)
-        end do
       END IF
       END IF ! analytical / numerical gradients
       !
       END SUBROUTINE g_disp
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE getc6(maxc,max_elem,c6ab,mxc,iat,jat,nci,ncj,c6)
+      implicit none
+      integer maxc,max_elem
+      integer iat,jat,i,j,mxc(max_elem)
+      real*8  nci,ncj,c6,c6mem
+      real*8  c6ab(max_elem,max_elem,maxc,maxc,3)
+c the exponential is sensitive to numerics
+c when nci or ncj is much larger than cn1/cn2
+      real*8  cn1,cn2,r,rsum,csum,tmp1
+      include 'param.inc'
+
+      c6mem=-1.d+99
+      rsum=0.0
+      csum=0.0
+      c6  =0.0
+      do i=1,mxc(iat)
+      do j=1,mxc(jat)
+         c6=c6ab(iat,jat,i,j,1)
+         if(c6.gt.0)then
+            c6mem=c6
+            cn1=c6ab(iat,jat,i,j,2)
+            cn2=c6ab(iat,jat,i,j,3)
+c distance
+            r=(cn1-nci)**2+(cn2-ncj)**2
+            tmp1=exp(k3*r)
+            rsum=rsum+tmp1
+            csum=csum+tmp1*c6
+         endif
+      enddo
+      enddo
+
+      if(rsum.gt.0)then
+         c6=csum/rsum
+      else
+         c6=c6mem
+      endif
+
+      END SUBROUTINE getc6
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+      SUBROUTINE limit(iat,jat,iadr,jadr)
+      integer iat,jat
+      iadr=1
+      jadr=1
+      i=100
+ 10   if(iat.gt.100) then
+         iat=iat-100
+         iadr=iadr+1
+         goto 10
+      endif
+
+      i=100
+ 20   if(jat.gt.100) then
+         jat=jat-100
+         jadr=jadr+1
+         goto 20
+      endif
+
+      END SUBROUTINE limit
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 C
 C
@@ -462,3 +524,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
         anag=0.0d0
       endif
       END SUBROUTINE c6_grads
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C
+C
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+
