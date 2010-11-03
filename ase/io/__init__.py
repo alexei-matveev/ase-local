@@ -132,7 +132,15 @@ def read(filename, index=-1, format=None):
     if format == 'vasp':
         from ase.io.vasp import read_vasp
         return read_vasp(filename)
-    
+
+    if format == 'gx':
+        from ase.io.gx import read_gx
+        return read_gx(filename)
+
+    if format == 'vasp_out':
+        from ase.io.vasp import read_vasp_out
+        return read_vasp_out(filename, index)
+
     if format == 'mol':
         from ase.io.mol import read_mol
         return read_mol(filename)

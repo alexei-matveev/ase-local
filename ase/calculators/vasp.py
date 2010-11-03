@@ -31,10 +31,17 @@ import ase
 
 # Parameters that can be set in INCAR. The values which are None
 # are not written and default parameters of VASP are used for them.
-keys = [
-    'prec',       # Precission of calculation (Low, Normal, Accurate)
-    'nbands',     # Number of bands
-    'encut',      # Planewave cutoff
+
+float_keys = [
+    'aexx',       # Fraction of exact/DFT exchange
+    'aggac',      # Fraction of gradient correction to correlation
+    'aggax',      # Fraction of gradient correction to exchange
+    'aldac',      # Fraction of LDA correlation energy
+    'amix',       #
+    'bmix',       # tags for mixing
+    'emax',       # energy-range for DOSCAR file
+    'emin',       #
+    'enmax',      # Another energy cutoff, defaults derived from data in POTCAR
     'enaug',      # Density cutoff
     'encut',      # Planewave cutoff
     'encutfock',  # FFT grid in the HF related routines 
@@ -83,11 +90,8 @@ int_keys = [
     'ngzf',       # FFT mesh for charges z
     'nbands',     # Number of bands
     'nblk',       # blocking for some BLAS calls (Sec. 6.5)
-    'system',     # name of System
-    'nwrite',     # verbosity write-flag (how much is written)
-    'istart',     # startjob: 0-new 1-cont 2-samecut
-    'icharg',     # charge: 1-file 2-atom 10-const
-    'iniwav',     # initial electr wf. : 0-lowe 1-rand
+    'nbmod',      # specifies mode for partial charge calculation
+    'nplane',     # for PAW
     'nelm',       #
     'nelmdl',     # nr. of electronic steps
     'nelmin',

@@ -25,7 +25,15 @@ from ase.optimize import QuasiNewton
 from ase.md.verlet import VelocityVerlet
 from ase.md.langevin import Langevin
 from ase.constraints import *
-from ase.calculators import LennardJones, EMT, ASAP, Siesta, Dacapo, Vasp
+from ase.calculators.lj import LennardJones
+from ase.calculators.emt import EMT, ASAP
+from ase.calculators.siesta import Siesta
+from ase.calculators.dacapo import Dacapo
+from ase.calculators.vasp import Vasp
+from ase.calculators.aims import Aims, AimsCube
+from ase.calculators.turbomole import Turbomole
+from ase.calculators.paragauss import ParaGauss
+from ase.calculators.dftb import Dftb
 from ase.neb import NEB, SingleCalculatorNEB
 from ase.visualize import view
 from ase.data import chemical_symbols, atomic_numbers, atomic_names, \
