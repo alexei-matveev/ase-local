@@ -61,8 +61,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             !
             r2 = dx*dx + dy*dy + dz*dz
             !
-            ! Screening for identical atoms
-            IF (r2 .lt. 0.01d0) cycle
+            ! Screening for identical or to distant atoms
+            IF (r2 .lt. 0.0001d0 .or. r2 .gt. 10000.0d0) cycle
             !
             r    = sqrt(r2)
             r6   = r2 * r2 * r2
@@ -96,9 +96,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             !
             r2 = dx*dx + dy*dy + dz*dz
             !
-            ! Screening for identical atoms
-            IF (r2 .lt. 0.01d0) cycle
-            IF (r2 .gt. 60.01d0) cycle
+            ! Screening for identical or to distant atoms
+            IF (r2 .lt. 0.0001d0 .or. r2 .gt. 10000.0d0) cycle
             !
             ! get vdW parameters
             R0  = r0ab(iz(iat),iz(jat))
@@ -259,8 +258,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             !
             r2 = dx*dx + dy*dy + dz*dz
             !
-            ! Screening for identical atoms
-            IF (r2 .lt. 0.01d0) cycle
+            ! Screening for identical or to distant atoms
+            IF (r2 .lt. 0.0001d0 .or. r2 .gt. 10000.0d0) cycle
             !
             r235 = r2**3.5
             r    = sqrt(r2)
@@ -311,8 +310,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             !
             r2 = dx*dx + dy*dy + dz*dz
             !
-            ! Screening for identical atoms
-            IF (r2 .lt. 0.01d0) cycle
+            ! Screening for identical or to distant atoms
+            IF (r2 .lt. 0.0001d0 .or. r2 .gt. 10000.0d0) cycle
             !
             ! get vdW parameters
             R0  = r0ab(iz(iat),iz(jat))
@@ -373,8 +372,8 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
               !
               r2 = dx*dx + dy*dy + dz*dz
               !
-              ! Screening for identical atoms
-              IF (r2 .lt. 0.01d0) cycle
+              ! Screening for identical or to distant atoms
+              IF (r2 .lt. 0.0001d0 .or. r2 .gt. 10000.0d0) cycle
               !
               ! Calculate vdW parameters
               R0  = r0ab(iz(jat),iz(kat))

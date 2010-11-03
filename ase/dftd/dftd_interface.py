@@ -195,7 +195,7 @@ def lattice_sum(func, f0, f0_prime, positions, elem_cell=np.eye(3), periodic_dir
     Rij_max = maxdist(positions)
 
     # use this below as cutoff radius:
-    cutoff = cutoff_radius + Rij_max
+    cutoff = cutoff_radius / AU_TO_ANG + Rij_max
 
     #
     # So far we have to provide the meaningfull (non-linearly dependent) cell vectors
