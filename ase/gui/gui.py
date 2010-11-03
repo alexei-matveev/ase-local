@@ -4,7 +4,7 @@
 # DFT
 # ADOS
 # grey-out stuff after one second: vmd, rasmol, ...
-# Show with ...
+# Show with ....
 # rasmol: set same rotation as ag
 # Graphs: save, Python, 3D
 # start from python (interactive mode?)
@@ -42,10 +42,11 @@ from ase.gui.settings import Settings
 from ase.gui.surfaceslab import SetupSurfaceSlab
 from ase.gui.nanoparticle import SetupNanoparticle
 from ase.gui.nanotube import SetupNanotube
+from ase.gui.graphene import SetupGraphene
 from ase.gui.calculator import SetCalculator
 from ase.gui.energyforces import EnergyForces
 from ase.gui.minimize import Minimize
-
+from ase.gui.scaling import HomogeneousDeformation
 
 ui_info = """\
 <ui>
@@ -102,6 +103,7 @@ ui_info = """\
     <menu action='SetupMenu'>
       <menuitem action='Surface'/>
       <menuitem action='Nanoparticle'/>
+      <menuitem action='Graphene'/>
       <menuitem action='Nanotube'/>
     </menu>
     <menu action='CalculateMenu'>
@@ -109,6 +111,7 @@ ui_info = """\
       <separator/>
       <menuitem action='EnergyForces'/>
       <menuitem action='Minimize'/>
+      <menuitem action='Scaling'/>
     </menu>
     <menu action='HelpMenu'>
       <menuitem action='About'/>
@@ -246,6 +249,9 @@ class GUI(View, Status):
             ('Nanotube', None, 'Nano_tube', None,
              "Create a nanotube",
              self.nanotube_window),
+            ('Graphene', None, 'Graphene', None,
+             "Create a graphene sheet or nanoribbon",
+             self.graphene_window),
             ('SetCalculator', None, 'Set _Calculator', None,
              "Set a calculator used in all calculation modules",
              self.calculator_window),
@@ -255,6 +261,9 @@ class GUI(View, Status):
             ('Minimize', None, 'Energy _Minimization', None,
              "Minimize the energy",
              self.energy_minimize_window),
+            ('Scaling', None, 'Scale system', None,
+             "Deform system by scaling it",
+             self.scaling_window),
             ('About', None, '_About', None,
              None,
              self.about),
@@ -273,19 +282,19 @@ class GUI(View, Status):
              'Bold',
              self.toggle_show_bonds,
              show_bonds),
-             ('MoveAtoms', None, '_Move atoms', '<control>M',
-              'Bold',
-              self.toggle_move_mode,
-              False),
-              ('RotateAtoms', None, '_Rotate atoms', '<control>R',
-               'Bold',
-               self.toggle_rotate_mode,
-               False),
-               ('OrientAtoms', None, 'Orien_t atoms', '<control>T',
-                 'Bold',
-                 self.toggle_orient_mode,
-                 False)             
-             ])
+            ('MoveAtoms', None, '_Move atoms', '<control>M',
+             'Bold',
+             self.toggle_move_mode,
+             False),
+            ('RotateAtoms', None, '_Rotate atoms', '<control>R',
+             'Bold',
+             self.toggle_rotate_mode,
+             False),
+            ('OrientAtoms', None, 'Orien_t atoms', '<control>T',
+             'Bold',
+             self.toggle_orient_mode,
+             False)             
+            ])
         self.ui = ui = gtk.UIManager()
         ui.insert_action_group(actions, 0)
         self.window.add_accel_group(ui.get_accel_group())
@@ -340,8 +349,6 @@ class GUI(View, Status):
     def _do_zoom(self, x):
         """Utility method for zooming"""
         self.scale *= x
-        center = (0.5 * self.width, 0.5 * self.height, 0)
-        self.offset = x * (self.offset + center) - center
         self.draw()
         
     def zoom(self, action):
@@ -366,9 +373,9 @@ class GUI(View, Status):
         CTRL = event.state == gtk.gdk.CONTROL_MASK
         SHIFT = event.state == gtk.gdk.SHIFT_MASK
         dxdydz = {gtk.keysyms.KP_Add: ('zoom', 1.2, 0),
-                gtk.keysyms.KP_Subtract: ('zoom', 1 / 1.2),
-                gtk.keysyms.Up:    ( 0, -1 + CTRL, +CTRL),
-                gtk.keysyms.Down:  ( 0, +1 - CTRL, -CTRL),
+                gtk.keysyms.KP_Subtract: ('zoom', 1 / 1.2, 0),
+                gtk.keysyms.Up:    ( 0, +1 - CTRL, +CTRL),
+                gtk.keysyms.Down:  ( 0, -1 + CTRL, -CTRL),
                 gtk.keysyms.Right: (+1,  0, 0),
                 gtk.keysyms.Left:  (-1,  0, 0)}.get(event.keyval, None)
         try:
@@ -396,9 +403,9 @@ class GUI(View, Status):
         d = self.scale * 0.1
         tvec = np.array([dx, dy, dz])
 
-        dir_vec = np.dot(self.rotation, tvec)
+        dir_vec = np.dot(self.axes, tvec)
         if (atom_move):
-            rotmat = self.rotation
+            rotmat = self.axes
             s = 0.1
             if SHIFT: 
                 s = 0.01
@@ -420,7 +427,7 @@ class GUI(View, Status):
                 self.rot_vec = dir_vec
                 
             change = False
-            z_axis = np.dot(self.rotation, np.array([0, 0, 1]))
+            z_axis = np.dot(self.axes, np.array([0, 0, 1]))
             if self.atoms_to_rotate == None:
                 change = True 
                 self.z_axis_old = z_axis.copy()
@@ -450,7 +457,9 @@ class GUI(View, Status):
             if np.prod(self.z_axis_old != z_axis):
                 change = True
             self.z_axis_old = z_axis.copy()           
-            self.dx_change = copy(cz)            
+            self.dx_change = copy(cz)
+            dihedral_rotation = len(self.images.selected_ordered) == 4
+
             if change:
                 self.atoms_selected = sel.copy()
 
@@ -465,18 +474,26 @@ class GUI(View, Status):
                           self.images.P[self.frame][a2]
                         
                     rvy = np.cross(rvx,
-                                   np.dot(self.rotation,
+                                   np.dot(self.axes,
                                    np.array([0, 0, 1])))     
                     self.rot_vec = rvx * dx + rvy * (dy + dz)
                     self.dx_change = [dx, dy+dz]
-                
+                    
+                # dihedral rotation?
+                if dihedral_rotation:
+                    sel = self.images.selected_ordered
+                    self.rot_vec = (dx+dy+dz)*(self.R[sel[2]]-self.R[sel[1]])
+
             rot_cen = np.array([0.0, 0.0, 0.0])
-            if nsel: 
+            if dihedral_rotation:
+                sel = self.images.selected_ordered
+                rot_cen = self.R[sel[1]].copy()
+            elif nsel: 
                 for i, b in enumerate( sel):
                     if b: 
                         rot_cen += self.R[i]
                 rot_cen /= float(nsel)     
-            
+
             degrees = 5 * (1 - SHIFT) + SHIFT
             degrees = abs(sum(dxdydz)) * 3.1415 / 360.0 * degrees
             rotmat = rotate_about_vec(self.rot_vec, degrees)
@@ -500,11 +517,12 @@ class GUI(View, Status):
 
             from rot_tools import rotate_vec_into_newvec
             rot_mat = rotate_vec_into_newvec(self.orient_normal, to_vec)
-            self.rotation = rot_mat
+            self.axes = rot_mat
             
             self.set_coordinates()
         else:
-            self.offset -= (dx * d, dy * d, 0)
+            self.center -= (dx * 0.1 * self.axes[:, 0] -
+                            dy * 0.1 * self.axes[:, 1])
         self.draw()
     
         
@@ -560,7 +578,7 @@ class GUI(View, Status):
                             self.add_entries[1].set_text('?' + molecule) 
                             return ()
                         
-                directions = np.transpose(self.rotation)
+                directions = np.transpose(self.axes)
                 if a != None:
                     for i in a:
                         try: 
@@ -575,7 +593,7 @@ class GUI(View, Status):
                             return ()
                   # apply the current rotation matrix to A
                     for i in a:
-                        i.position = np.dot(self.rotation, i.position)       
+                        i.position = np.dot(self.axes, i.position)       
                   # find the extent of the molecule in the local coordinate system
                     a_cen_pos = np.array([0.0, 0.0, 0.0])
                     m_cen_pos = 0.0
@@ -890,8 +908,8 @@ class GUI(View, Status):
                 _('Open ...'), None, gtk.FILE_CHOOSER_ACTION_OPEN,
                 (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
                  gtk.STOCK_OPEN, gtk.RESPONSE_OK))
-            ok = chooser.run()
-            if ok == gtk.RESPONSE_OK:
+            ok = chooser.run() == gtk.RESPONSE_OK
+            if ok:
                 filenames = [chooser.get_filename()]
             chooser.destroy()
 
@@ -928,8 +946,9 @@ class GUI(View, Status):
             (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
              gtk.STOCK_SAVE, gtk.RESPONSE_OK))
 
-        combo = gtk.combo_box_new_text()
+        # Add a file type filter
         types = []
+        name_to_suffix = {}
         for name, suffix in [('Automatic', None),
                              ('XYZ file', 'xyz'),
                              ('ASE trajectory', 'traj'),
@@ -946,43 +965,58 @@ class GUI(View, Status):
                 name = _(name)
             else:
                 name = '%s (%s)' % (_(name), suffix)
-            types.append(suffix)
-            combo.append_text(name)
-
-        combo.set_active(0)
-
-        pack(chooser.vbox, combo)
+            filt = gtk.FileFilter()
+            filt.set_name(name)
+            if suffix is None:
+                filt.add_pattern('*')
+            elif suffix == 'POSCAR':
+                filt.add_pattern('*POSCAR*')
+            else:
+                filt.add_pattern('*.'+suffix)
+            if suffix is not None:
+                types.append(suffix)
+                name_to_suffix[name] = suffix
+                
+            chooser.add_filter(filt)
 
         if self.images.nimages > 1:
+            img_vbox = gtk.VBox()
             button = gtk.CheckButton('Save current image only (#%d)' %
                                      self.frame)
-            pack(chooser.vbox, button)
-            entry = pack(chooser.vbox, [gtk.Label(_('Slice: ')),
-                                        gtk.Entry(10),
-                                        help('Help for slice ...')])[1]
+            pack(img_vbox, button)
+            entry = gtk.Entry(10)
+            pack(img_vbox, [gtk.Label(_('Slice: ')), entry,
+                                        help('Help for slice ...')])
             entry.set_text('0:%d' % self.images.nimages)
+            img_vbox.show()
+            chooser.set_extra_widget(img_vbox)
 
         while True:
-            if chooser.run() == gtk.RESPONSE_CANCEL:
+            # Loop until the user selects a proper file name, or cancels.
+            response = chooser.run()
+            if response == gtk.RESPONSE_CANCEL:
                 chooser.destroy()
                 return
-            
+            elif response != gtk.RESPONSE_OK:
+                print >>sys.stderr, "AG INTERNAL ERROR: strange response in Save,", response
+                chooser.destroy()
+                return
+                
             filename = chooser.get_filename()
 
-            i = combo.get_active()
-            if i == 0:
-                suffix = filename.split('.')[-1]
-                if 'POSCAR' in filename:
-                    suffix = 'POSCAR'
-                elif suffix not in types:
-                    self.xxx(message1='Unknown output format!',
-                             message2='Use one of: ' + ', '.join(types[1:]))
-                    continue
-            else:
-                suffix = types[i]
+            suffix = os.path.splitext(filename)[1][1:]
+            if 'POSCAR' in filename:
+                suffix = 'POSCAR'
+            if suffix == '':
+                # No suffix given.  If the user has chosen a special
+                # file type, use the corresponding suffix.
+                filt = chooser.get_filter().get_name()
+                suffix = name_to_suffix[filt]
+                filename = filename + '.' + suffix
                 
-            if suffix in ['pdb', 'vnl']:
-                self.xxx()
+            if suffix not in types:
+                oops(message='Unknown output format!',
+                     message2='Use one of: ' + ', '.join(types[1:]))
                 continue
                 
             if self.images.nimages > 1:
@@ -996,12 +1030,11 @@ class GUI(View, Status):
         chooser.destroy()
 
         bbox = np.empty(4)
-        bbox[:2] = self.offset[:2]
-        bbox[2:] = bbox[:2] + (self.width, self.height)
-        bbox /= self.scale
+        size = np.array([self.width, self.height]) / self.scale
+        bbox[0:2] = np.dot(self.center, self.axes[:, :2]) - size / 2
+        bbox[2:] = bbox[:2] + size
         suc = self.ui.get_widget('/MenuBar/ViewMenu/ShowUnitCell').get_active()
-        self.images.write(filename, self.rotation,
-                          show_unit_cell=suc, bbox=bbox)
+        self.images.write(filename, self.axes, show_unit_cell=suc, bbox=bbox)
         
     def bulk_window(self, menuitem):
         SetupBulkCrystal(self)
@@ -1012,6 +1045,9 @@ class GUI(View, Status):
     def nanoparticle_window(self, menuitem):
         SetupNanoparticle(self)
         
+    def graphene_window(self, menuitem):
+        SetupGraphene(self)
+
     def nanotube_window(self, menuitem):
         SetupNanotube(self)
 
@@ -1023,6 +1059,9 @@ class GUI(View, Status):
         
     def energy_minimize_window(self, menuitem):
         Minimize(self)
+
+    def scaling_window(self, menuitem):
+        HomogeneousDeformation(self)
         
     def new_atoms(self, atoms, init_magmom=False):
         "Set a new atoms object."

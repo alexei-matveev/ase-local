@@ -134,7 +134,7 @@ def read(filename, index=-1, format=None):
     
     if format == 'vasp_out':
         from ase.io.vasp import read_vasp_out
-        return read_vasp_out(filename)
+        return read_vasp_out(filename, index)
     
     if format == 'mol':
         from ase.io.mol import read_mol
@@ -170,7 +170,7 @@ def read(filename, index=-1, format=None):
     
     if format == 'aims_out':
         from ase.io.aims import read_aims_output
-        return read_aims_output(filename)
+        return read_aims_output(filename, index)
 
     if format == 'iwm':
         from ase.io.iwm import read_iwm
@@ -191,6 +191,10 @@ def read(filename, index=-1, format=None):
     if format == 'dftb':
         from ase.io.dftb import read_dftb
         return read_dftb(filename)
+
+    if format == 'sdf':
+        from ase.io.sdf import read_sdf
+        return read_sdf(filename)
 
     raise RuntimeError('File format descriptor '+format+' not recognized!')
 
@@ -260,8 +264,8 @@ def write(filename, images, format=None, **kwargs):
       An array of same length as the list of atoms indicating the sphere radii.
       A single float specifies a uniform scaling of the default covalent radii.
 
-    bbox: array (default None)
-      XXX
+    bbox: 4 floats (default None)
+      Set the bounding box to (xll, yll, xur, yur) (lower left, upper right).
 
     colors: array (default None)
       An array of same length as the list of atoms, indicating the rgb color
@@ -320,10 +324,6 @@ def write(filename, images, format=None, **kwargs):
     elif format == 'dftb':
         from ase.io.dftb import write_dftb
         write_dftb(filename, images)
-        return
-    elif format == 'struct':
-        from ase.io.wien2k import write_struct
-        write_struct(filename, images, **kwargs)
         return
     elif format == 'struct':
         from ase.io.wien2k import write_struct
@@ -463,5 +463,8 @@ def filetype(filename):
             return 'vtu'
         elif xmltype is not None:
             raise IOError('Unknown VTK XML file!')
+
+    if filename.lower().endswith('.sdf'):
+        return 'sdf'
 
     return 'xyz'

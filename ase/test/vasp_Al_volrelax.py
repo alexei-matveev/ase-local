@@ -16,8 +16,11 @@ if vcmd == None and vscr == None:
     raise NotAvailable('Neither VASP_COMMAND nor VASP_SCRIPT defined')
 
 import numpy as np
-from ase import *
+from ase import io
+from ase.optimize import QuasiNewton
+from ase.constraints import StrainFilter
 from ase.structure import bulk
+from ase.calculators.vasp import Vasp
 
 # -- Perform Volume relaxation within Vasp
 def vasp_vol_relax():

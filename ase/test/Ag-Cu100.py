@@ -1,5 +1,10 @@
-from ase import *
+from math import sqrt
+from ase import Atom, Atoms
+from ase.neb import NEB
+from ase.constraints import FixAtoms
 from ase.vibrations import Vibrations
+from ase.calculators.emt import EMT
+from ase.optimize import QuasiNewton
 
 # Distance between Cu atoms on a (100) surface:
 d = 3.6 / sqrt(2)
@@ -23,7 +28,6 @@ neb = NEB(images, climb=True)
 # Set constraints and calculator:
 constraint = FixAtoms(range(len(initial) - 1))
 for image in images:
-    #image.set_calculator(ASAP())
     image.set_calculator(EMT())
     image.set_constraint(constraint)
 

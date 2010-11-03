@@ -20,8 +20,10 @@ float_keys = [
     'ini_linear_mix_param',
     'ini_spin_mix_parma',
     'initial_moment',
+    'MD_MB_init',
     'MD_time_step',
     'prec_mix_param',
+    'set_vacuum_level',
     'spin_mix_param',
 ]
 
@@ -42,6 +44,8 @@ string_keys = [
     'restart_read_only',
     'restart_write_only',
     'spin',
+    'total_energy_method',
+    'qpe_calc',
     'xc',
 ]
 
@@ -49,15 +53,19 @@ int_keys = [
     'empty_states',
     'ini_linear_mixing',
     'max_relaxation_steps',    
-    'n_max_pulay',    
+    'n_max_pulay',   
     'sc_iter_limit',
+    'walltime',
 ]
 
 bool_keys = [
     'collect_eigenvectors',
     'compute_forces',
     'compute_kinetic',
+    'distributed_spline_storage',
+    'evaluate_work_function',
     'final_forces_cleaned',
+    'hessian_to_restart_geometry',
     'MD_clean_rotations',
     'restart_relaxations',
     'squeeze_memory',
@@ -69,6 +77,7 @@ bool_keys = [
 
 list_keys = [
     'k_grid',
+    'k_offset',
     'MD_run',
     'MD_schedule',
     'MD_segment',
@@ -89,6 +98,13 @@ input_keys = [
     'track_output',
 ] 
 
+input_parameters_default = {'run_command':None,
+                            'run_dir':None,
+                            'species_dir':None,
+                            'cubes':None,
+                            'output_template':'aims',
+                            'track_output':False}
+
 class Aims(Calculator):
     def __init__(self, **kwargs):
         self.name = 'Aims'
@@ -97,7 +113,6 @@ class Aims(Calculator):
         self.string_params = {}
         self.int_params = {}
         self.bool_params = {}
-        self.s_bool_params = {}
         self.list_params = {}
         self.input_parameters = {}
         for key in float_keys:
@@ -113,7 +128,7 @@ class Aims(Calculator):
         for key in list_keys:
             self.list_params[key] = None
         for key in input_keys:
-            self.input_parameters[key] = None
+            self.input_parameters[key] = input_parameters_default[key]
         if os.environ.has_key('AIMS_SPECIES_DIR'):
             self.input_parameters['species_dir'] = os.environ['AIMS_SPECIES_DIR']
         if os.environ.has_key('AIMS_COMMAND'):
@@ -122,11 +137,30 @@ class Aims(Calculator):
         self.positions = None
         self.atoms = None
         self.run_counts = 0
-        self.input_parameters['output_template']='aims'
-        self.input_parameters['track_output'] = False
         self.set(**kwargs)
 
     def set(self, **kwargs):
+        if 'control' in kwargs:
+            fname = kwargs['control']
+            from ase.io.aims import read_aims_calculator
+            file = open(fname, 'r')
+            calc_temp = None
+            while True:
+                line = file.readline()
+                if "List of parameters used to initialize the calculator:" in line:
+                   file.readline()
+                   calc_temp = read_aims_calculator(file)
+                   break
+            if calc_temp is not None:
+                self.float_params      = calc_temp.float_params
+                self.exp_params        = calc_temp.exp_params
+                self.string_params     = calc_temp.string_params
+                self.int_params        = calc_temp.int_params
+                self.bool_params       = calc_temp.bool_params
+                self.list_params       = calc_temp.list_params
+                self.input_parameters  = calc_temp.input_parameters
+            else:
+                raise TypeError("Control file to be imported can not be read by ASE = " + fname)
         for key in kwargs:
             if self.float_params.has_key(key):
                 self.float_params[key] = kwargs[key]
@@ -142,7 +176,7 @@ class Aims(Calculator):
                 self.list_params[key] = kwargs[key]
             elif self.input_parameters.has_key(key):
                 self.input_parameters[key] = kwargs[key]
-            else:
+            elif key is not 'control':
                 raise TypeError('Parameter not defined: ' + key)
 
     def update(self, atoms):
@@ -218,102 +252,75 @@ class Aims(Calculator):
         if self.input_parameters['run_dir']:
             aims_command = aims_command + self.input_parameters['run_dir'] + '/'
         aims_command = aims_command + self.out
-        self.write_parameters()
+        self.write_parameters('#',self.out)
         exitcode = os.system(aims_command)
         if exitcode != 0:
             raise RuntimeError('FHI-aims exited with exit code: %d.  ' % exitcode)
         if self.input_parameters['cubes'] and self.input_parameters['track_output']:
             self.input_parameters['cubes'].move_to_base_name(self.input_parameters['output_template']+str(self.run_counts-1))
 
-    def write_parameters(self):
-        output = open(self.out,'w')
-        output.write('=======================================================\n')
-        output.write('FHI-aims output file\n')
-        output.write('Created using the Atomic Simulation Environment (ASE)\n\n')
-        output.write('List of parameters used to initialize the calculator:\n')
-        output.write('=======================================================\n')
+    def write_parameters(self,prefix,filename):
+        output = open(filename,'w')
+        output.write(prefix+'=======================================================\n')
+        output.write(prefix+'FHI-aims file: '+filename+'\n')
+        output.write(prefix+'Created using the Atomic Simulation Environment (ASE)\n'+prefix+'\n')
+        output.write(prefix+'List of parameters used to initialize the calculator:\n')
+        output.write(prefix+'=======================================================\n')
         for key, val in self.float_params.items():
             if val is not None:
-                output.write('%-30s%5.6f\n' % (key, val))        
+                output.write('%-35s%5.6f\n' % (key, val))        
         for key, val in self.exp_params.items():
             if val is not None:
-                output.write('%-30s%5.2e\n' % (key, val))
+                output.write('%-35s%5.2e\n' % (key, val))
         for key, val in self.string_params.items():
             if val is not None:
-                output.write('%-30s%s\n' % (key, val))
+                output.write('%-35s%s\n' % (key, val))
         for key, val in self.int_params.items():
             if val is not None:
-                output.write('%-30s%d\n' % (key, val))
+                output.write('%-35s%d\n' % (key, val))
         for key, val in self.bool_params.items():
             if val is not None:
-                if val:
-                    output.write('%-30s.true.\n' % (key))
-                else:
-                    output.write('%-30s.false.\n' % (key))
+                if key == 'vdw_correction_hirshfeld' and val:
+                    output.write('%-35s\n' % (key))
+                elif val:
+                    output.write('%-35s.true.\n' % (key))
+                elif key != 'vdw_correction_hirshfeld':
+                    output.write('%-35s.false.\n' % (key))
         for key, val in self.list_params.items():
             if val is not None:
-                output.write('%-30s' % (key))
-                if isinstance(val,str): 
-                    output.write(val)
+                if key == 'output':
+                    if not isinstance(val,(list,tuple)): 
+                        val = [val]
+                    for output_type in val:
+                        output.write('%-35s%s\n' % (key,str(output_type)))
                 else:
-                    for sub_value in val:
-                        output.write(str(sub_value)+' ')
-                output.write('\n')
+                    output.write('%-35s' % (key))
+                    if isinstance(val,str): 
+                        output.write(val)
+                    else:
+                        for sub_value in val:
+                            output.write(str(sub_value)+' ')
+                    output.write('\n')
         for key, val in self.input_parameters.items():
             if key is  'cubes':
                 if val:
                     val.write(output)
-            elif val:
-                output.write('%-30s%s\n' % (key,val))
-        output.write('=======================================================\n\n')
+            elif val and val != input_parameters_default[key]:
+                output.write(prefix+'%-34s%s\n' % (key,val))
+        output.write(prefix+'=======================================================\n\n')
         output.close()
 
-    def write_control(self):
+    def write_control(self, file = 'control.in'):
         """Writes the control.in file."""
-        control = open('control.in', 'w')
-        for key, val in self.float_params.items():
-            if val is not None:
-                control.write('%-30s%5.6f\n' % (key, val))
-        for key, val in self.exp_params.items():
-            if val is not None:
-                control.write('%-30s%5.2e\n' % (key, val))
-        for key, val in self.string_params.items():
-            if val is not None:
-                control.write('%-30s%s\n' % (key, val))
-        for key, val in self.int_params.items():
-            if val is not None:
-                contol.write('%-30s%d\n' % (key, val))
-        for key, val in self.bool_params.items():
-            if val is not None:
-                if key == 'vdw_correction_hirshfeld' and val:
-                    control.write('%-30s\n' % (key))
-                elif val:
-                    control.write('%-30s.true.\n' % (key))
-                elif key != 'vdw_correction_hirshfeld':
-                    control.write('%-30s.false.\n' % (key))
-        for key, val in self.list_params.items():
-            if val is not None:
-                control.write('%-30s' % key)
-                if isinstance(val,str):
-                    control.write(val)
-                else:
-                    for ival in val:
-                        control.write(str(ival)+' ')
-                control.write('\n')
-        for key, val in self.input_parameters.items():
-            if key is  'cubes':
-                if val:
-                    val.write(control)
-        control.write('\n')
-        control.close()
+        self.write_parameters('#',file)
 
-    def write_species(self):
+    def write_species(self, file = 'control.in'):
         from ase.data import atomic_numbers
 
         if not self.input_parameters['species_dir']:
             raise RuntimeError('Missing species directory, THIS MUST BE SPECIFIED!')
 
-        control = open('control.in', 'a')
+        control = open(file, 'a')
         species_path = self.input_parameters['species_dir']
         symbols = self.atoms.get_chemical_symbols()
         symbols2 = []
@@ -321,8 +328,8 @@ class Aims(Calculator):
             if symbol not in symbols2:
                 symbols2.append(symbol)
         for symbol in symbols2:
-            file = join(species_path, '%02i_%s_default' % (atomic_numbers[symbol], symbol))
-            for line in open(file, 'r'):
+            fd = join(species_path, '%02i_%s_default' % (atomic_numbers[symbol], symbol))
+            for line in open(fd, 'r'):
                 control.write(line)
         control.close()
 

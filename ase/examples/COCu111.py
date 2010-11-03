@@ -1,4 +1,10 @@
-from ase import *
+from math import sqrt
+from ase import Atoms, Atom
+from ase.constraints import FixAtoms
+from ase.optimize import QuasiNewton
+from ase.io import PickleTrajectory
+from ase.neb import NEB
+from ase.calculators.emt import EMT
 
 # Distance between Cu atoms on a (111) surface:
 a = 3.6
@@ -39,7 +45,6 @@ neb = NEB(images, climb=True)
 
 # Set constraints and calculator:
 for image in images:
-    #image.set_calculator(ASAP())
     image.set_calculator(EMT())
     image.set_constraint(constraint)
 

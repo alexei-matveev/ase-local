@@ -1,4 +1,4 @@
-from ase import *
+from ase.all import *
 
 atoms = Atoms('H7',
               positions=[(0, 0, 0),

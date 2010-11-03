@@ -7,7 +7,7 @@
 from ase.atom import Atom
 from ase.atoms import Atoms
 
-_deprecate_things_from_ase_module = not True
+_deprecate_things_from_ase_module = True
 
 # Some day in the future, we will uncomment this line:
 #__all__ = ['Atoms', 'Atom']  
@@ -21,11 +21,12 @@ from ase.optimize.lbfgs import HessLBFGS
 from ase.optimize.fire import FIRE
 from ase.optimize.lbfgs import LBFGS, LBFGSLineSearch
 from ase.optimize.bfgs import BFGS
+from ase.optimize import QuasiNewton
 from ase.md.verlet import VelocityVerlet
 from ase.md.langevin import Langevin
 from ase.constraints import *
 from ase.calculators.lj import LennardJones
-from ase.calculators.emt import EMT, ASAP
+from ase.calculators.emt import EMT
 from ase.calculators.siesta import Siesta
 from ase.calculators.dacapo import Dacapo
 from ase.calculators.vasp import Vasp
@@ -40,8 +41,6 @@ from ase.data.molecules import molecule
 
 from math import sqrt, pi
 import numpy as np
-
-QuasiNewton = BFGS
 
 
 
@@ -73,4 +72,6 @@ if _deprecate_things_from_ase_module:
             _locals[name] = dep.Deprecate(obj, name, module)
         else:
             pass  # how about atomic_numbers, covalent_radii, ... ? XXX
+
+    np = dep.DeprecatedNumpyImport()
 

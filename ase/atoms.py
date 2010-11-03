@@ -117,7 +117,7 @@ class Atoms(object):
               len(symbols) > 0 and isinstance(symbols[0], Atom)):
             # Get data from a list or tuple of Atom objects:
             data = zip(*[atom.get_data() for atom in symbols])
-            atoms = Atoms(None, *data)
+            atoms = self.__class__(None, *data)
             symbols = None    
                 
         if atoms is not None:
@@ -584,7 +584,7 @@ class Atoms(object):
     def copy(self):
         """Return a copy."""
         import copy
-        atoms = Atoms(cell=self._cell, pbc=self._pbc)
+        atoms = self.__class__(cell=self._cell, pbc=self._pbc)
 
         atoms.arrays = {}
         for name, a in self.arrays.items():
@@ -612,7 +612,7 @@ class Atoms(object):
             symbols = self.get_chemical_symbols(reduce=True)
         else:
             symbols = ''.join([chemical_symbols[Z] for Z in num[:15]]) + '...'
-        s = "Atoms(symbols='%s', " % symbols
+        s = "%s(symbols='%s', " %(self.__class__.__name__, symbols)
         for name in self.arrays:
             if name == 'numbers':
                 continue
@@ -638,7 +638,7 @@ class Atoms(object):
     def extend(self, other):
         """Extend atoms object by appending atoms from *other*."""
         if isinstance(other, Atom):
-            other = Atoms([other])
+            other = self.__class__([other])
             
         n1 = len(self)
         n2 = len(other)
@@ -664,7 +664,7 @@ class Atoms(object):
 
     def append(self, atom):
         """Append atom to end."""
-        self.extend(Atoms([atom]))
+        self.extend(self.__class__([atom]))
 
     def __getitem__(self, i):
         """Return a subset of the atoms.
@@ -689,7 +689,7 @@ class Atoms(object):
         import copy
         from ase.constraints import FixConstraint
         
-        atoms = Atoms(cell=self._cell, pbc=self._pbc)
+        atoms = self.__class__(cell=self._cell, pbc=self._pbc)
         # TODO: Do we need to shuffle indices in adsorbate_info too?
         atoms.adsorbate_info = self.adsorbate_info
         
@@ -728,10 +728,10 @@ class Atoms(object):
         return atom
     
     def __imul__(self, m):
-        if len(self._constraints) > 0:
-            raise RuntimeError('Remove constraint before modifying atoms.')
+        """In-place repeat of atoms."""
         if isinstance(m, int):
             m = (m, m, m)
+
         M = np.product(m)
         n = len(self)
         
@@ -746,7 +746,12 @@ class Atoms(object):
                     i1 = i0 + n
                     positions[i0:i1] += np.dot((m0, m1, m2), self._cell)
                     i0 = i1
+
+        if self.constraints is not None:
+            self.constraints = [c.repeat(m, n) for c in self.constraints]
+
         self._cell = np.array([m[c] * self._cell[c] for c in range(3)])
+
         return self
 
     def repeat(self, rep):
@@ -910,6 +915,15 @@ class Atoms(object):
             c = np.dot(v, v2)
             v = np.cross(v, v2)
             s = norm(v)
+            # In case *v* and *a* are parallel, np.cross(v, v2) vanish
+            # and can't be used as a rotation axis. However, in this
+            # case any rotation axis perpendicular to v2 will do.
+            eps = 1e-7
+            if s < eps:
+                v = np.cross((0, 0, 1), v2)
+            if norm(v) < eps:
+                v = np.cross((1, 0, 0), v2)
+            assert norm(v) >= eps
             if s > 0: v /= s
         
         if isinstance(center, str) and center.lower() == 'com':
@@ -1017,7 +1031,7 @@ class Atoms(object):
         axis   = self.positions[list[2]]-self.positions[list[1]]
         center = self.positions[list[2]]
         # recursive object definition might not be the most elegant thing, more generally useful might be a rotation function with a mask?
-        group  = Atoms()
+        group  = self.__class__()
         for i in range(len(self)):
             if mask[i]:
                 group += self[i]

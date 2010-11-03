@@ -2,6 +2,7 @@ import sys
 import time
 import atexit
 
+
 def paropen(name, mode='r', buffering=0):
     """MPI-safe version of open function.
 
@@ -12,6 +13,7 @@ def paropen(name, mode='r', buffering=0):
     if rank > 0 and mode[0] != 'r':
         name = '/dev/null'
     return open(name, mode, buffering)
+
 
 def parprint(*args, **kwargs):
     """MPI save print - prints only from master.
@@ -25,7 +27,7 @@ def parprint(*args, **kwargs):
     for key in defaults:
         if not key in kwargs:
             kwargs[key] = defaults[key]
-    
+
     for arg in args[:-1]:
         print >> kwargs['file'], arg,
     if len(args):
@@ -66,6 +68,8 @@ else:
     world = None
     def barrier():
         pass
+
+
 
 
 def register_parallel_cleanup_function():
