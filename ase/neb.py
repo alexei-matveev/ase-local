@@ -3,7 +3,7 @@ from math import sqrt
 import numpy as np
 
 from ase.parallel import world, rank, size
-from ase.calculators import SinglePointCalculator
+from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import read
 
 class NEB:
@@ -53,8 +53,18 @@ class NEB:
         else:
             # Parallelize over images:
             i = rank * (self.nimages - 2) // size + 1
-            energies[i - 1] = images[i].get_potential_energy()
-            forces[i - 1] = images[i].get_forces()
+            try:
+                energies[i - 1] = images[i].get_potential_energy()
+                forces[i - 1] = images[i].get_forces()
+            except:
+                # Make sure other images also fail:
+                error = world.sum(1.0)
+                raise
+            else:
+                error = world.sum(0.0)
+                if error:
+                    raise RuntimeError('Parallel NEB failed!')
+                
             for i in range(1, self.nimages - 1):
                 root = (i - 1) * size // (self.nimages - 2)
                 world.broadcast(energies[i - 1:i], root)
@@ -217,6 +227,11 @@ class SingleCalculatorNEB(NEB):
         traj = PickleTrajectory(filename, 'w', self)
         traj.write()
         traj.close()
+
+    def __add__(self, other):
+        for image in other:
+            self.images.append(image)
+        return self
 
 def fit(images):
     E = [i.get_potential_energy() for i in images]

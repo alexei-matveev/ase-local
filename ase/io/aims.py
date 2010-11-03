@@ -6,7 +6,8 @@ def read_aims(filename):
     a geometry.in file.
     """
 
-    from ase import Atoms, FixAtoms, FixCartesian
+    from ase import Atoms
+    from ase.constraints import FixAtoms, FixCartesian
     import numpy as np
 
     atoms = Atoms()
@@ -83,6 +84,10 @@ def write_aims(filename, atoms):
             atoms = atoms[0]
 
     fd = open(filename, 'w')
+    fd.write('#=======================================================\n')
+    fd.write('#FHI-aims file: '+filename+'\n')
+    fd.write('#Created using the Atomic Simulation Environment (ASE)\n')
+    fd.write('#=======================================================\n')
     i = 0
     if atoms.get_pbc().any():
         for n, vector in enumerate(atoms.get_cell()):
@@ -127,11 +132,13 @@ def read_energy(filename):
             E = float(line.split()[-2])
     return E
 
-def read_aims_output(filename):
+def read_aims_output(filename, index = -1):
     """  Import FHI-aims output files with all data available, i.e. relaxations, 
     MD information, force information etc etc etc. """
     from ase import Atoms, Atom 
-    from ase.calculators import SinglePointCalculator
+    from ase.calculators.singlepoint import SinglePointCalculator
+    from ase.units import Ang, fs
+    molecular_dynamics = False
     fd = open(filename, 'r')
     cell = []
     images = []
@@ -139,6 +146,7 @@ def read_aims_output(filename):
     f = None
     pbc = False
     found_aims_calculator = False
+    v_unit = Ang/(1000.0*fs)
     while True:
         line = fd.readline()
         if not line:
@@ -157,18 +165,34 @@ def read_aims_output(filename):
                 for i in range(3):
                     inp = fd.readline().split()
                     cell.append([inp[1],inp[2],inp[3]])
-        if "Atomic structure:" in line:
+        if "Atomic structure:" in line and not molecular_dynamics:
             fd.readline()
             atoms = Atoms()
             for i in range(n_atoms):
                 inp = fd.readline().split()
-                atoms.append(Atom(inp[3],(inp[4],inp[5],inp[6]))) 
-        if "Updated atomic structure:" in line:
+                atoms.append(Atom(inp[3],(inp[4],inp[5],inp[6])))
+        if "Complete information for previous time-step:" in line:
+            molecular_dynamics = True
+        if "Updated atomic structure:" in line and not molecular_dynamics:
             fd.readline()
             atoms = Atoms()
+            velocities = []
             for i in range(n_atoms):
                 inp = fd.readline().split()
-                atoms.append(Atom(inp[4],(inp[1],inp[2],inp[3])))                 
+                atoms.append(Atom(inp[4],(inp[1],inp[2],inp[3])))  
+                if molecular_dynamics:
+                    inp = fd.readline().split()
+        if "Atomic structure (and velocities)" in line:
+            fd.readline()
+            atoms = Atoms()
+            velocities = []
+            for i in range(n_atoms):
+                inp = fd.readline().split()
+                atoms.append(Atom(inp[4],(inp[1],inp[2],inp[3])))  
+                inp = fd.readline().split()
+                velocities += [[float(inp[1])*v_unit,float(inp[2])*v_unit,float(inp[3])*v_unit]]
+            atoms.set_velocities(velocities)
+            images.append(atoms)
         if "Total atomic forces" in line:
             f = []
             for i in range(n_atoms):
@@ -186,13 +210,42 @@ def read_aims_output(filename):
                 atoms.pbc = True
             if not found_aims_calculator:
                 atoms.set_calculator(SinglePointCalculator(e,None,None,None,atoms))
-            images.append(atoms)
+            if not molecular_dynamics: 
+                images.append(atoms)
             e = None
+            if found_aims_calculator:
+                calc.set_results(images[-1])
+                images[-1].set_calculator(calc)
     fd.close()
-    if found_aims_calculator:
-        calc.set_results(images[-1])
-        images[-1].set_calculator(calc)
-    return images[-1]
+    if molecular_dynamics:
+        images = images[1:]
+
+    # return requested images, code borrowed from ase/io/trajectory.py
+    if isinstance(index, int):
+        return images[index]
+    else:
+        step = index.step or 1
+        if step > 0:
+            start = index.start or 0
+            if start < 0:
+                start += len(images)
+            stop = index.stop or len(images)
+            if stop < 0:
+                stop += len(images)
+        else:
+            if index.start is None:
+                start = len(images) - 1
+            else:
+                start = index.start
+                if start < 0:
+                    start += len(images)
+            if index.stop is None:
+                stop = -1
+            else:
+                stop = index.stop
+                if stop < 0:
+                    stop += len(images)
+        return [images[i] for i in range(start, stop, step)]
 
 def read_aims_calculator(file):
     """  found instructions for building an FHI-aims calculator in the output file, 
@@ -206,20 +259,44 @@ def read_aims_calculator(file):
         else:
             args = line.split()
             key = args[0]
-            if calc.float_params.has_key(key):
+            if key == '#':
+                comment = True   
+            elif calc.float_params.has_key(key):
                 calc.float_params[key] = float(args[1])
             elif calc.exp_params.has_key(key):
                 calc.exp_params[key] = float(args[1])
             elif calc.string_params.has_key(key):
                 calc.string_params[key] = args[1]
+                if len(args) > 2:
+                    for s in args[2:]:
+                        calc.string_params[key] += " "+s
             elif calc.int_params.has_key(key):
                 calc.int_params[key] = int(args[1])
             elif calc.bool_params.has_key(key):
-                calc.bool_params[key] = bool(args[1])
+                try:
+                    calc.bool_params[key] = bool(args[1])
+                except:
+                    if key == 'vdw_correction_hirshfeld':
+                        calc.bool_params[key] = True
             elif calc.list_params.has_key(key):
-                calc.list_params[key] = tuple(args[1:])
-            elif calc.input_parameters.has_key(key):
-                calc.input_parameters[key] = args[1]
+                if key == 'output':
+                    # build output string from args:
+                    out_option = ''
+                    for arg in args[1:]:
+                        out_option +=str(arg)+' '
+                    if calc.list_params['output'] is not None:
+                        calc.list_params['output'] += [out_option]
+                    else:
+                        calc.list_params['output'] = [out_option]
+                else:
+                    calc.list_params[key] = list(args[1:])
+            elif '#' in key:
+                key = key[1:]
+                if calc.input_parameters.has_key(key):
+                    calc.input_parameters[key] = args[1]
+                    if len(args) > 2: 
+                        for s in args[2:]:
+                            calc.input_parameters[key] += " "+s                
             else:
                 raise TypeError('FHI-aims keyword not defined in ASE: ' + key + '. Please check.')
     return calc

@@ -4,8 +4,9 @@ import numpy as np
 
 from ase.data import covalent_radii
 from ase.atoms import Atoms
-from ase.calculators import SinglePointCalculator
+from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import read, write, string2index
+from ase.constraints import FixAtoms
 
 
 class Images:
@@ -71,10 +72,11 @@ class Images:
             print('WARNING: Not all images have the same bondary conditions!')
             
         self.selected = np.zeros(self.natoms, bool)
+        self.selected_ordered  = []
         self.atoms_to_rotate_0 = np.zeros(self.natoms, bool)
         self.visible = np.ones(self.natoms, bool)
         self.nselected = 0
-        self.set_dynamic()
+        self.set_dynamic(constraints = images[0].constraints)
         self.repeat = np.ones(3, int)
         self.set_radii(0.89)
         
@@ -182,11 +184,39 @@ class Images:
         self.nselected = 0
         
     def graph(self, expr):
+        import ase.units as units
         code = compile(expr + ',', 'atoms.py', 'eval')
 
         n = self.nimages
         def d(n1, n2):
             return sqrt(((R[n1] - R[n2])**2).sum())
+        def a(n1, n2, n3):
+            v1 = R[n1]-R[n2]
+            v2 = R[n3]-R[n2]
+            arg = np.vdot(v1,v2)/(sqrt((v1**2).sum()*(v2**2).sum()))
+            if arg > 1.0: arg = 1.0
+            if arg < -1.0: arg = -1.0
+            return 180.0*np.arccos(arg)/np.pi
+        def dih(n1, n2, n3, n4):
+            # vector 0->1, 1->2, 2->3 and their normalized cross products:
+            a    = R[n2]-R[n1]
+            b    = R[n3]-R[n2]
+            c    = R[n4]-R[n3]
+            bxa  = np.cross(b,a)
+            bxa /= np.sqrt(np.vdot(bxa,bxa))
+            cxb  = np.cross(c,b)
+            cxb /= np.sqrt(np.vdot(cxb,cxb))
+            angle = np.vdot(bxa,cxb)
+            # check for numerical trouble due to finite precision:
+            if angle < -1: angle = -1
+            if angle >  1: angle =  1
+            angle = np.arccos(angle)
+            if (np.vdot(bxa,c)) > 0: angle = 2*np.pi-angle
+            return angle*180.0/np.pi
+        # get number of mobile atoms for temperature calculation
+        ndynamic = 0
+        for dyn in self.dynamic: 
+            if dyn: ndynamic += 1
         S = self.selected
         D = self.dynamic[:, np.newaxis]
         E = self.E
@@ -202,6 +232,7 @@ class Images:
             epot = E[i]
             ekin = self.K[i]
             e = epot + ekin
+            T = 2.0 * ekin / (3.0 * ndynamic * units.kB)
             data = eval(code)
             if i == 0:
                 m = len(data)
@@ -211,7 +242,7 @@ class Images:
                 s += sqrt(((self.P[i + 1] - R)**2).sum())
         return xy
 
-    def set_dynamic(self):
+    def set_dynamic(self, constraints = None):
         if self.nimages == 1:
             self.dynamic = np.ones(self.natoms, bool)
         else:
@@ -219,6 +250,10 @@ class Images:
             R0 = self.P[0]
             for R in self.P[1:]:
                 self.dynamic |= (np.abs(R - R0) > 1.0e-10).any(1)
+        if constraints is not None:
+            for con in constraints: 
+                if isinstance(con,FixAtoms):
+                    self.dynamic[con.index] = False
 
     def write(self, filename, rotations='', show_unit_cell=False, bbox=None):
         indices = range(self.nimages)
@@ -235,11 +270,11 @@ class Images:
                     indices = [indices]
 
         images = [self.get_atoms(i) for i in indices]
-        try:
+        if len(filename) > 4 and filename[-4:] in ['.eps', '.png', '.pov']:
             write(filename, images, 
                   rotation=rotations, show_unit_cell=show_unit_cell,
                   bbox=bbox)
-        except:
+        else:
             write(filename, images)
 
     def get_atoms(self, frame):
@@ -249,6 +284,11 @@ class Images:
                       tags=self.T,
                       cell=self.A[frame],
                       pbc=self.pbc)
+        
+        # check for constrained atoms and add them accordingly:
+        if not self.dynamic.all():
+            atoms.set_constraint(FixAtoms(mask=1-self.dynamic))
+        
         atoms.set_calculator(SinglePointCalculator(self.E[frame],
                                                    self.F[frame],
                                                    None, None, atoms))
