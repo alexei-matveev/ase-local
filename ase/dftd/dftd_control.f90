@@ -101,8 +101,8 @@ subroutine dftd(natoms, ngroups, xyz, tvec, iz, ilist, imat, cn, dcn, &
                ,gdsp, dispgrad)
     !
     IF (abs(gdsp-disp) .gt. 1.0D-9) THEN
-      write(*,*) 'something terrible has happened -> STOP'
-      !  stop
+      write(*,*) 'something terrible has happened:', gdsp, '-', disp,' >10^-9     -> STOP'
+      stop
     END IF
   END IF
   !
