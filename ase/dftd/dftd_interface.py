@@ -2,10 +2,10 @@
 import numpy as np
 from math import sqrt, exp, ceil
 from decimal import Decimal
-from ase.dftd.dft_d2_native import check_interaction_group_input
-from ase.dftd.dft_d2_native import dft_d_pbc
-from ase.dftd.dft_d2_native import maxdist
-from ase.dftd.dft_d2_native import minbox
+from ase.dftd.dftd_native import check_interaction_group_input
+from ase.dftd.dftd_native import dft_d_pbc
+from ase.dftd.dftd_native import maxdist
+from ase.dftd.dftd_native import minbox
 from ase.dftd.dftd_module import d2_gradients as dftd2_gradients
 from ase.dftd.dftd_module import d3_gradients as dftd3_gradients
 

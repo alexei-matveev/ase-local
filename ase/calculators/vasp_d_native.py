@@ -4,7 +4,7 @@ correction can be added to the potential energy and the forces.
 """
 import numpy as np
 import vasp
-import ase.dftd.dft_d2_native as dftd
+import ase.dftd.dftd_native as dftd
 
 class Vasp_d(vasp.Vasp):
     #

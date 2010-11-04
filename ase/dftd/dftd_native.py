@@ -10,7 +10,7 @@ Example for H2:
            [ 0.01760738,  0.        ,  0.        ]])
 """
 
-import atoms
+import ase.atoms as atoms
 import numpy as np
 from math import sqrt, exp, ceil
 
@@ -133,6 +133,7 @@ def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
     if interactionlist == None:
         # Case 1: Nothing given, all atoms in the same group and interacting with each other
         interactionlist = [0,] * N_atoms
+        interactionlist = np.array(interactionlist)
         interactionmatrix = np.array(np.ones((1,1)),dtype=bool)
 	#
     elif interactionlist[0] != None and interactionmatrix == None:
@@ -142,6 +143,7 @@ def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
         if len(interactionlist) != N_atoms:
             raise SyntaxError, 'DFT-D: interaction list not of expected size'
 
+        interactionlist = np.array(interactionlist)
         interactionmatrix = np.array(np.ones((N_groups,N_groups)) - np.eye((N_groups)),dtype=bool)
 	#
     elif interactionlist[0] != None and interactionmatrix != None:
@@ -151,6 +153,7 @@ def check_interaction_group_input(N_atoms, interactionlist, interactionmatrix):
         if len(interactionlist) != N_atoms:
             raise SyntaxError, 'DFT-D: interaction list not of expected size'
 
+        interactionlist = np.array(interactionlist)
 	interactionmatrix = np.array(interactionmatrix,dtype=bool)
 
         if not (len(interactionmatrix[:,0]) == N_groups and len(interactionmatrix[0,:]) == N_groups):
