@@ -25,6 +25,7 @@ if _deprecate_things_from_ase_module:
     for name in ['LennardJones', 'EMT', 'Siesta', 'Dacapo', 'Vasp',
                  'Aims', 'AimsCube', 'Turbomole', 'Exciting', 'Dftb',
                  'SinglePointCalculator', 'numeric_force', 'numeric_forces',
+                 'Vasp_d', 'Vasp_d3', 'Vasp_d2', 'ParaGauss',
                  'TestPotential']:
         obj = _locals[name]
         _locals[name] = Deprecate(obj, name, obj.__module__, 'ase.calculators')
