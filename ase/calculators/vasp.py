@@ -144,15 +144,6 @@ special_keys = [
     'lreal',      # non-local projectors in real space
 ]
 
-keys = [    
-    # 'NBLOCK' and KBLOCK       inner block; outer block
-    # 'NPACO' and APACO         distance and nr. of slots for P.C.
-    # 'WEIMIN, EBREAK, DEPER    special control tags
-    'weimin',
-    'ialgo',
-    'lmaxpaw'
-]
-
 class Vasp(Calculator):
     def __init__(self, restart=None, output_template='vasp', track_output=False, 
                  **kwargs):
