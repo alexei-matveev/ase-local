@@ -32,6 +32,8 @@ from ase.calculators.emt import EMT
 from ase.calculators.siesta import Siesta
 from ase.calculators.dacapo import Dacapo
 from ase.calculators.vasp import Vasp
+from ase.calculators.vasp_d import Vasp_d2
+from ase.calculators.vasp_d import Vasp_d3
 from ase.calculators.aims import Aims, AimsCube
 from ase.calculators.turbomole import Turbomole
 from ase.calculators.paragauss import ParaGauss
