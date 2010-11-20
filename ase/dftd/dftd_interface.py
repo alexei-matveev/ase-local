@@ -6,8 +6,6 @@ from ase.dftd.dftd_native import check_interaction_group_input
 from ase.dftd.dftd_native import dft_d_pbc
 from ase.dftd.dftd_native import maxdist
 from ase.dftd.dftd_native import minbox
-from ase.dftd.dftd_module import d2_gradients as dftd2_gradients
-from ase.dftd.dftd_module import d3_gradients as dftd3_gradients
 
 # General parameters
 AU_TO_ANG    = 0.52917726
@@ -20,6 +18,19 @@ def d2_pbc(atoms, functional):
     isolated systems.
 
     """
+    # Check if compiled f2py interfaces are present
+    try:
+      from ase.dftd.dftd_module import d2_gradients as dftd2_gradients
+    except ImportError:
+      dftd_autocompile()
+      # Check if compilation was successful
+      try:
+        from ase.dftd.dftd_module import d2_gradients as dftd2_gradients
+      except ImportError:
+        print ' Compilation of DFT-D module failed!'
+        print
+    #
+    #
     dispersion_correction = 0.0
     gradient_contribution = 0.0
     #
@@ -61,6 +72,19 @@ def d3_pbc(atoms, functional):
     isolated systems.
 
     """
+    # Check if compiled f2py interfaces are present
+    try:
+      from ase.dftd.dftd_module import d3_gradients as dftd3_gradients
+    except ImportError:
+      dftd_autocompile()
+      # Check if compilation was successful
+      try:
+        from ase.dftd.dftd_module import d3_gradients as dftd3_gradients
+      except ImportError:
+        print ' Compilation of DFT-D module failed!'
+        print
+    #
+    #
     dispersion_correction = 0.0
     gradient_contribution = 0.0
     #
@@ -482,3 +506,23 @@ def get_interaction_controls(atoms):
     return interactionlist, interactionmatrix
 # End of function get_interaction_controls
 #
+#
+# Autocompilation subroutine
+def dftd_autocompile():
+  import os
+  import sys
+  print
+  print ' DFT-D module seems not to be available! Attempt of compilation ...'
+  #
+  # Get list of PYTHONPATH-entries
+  paths = os.environ['PYTHONPATH'].split(os.pathsep)
+  #
+  # Search within PYTHONPATH for a subdirectory ase/dftd and compile
+  # with makefile DFTD_Makefile
+  for path in paths:
+    print
+    print '    Looking for ase in ', path
+    print
+    os.system('cd '+path+'; cd ase'+os.sep+'dftd ; make -f DFTD_Makefile')
+    print
+

@@ -16,7 +16,7 @@ class Vasp_d2(vasp.Vasp):
 	the original call for the VASP package and adds the DFT-D2 contribution
 	to the converged SCF-energy.
 	"""
-#        self.update(atoms)
+        self.update(atoms)
 	# Conversion factors a.u. -> eV
 	Eh__2__eV          = 27.211396132
 	#
@@ -49,7 +49,7 @@ class Vasp_d2(vasp.Vasp):
 	The function obtains the DFT forces by using the original call for the
 	VASP package and adds the DFT-D contribution to the calculated forces.
 	"""
-#        self.update(atoms)
+        self.update(atoms)
 	# Conversion factors a.u. -> eV and a.u. -> eV/Angst
 	Eh__2__eV          = 27.211396132
 	Eh_rb__2__eV_Angst = 51.422086162
@@ -106,9 +106,9 @@ class Vasp_d3(vasp.Vasp):
 	self.dispersion_correction       = self.dispersion_correction       * Eh__2__eV
 	#
 	# Print out components (Useful?)
-       #print
-       #print 'DFT total energy  : ', self.energy_free_or_zero
-       #print 'DFT-D3 correction : ', self.dispersion_correction
+        print
+        print 'DFT total energy  : ', self.energy_free_or_zero
+        print 'DFT-D3 correction : ', self.dispersion_correction
         print
 	print 'DFT-D3 final corrected energy: ', self.energy_free_or_zero + self.dispersion_correction
 	print
