@@ -18,16 +18,28 @@ from ase.calculators.turbomole import Turbomole
 from ase.calculators.paragauss import ParaGauss
 from ase.calculators.exciting import Exciting
 from ase.calculators.dftb import Dftb
-from ase.calculators.gpaw_d import GPAW_d3
-from ase.calculators.gpaw_d import GPAW_d2
-
-if _deprecate_things_from_ase_module:
-    from ase.utils.deprecate import Deprecate
-    _locals = locals()
-    for name in ['LennardJones', 'EMT', 'Siesta', 'Dacapo', 'Vasp',
-                 'Aims', 'AimsCube', 'Turbomole', 'Exciting', 'Dftb',
-                 'SinglePointCalculator', 'numeric_force', 'numeric_forces',
-                 'Vasp_d', 'Vasp_d3', 'Vasp_d2', 'ParaGauss',
-		 'GPAW_d3', 'GPAW_d2', 'TestPotential']:
-        obj = _locals[name]
-        _locals[name] = Deprecate(obj, name, obj.__module__, 'ase.calculators')
+try:
+    from ase.calculators.gpaw_d import GPAW_d3
+    from ase.calculators.gpaw_d import GPAW_d2
+    if _deprecate_things_from_ase_module:
+        from ase.utils.deprecate import Deprecate
+        _locals = locals()
+        for name in ['LennardJones', 'EMT', 'Siesta', 'Dacapo', 'Vasp',
+                     'Aims', 'AimsCube', 'Turbomole', 'Exciting', 'Dftb',
+                     'SinglePointCalculator', 'numeric_force', 'numeric_forces',
+                     'Vasp_d', 'Vasp_d3', 'Vasp_d2', 'ParaGauss',
+                     'GPAW_d3', 'GPAW_d2', 'TestPotential']:
+            obj = _locals[name]
+            _locals[name] = Deprecate(obj, name, obj.__module__, 'ase.calculators')
+except ImportError:
+   print "WARNING: no GPAW available"
+   if _deprecate_things_from_ase_module:
+       from ase.utils.deprecate import Deprecate
+       _locals = locals()
+       for name in ['LennardJones', 'EMT', 'Siesta', 'Dacapo', 'Vasp',
+                    'Aims', 'AimsCube', 'Turbomole', 'Exciting', 'Dftb',
+                    'SinglePointCalculator', 'numeric_force', 'numeric_forces',
+                    'Vasp_d', 'Vasp_d3', 'Vasp_d2', 'ParaGauss',
+                    'TestPotential']:
+           obj = _locals[name]
+           _locals[name] = Deprecate(obj, name, obj.__module__, 'ase.calculators')
