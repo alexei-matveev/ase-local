@@ -49,7 +49,7 @@ def read_turbomole(filename='coord'):
         f.close()
 
     atoms = Atoms(positions = atoms_pos, symbols = atom_symbols, pbc = False)
-    c = FixAtoms(myconstraints)
+    c = FixAtoms(mask = myconstraints)
     atoms.set_constraint(c)
     #print c
     
