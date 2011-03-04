@@ -6,6 +6,8 @@ import numpy as np
 import vasp
 from ase.dftd.dftd_interface import d2_pbc as d2_pbc
 from ase.dftd.dftd_interface import d3_pbc as d3_pbc
+from ase.dftd.dftd_interface import xc_name as xc_name
+
 
 class Vasp_d2(vasp.Vasp):
     #
@@ -21,7 +23,7 @@ class Vasp_d2(vasp.Vasp):
 	Eh__2__eV          = 27.211396132
 	#
 	# Get functional name as string
-	functional = str.lower(vasp.Vasp.get_xc_functional(self))
+	functional = xc_name(str.lower(vasp.Vasp.get_xc_functional(self)))
 	#
 	# Calling original VASP-calculator for energy
 	self.energy_free_or_zero = vasp.Vasp.get_potential_energy(self, atoms, force_consistent)
@@ -47,7 +49,7 @@ class Vasp_d2(vasp.Vasp):
 	"""
 	Altered version of the original get_forces function in the Vasp-class.
 	The function obtains the DFT forces by using the original call for the
-	VASP package and adds the DFT-D contribution to the calculated forces.
+	VASP package and adds the DFT-D2 contribution to the calculated forces.
 	"""
         self.update(atoms)
 	# Conversion factors a.u. -> eV and a.u. -> eV/Angst
@@ -55,10 +57,10 @@ class Vasp_d2(vasp.Vasp):
 	Eh_rb__2__eV_Angst = 51.422086162
 	#
 	# Get functional name as string
-	functional = str.lower(vasp.Vasp.get_xc_functional(self))
+	functional = xc_name(str.lower(vasp.Vasp.get_xc_functional(self)))
 	#
 	# Calling original VASP-calculator for forces
-	dft_forces = vasp.Vasp.get_forces(self, atoms)
+	self.dft_forces = vasp.Vasp.get_forces(self, atoms)
 	#
 	# Call DFT-D module: Energy and gradients
 	self.dispersion_correction, self.dft_d_gradient_contribution = d2_pbc(atoms, functional)
@@ -75,7 +77,7 @@ class Vasp_d2(vasp.Vasp):
 	#
 	# Adding correction contributions to forces
 	# Note the (-) sign: DFT-D module delivers gradients, not forces
-	return self.forces - self.dft_d_gradient_contribution
+	return self.dft_forces - self.dft_d_gradient_contribution
         #
 # End of class Vasp_d2
 #
@@ -94,7 +96,7 @@ class Vasp_d3(vasp.Vasp):
 	Eh__2__eV          = 27.211396132
 	#
 	# Get functional name as string
-	functional = str.lower(vasp.Vasp.get_xc_functional(self))
+	functional = xc_name(str.lower(vasp.Vasp.get_xc_functional(self)))
 	#
 	# Calling original VASP-calculator for energy
 	self.energy_free_or_zero = vasp.Vasp.get_potential_energy(self, atoms, force_consistent)
@@ -120,7 +122,7 @@ class Vasp_d3(vasp.Vasp):
         """
 	Altered version of the original get_forces function in the Vasp-class.
 	The function obtains the DFT forces by using the original call for the
-	VASP package and adds the DFT-D contribution to the calculated forces.
+	VASP package and adds the DFT-D3 contribution to the calculated forces.
 	"""
 #        self.update(atoms)
 	# Conversion factors a.u. -> eV and a.u. -> eV/Angst
@@ -128,10 +130,10 @@ class Vasp_d3(vasp.Vasp):
 	Eh_rb__2__eV_Angst = 51.422086162
 	#
 	# Get functional name as string
-	functional = str.lower(vasp.Vasp.get_xc_functional(self))
+	functional = xc_name(str.lower(vasp.Vasp.get_xc_functional(self)))
 	#
 	# Calling original VASP-calculator for forces
-	dft_forces = vasp.Vasp.get_forces(self, atoms)
+	self.dft_forces = vasp.Vasp.get_forces(self, atoms)
 	#
 	# Call DFT-D module: Energy and gradients
 	self.dispersion_correction, self.dft_d_gradient_contribution = d3_pbc(atoms, functional)
@@ -148,6 +150,6 @@ class Vasp_d3(vasp.Vasp):
 	#
         # Adding correction contributions to forces
         # Note the (-) sign: DFT-D module delivers gradients, not forces
-        return self.forces - self.dft_d_gradient_contribution
+	return self.dft_forces - self.dft_d_gradient_contribution
         #
 # End of class Vasp_d3

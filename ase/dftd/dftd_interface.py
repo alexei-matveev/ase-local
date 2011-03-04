@@ -507,6 +507,19 @@ def get_interaction_controls(atoms):
 # End of function get_interaction_controls
 #
 #
+# Convert xc_functional designators
+def xc_name(raw_xc_name):
+  conv_xc_name = '000'
+  if (str.lower(raw_xc_name) == 'pbe'):
+    conv_xc_name = 'pbe'
+  if (str.lower(raw_xc_name) == 'ps'):
+    conv_xc_name = 'pbesol'
+  if (str.lower(raw_xc_name) == 'rp'):
+    conv_xc_name = 'revpbe'
+  if (str.lower(raw_xc_name) == 'bp'):
+    conv_xc_name = 'b-p'
+  return conv_xc_name
+#
 # Autocompilation subroutine
 def dftd_autocompile():
   import os
