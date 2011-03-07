@@ -81,6 +81,7 @@ int_keys = [
     'isym',       # symmetry: 0-nonsym 1-usesym
     'iwavpr',     # prediction of wf.: 0-non 1-charg 2-wave 3-comb
     'lmaxmix',    # 
+    'lmaxpaw',    # maximum expansion of paw angular momenta
     'lorbit',     # create PROOUT
     'ngx',        # FFT mesh for wavefunctions, x
     'ngxf',       # FFT mesh for charges x
