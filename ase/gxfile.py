@@ -125,6 +125,9 @@ def gxread( file='gxfile' ):
             # warn("gxread: gxfile does not contain energy")
             raise EOF, "gxread: no energies"
             # or maybe "return atoms, loop, None" right away?
+        except IndexError:
+            raise EOF, "gxread: energies empty"
+
         #end try
 
         #
