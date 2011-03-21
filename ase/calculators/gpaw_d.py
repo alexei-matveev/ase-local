@@ -41,7 +41,28 @@ class GPAW_d2(GPAW):
         #
         # Adding correction contribution to energy
         return self.ks_scf_energy + self.dispersion_correction
+    #
+    def get_dispersion_correction(self, atoms):
+        """
+        Returns the DFT-D dispersion correction for the current geometry
+        """
         #
+        # Conversion factors a.u. -> eV
+        Eh__2__eV          = 27.211396132
+        #
+        # Get functional name as string
+	self.functional = xc_name(str.lower(GPAW.get_xc_functional(self)))
+        #
+        # Call DFT-D module: Energy and gradients
+        self.dispersion_correction, self.dft_d_gradient_contribution = d2_pbc(atoms, self.functional)
+        #
+        # Convert to proper units
+        self.dispersion_correction       = self.dispersion_correction       * Eh__2__eV
+        #
+        #
+        # Return dispersion correction
+        return self.dispersion_correction
+    #
     def get_forces(self, atoms):
         """
         Altered version of the original get_forces function in the GPAW-class.
@@ -107,7 +128,28 @@ class GPAW_d3(GPAW):
         #
         # Adding correction contribution to energy
         return self.ks_scf_energy + self.dispersion_correction
+    #
+    def get_dispersion_correction(self, atoms):
+        """
+        Returns the DFT-D dispersion correction for the current geometry
+        """
         #
+        # Conversion factors a.u. -> eV
+        Eh__2__eV          = 27.211396132
+        #
+        # Get functional name as string
+	self.functional = xc_name(str.lower(GPAW.get_xc_functional(self)))
+        #
+        # Call DFT-D module: Energy and gradients
+        self.dispersion_correction, self.dft_d_gradient_contribution = d3_pbc(atoms, self.functional)
+        #
+        # Convert to proper units
+        self.dispersion_correction       = self.dispersion_correction       * Eh__2__eV
+        #
+        #
+        # Return dispersion correction
+        return self.dispersion_correction
+    #
     def get_forces(self, atoms):
         """
         Altered version of the original get_forces function in the GPAW-class.
