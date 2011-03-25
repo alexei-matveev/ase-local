@@ -525,6 +525,16 @@ class Atoms(object):
             raise RuntimeError('Atoms object has no calculator.')
         return self._calc.get_potential_energy(self)
 
+    def get_dispersion_correction(self):
+        """Calculate dft-d energy."""
+        if self.calc is None:
+            raise RuntimeError('Atoms object has no calculator.')
+	try:
+            dispersion_correction = self.calc.get_dispersion_correction(self)
+	except:
+            dispersion_correction = 0.0
+        return dispersion_correction
+
     def get_potential_energies(self):
         """Calculate the potential energies of all the atoms.
 
