@@ -516,8 +516,10 @@ def xc_name(raw_xc_name):
     conv_xc_name = 'pbesol'
   if (str.lower(raw_xc_name) == 'rp'):
     conv_xc_name = 'revpbe'
-  if (str.lower(raw_xc_name) == 'bp'):
+  if (str.lower(raw_xc_name) == 'bp' or str.lower(raw_xc_name) == 'bp86'):
     conv_xc_name = 'b-p'
+  if (str.lower(raw_xc_name) == 'tpss'):
+    conv_xc_name = 'tpss'
   return conv_xc_name
 #
 # Autocompilation subroutine
