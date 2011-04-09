@@ -217,7 +217,7 @@ subroutine func_parameters( func, version                                     &
             rs6 = 1.613d0
             s8  = 1.868d0
        case DEFAULT
-            write(*,*) 'unsupported functional -> STOP'
+            write(*,*) 'unsupported functional ', func, ' -> STOP'
             stop
     end select
     ! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -257,13 +257,13 @@ subroutine func_parameters( func, version                                     &
        case ("b2gp-plyp")
             s6=0.4d0
        case DEFAULT
-            write(*,*) 'unsupported functional -> STOP'
+            write(*,*) 'unsupported functional ', func, ' -> STOP'
             stop
     end select
     ! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   else
     ! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    write(*,*) 'unsupported version -> STOP'
+    write(*,*) 'unsupported version ', version, ' -> STOP'
     stop
     ! - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   end if
