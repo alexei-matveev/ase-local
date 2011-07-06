@@ -3,7 +3,7 @@ import numpy as np
 from numpy.linalg import eigh, solve
 
 from ase.optimize.optimize import Optimizer
-
+from ase.parallel import rank, barrier
 
 class BFGS(Optimizer):
     def __init__(self, atoms, restart=None, logfile='-', trajectory=None,
@@ -47,7 +47,6 @@ class BFGS(Optimizer):
         self.update(r.flat, f, self.r0, self.f0)
         omega, V = eigh(self.H)
         dr = np.dot(V, np.dot(f, V) / np.fabs(omega)).reshape((-1, 3))
-        #dr = solve(self.H, f).reshape((-1, 3))
         steplengths = (dr**2).sum(1)**0.5
         dr = self.determine_step(dr, steplengths)
         atoms.set_positions(r + dr)

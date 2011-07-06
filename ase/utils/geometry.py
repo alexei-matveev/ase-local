@@ -12,9 +12,9 @@ def gcd(seq):
     """Returns greatest common divisor of integers in *seq*."""
     def _gcd(m, n):
         while n:
-            m, n = n, m%n
+            m, n = n, m % n
         return m       
-    return reduce(_gcd, seq)
+    return reduce(_gcd, np.array(np.rint(seq), dtype=int))
 
 
 
@@ -74,8 +74,9 @@ def get_layers(atoms, miller, tolerance=0.001):
 
 
 
-def cut(atoms, a=(1,0,0), b=(0,1,0), c=(0,0,1), origo=(0,0,0), 
-        nlayers=None, extend=1.0, tolerance=0.001):
+def cut(atoms, a=(1, 0, 0), b=(0, 1, 0), c=None, clength=None, 
+        origo=(0, 0, 0), nlayers=None, extend=1.0, tolerance=0.01, 
+        maxatoms=None):
     """Cuts out a cell defined by *a*, *b*, *c* and *origo* from a
     sufficiently repeated copy of *atoms*.
 
@@ -99,19 +100,25 @@ def cut(atoms, a=(1,0,0), b=(0,1,0), c=(0,0,1), origo=(0,0,0),
         The b-vector in scaled coordinates of the cell to cut out. If
         integer, the b-vector will be the scaled vector from *origo* to the
         atom with index *b*.
-    c: int | 3 floats
-        The c-vector in scaled coordinates of the cell to cut out. If
-        integer, the c-vector will be the scaled vector from *origo* to the
-        atom with index *c*. Not used if *nlayers* is given.
+    c: None | int | 3 floats
+        The c-vector in scaled coordinates of the cell to cut out. 
+        if integer, the c-vector will be the scaled vector from *origo* to 
+        the atom with index *c*. 
+        If *None* it will be along cross(a, b) converted to real space
+        and normalised with the cube root of the volume. Note that this
+        in general is not perpendicular to a and b for non-cubic
+        systems. For cubic systems however, this is redused to 
+        c = cross(a, b).
+    clength: None | float
+        If not None, the length of the c-vector will be fixed to
+        *clength* Angstroms. Should not be used together with
+        *nlayers*.
     origo: int | 3 floats
         Position of origo of the new cell in scaled coordinates. If
         integer, the position of the atom with index *origo* is used.
-    nlayers: int
+    nlayers: None | int
         If *nlayers* is not *None*, the returned cell will have
-        *nlayers* atomic layers in the c-direction. The direction of
-        the c-vector will be along cross(a, b) converted to real
-        space, i.e. normal to the plane spanned by a and b in
-        orthorombic systems.
+        *nlayers* atomic layers in the c-direction.
     extend: 1 or 3 floats
         The *extend* argument scales the effective cell in which atoms
         will be included. It must either be three floats or a single
@@ -124,6 +131,17 @@ def cut(atoms, a=(1,0,0), b=(0,1,0), c=(0,0,1), origo=(0,0,0),
         Determines what is defined as a plane.  All atoms within
         *tolerance* Angstroms from a given plane will be considered to
         belong to that plane.
+    maxatoms: None | int
+        This option is used to auto-tune *tolerance* when *nlayers* is
+        given for high zone axis systems.  For high zone axis one
+        needs to reduce *tolerance* in order to distinguise the atomic
+        planes, resulting in the more atoms will be added and
+        eventually MemoryError.  A too small *tolerance*, on the other
+        hand, might result in inproper splitting of atomic planes and
+        that too few layers are returned.  If *maxatoms* is not None,
+        *tolerance* will automatically be gradually reduced until
+        *nlayers* atomic layers is obtained, when the number of atoms
+        exceeds *maxatoms*.
 
     Example:
 
@@ -160,6 +178,8 @@ def cut(atoms, a=(1,0,0), b=(0,1,0), c=(0,0,1), origo=(0,0,0),
 
     if isinstance(origo, int):
         origo = atoms.get_scaled_positions()[origo]
+    origo = np.array(origo, dtype=float)
+
     scaled = (atoms.get_scaled_positions() - origo)%1.0
     scaled %= 1.0 # needed to ensure that all numbers are *less* than one
     atoms.set_scaled_positions(scaled)
@@ -173,30 +193,44 @@ def cut(atoms, a=(1,0,0), b=(0,1,0), c=(0,0,1), origo=(0,0,0),
 
     a = np.array(a, dtype=float)
     b = np.array(b, dtype=float)
-    origo = np.array(origo, dtype=float)
+    if c is None:
+        metric = np.dot(cell, cell.T)
+        vol = np.sqrt(np.linalg.det(metric))
+        h = np.cross(a, b) 
+        H = np.linalg.solve(metric.T, h.T)
+        c = vol*H/vol**(1./3.)
+    c = np.array(c, dtype=float)
 
     if nlayers:
-        miller = np.cross(a, b) # surface normal
-        # The factor 36 = 2*2*3*3 is because the elements of a and b
-        # might be multiples of 1/2 or 1/3 because of lattice
-        # subtranslations
-        if np.all(36*miller - np.rint(36*miller)) < 1e-5:
-            miller = np.rint(36*miller)
-            miller /= gcd(miller)
-        tags, layers = get_layers(atoms, miller, tolerance)
-        while tags.max() < nlayers:
-            atoms = atoms.repeat(2)
-            tags, layers = get_layers(atoms, miller, tolerance)
-        # Convert surface normal in reciprocal space to direction in
-        # real space
-        metric = np.dot(cell, cell.T)
-        c = np.linalg.solve(metric.T, miller.T).T
-        c *= layers[nlayers]/np.sqrt(np.dot(c, miller))
-        if np.linalg.det(np.dot(np.array([a, b, c]), cell)) < 0:
-            c *= -1.0
+        # Recursive increase the length of c until we have at least
+        # *nlayers* atomic layers parallell to the a-b plane
+        while True:
+            at = cut(atoms, a, b, c, origo=origo, extend=extend, 
+                        tolerance=tolerance)
+            scaled = at.get_scaled_positions()
+            d = scaled[:,2]
+            keys = np.argsort(d)
+            ikeys = np.argsort(keys)
+            tol = tolerance
+            while True:
+                mask = np.concatenate(([True], np.diff(d[keys]) > tol))
+                tags = np.cumsum(mask)[ikeys] - 1
+                levels = d[keys][mask]
+                if (maxatoms is None or len(at) < maxatoms or 
+                    len(levels) > nlayers): 
+                    break
+                tol *= 0.9
+            if len(levels) > nlayers: 
+                break
+            c *= 2
+
+        at.cell[2] *= levels[nlayers]
+        return at[tags < nlayers]
 
     newcell = np.dot(np.array([a, b, c]), cell)
-    
+    if nlayers is None and clength is not None:
+        newcell[2,:] *= clength/np.linalg.norm(newcell[2])
+
     # Create a new atoms object, repeated and translated such that
     # it completely covers the new cell
     scorners_newcell = np.array([[0., 0., 0.], [0., 0., 1.], 
@@ -212,21 +246,24 @@ def cut(atoms, a=(1,0,0), b=(0,1,0), c=(0,0,1), origo=(0,0,0),
     atoms.set_cell(newcell)
 
     # Mask out atoms outside new cell
-    stol = tolerance  # scaled tolerance, XXX
+    stol = 0.1*tolerance  # scaled tolerance, XXX
     maskcell = atoms.cell*extend
     sp = np.linalg.solve(maskcell.T, (atoms.positions).T).T
     mask = np.all(np.logical_and(-stol <= sp, sp < 1-stol), axis=1)
     atoms = atoms[mask]
-    
     return atoms
 
 
+class IncompatibleCellError(ValueError):
+    """Exception raised if stacking fails due to incompatible cells
+    between *atoms1* and *atoms2*."""
+    pass
 
 
 def stack(atoms1, atoms2, axis=2, cell=None, fix=0.5,  
-          maxstrain=0.5, distance=None):
-    """Return a new Atoms instance with *atoms2* added to atoms1
-    along the given axis. Periodicity in all directions is
+          maxstrain=0.5, distance=None, reorder=False):
+    """Return a new Atoms instance with *atoms2* stacked on top of
+    *atoms1* along the given axis. Periodicity in all directions is
     ensured.
 
     The size of the final cell is determined by *cell*, except
@@ -238,17 +275,21 @@ def stack(atoms1, atoms2, axis=2, cell=None, fix=0.5,
     if *fix* equals one, it will be determined purely from
     *atoms2*.
 
-    An ValueError exception will be raised if the far corner of
-    the unit cell of either *atoms1* or *atoms2* is displaced more
-    than *maxstrain*. Setting *maxstrain* to None, disable this
-    check.
+    An ase.geometry.IncompatibleCellError exception is raised if the
+    cells of *atoms1* and *atoms2* are incopatible, e.g. if the far
+    corner of the unit cell of either *atoms1* or *atoms2* is
+    displaced more than *maxstrain*. Setting *maxstrain* to None,
+    disable this check.
 
-    If *distance* is provided, the atomic positions in *atoms1* and
-    *atoms2* as well as the cell lengths along *axis* will be
-    adjusted such that the distance between the distance between
-    the closest atoms in *atoms1* and *atoms2* will equal *distance*.
-    This option uses scipy.optimize.fmin() and hence require scipy
-    to be installed.
+    If *distance* is not None, the size of the final cell, along the
+    direction perpendicular to the interface, will be adjusted such
+    that the distance between the closest atoms in *atoms1* and
+    *atoms2* will be equal to *distance*. This option uses
+    scipy.optimize.fmin() and hence require scipy to be installed.
+
+    If *reorder* is True, then the atoms will be reordred such that
+    all atoms with the same symbol will follow sequensially after each
+    other, eg: 'Al2MnAl10Fe' -> 'Al12FeMn'.    
 
     Example:
 
@@ -271,7 +312,7 @@ def stack(atoms1, atoms2, axis=2, cell=None, fix=0.5,
     >>> ase.view(interface)  # doctest: +SKIP
     >>>
     # Once more, this time adjusted such that the distance between
-    # the closest Ag and Si atoms will be 2.3 Angstrom.
+    # the closest Ag and Si atoms will be 2.3 Angstrom (requires scipy).
     >>> interface2 = stack(ag110, si110, 
     ...                    maxstrain=1, distance=2.3)   # doctest:+ELLIPSIS
     Optimization terminated successfully.
@@ -280,6 +321,11 @@ def stack(atoms1, atoms2, axis=2, cell=None, fix=0.5,
     """
     atoms1 = atoms1.copy()
     atoms2 = atoms2.copy()
+
+    if (np.sign(np.linalg.det(atoms1.cell)) != 
+        np.sign(np.linalg.det(atoms2.cell))):
+        raise IncompatibleCellError('*atoms1* amd *atoms2* must both either '
+                                    'have a lefthanded or a righanded cell.')
 
     c1 = np.linalg.norm(atoms1.cell[axis])
     c2 = np.linalg.norm(atoms2.cell[axis])
@@ -295,17 +341,16 @@ def stack(atoms1, atoms2, axis=2, cell=None, fix=0.5,
     cell1[axis] *= c1
     cell2[axis] *= c2
 
-    if (maxstrain and
-        (((cell1 - atoms1.cell).sum(axis=0)**2).sum() > maxstrain**2 or
-         ((cell2 - atoms2.cell).sum(axis=0)**2).sum() > maxstrain**2)):
-        raise ValueError('Incompatible cells.')
+    if maxstrain:
+        strain1 = np.sqrt(((cell1 - atoms1.cell).sum(axis=0)**2).sum())
+        strain2 = np.sqrt(((cell2 - atoms2.cell).sum(axis=0)**2).sum())
+        if strain1 > maxstrain or strain2 > maxstrain:
+            raise IncompatibleCellError(
+                '*maxstrain* exceeded. *atoms1* strained %f and '
+                '*atoms2* strained %f.'%(strain1, strain2))
 
-    sp1 = np.linalg.solve(atoms1.cell.T, atoms1.positions.T).T
-    sp2 = np.linalg.solve(atoms2.cell.T, atoms2.positions.T).T
-    atoms1.set_cell(cell1)
-    atoms2.set_cell(cell2)
-    atoms1.set_scaled_positions(sp1)
-    atoms2.set_scaled_positions(sp2)
+    atoms1.set_cell(cell1, scale_atoms=True)
+    atoms2.set_cell(cell2, scale_atoms=True)
 
     if distance is not None:
         from scipy.optimize import fmin
@@ -335,7 +380,66 @@ def stack(atoms1, atoms2, axis=2, cell=None, fix=0.5,
     atoms2.translate(atoms1.cell[axis])
     atoms1.cell[axis] += atoms2.cell[axis]
     atoms1.extend(atoms2)
+
+    if reorder:
+        atoms1 = sort(atoms1)
+
     return atoms1
+
+
+def sort(atoms, tags=None):
+    """Return a new Atoms object with sorted atomic order. The default
+    is to order according to chemical symbols, but if *tags* is not
+    None, it will be used instead. A stable sorting algorithm is used.
+
+    Example:
+    >>> import ase
+    >>> from ase.lattice.spacegroup import crystal
+    >>>
+    # Two unit cells of NaCl
+    >>> a = 5.64
+    >>> nacl = crystal(['Na', 'Cl'], [(0, 0, 0), (0.5, 0.5, 0.5)], 
+    ... spacegroup=225, cellpar=[a, a, a, 90, 90, 90]).repeat((2, 1, 1))
+    >>> nacl.get_chemical_symbols()
+    ['Na', 'Na', 'Na', 'Na', 'Cl', 'Cl', 'Cl', 'Cl', 'Na', 'Na', 'Na', 'Na', 'Cl', 'Cl', 'Cl', 'Cl']
+    >>> nacl_sorted = sort(nacl)
+    >>> nacl_sorted.get_chemical_symbols()
+    ['Cl', 'Cl', 'Cl', 'Cl', 'Cl', 'Cl', 'Cl', 'Cl', 'Na', 'Na', 'Na', 'Na', 'Na', 'Na', 'Na', 'Na']
+    >>> np.all(nacl_sorted.cell == nacl.cell)
+    True
+    """
+    if tags is None:
+        tags = atoms.get_chemical_symbols()
+    else:
+        tags = list(tags)
+    deco = [(tag, i) for i, tag in enumerate(tags)]
+    deco.sort()
+    indices = [i for tag, i in deco]
+    return atoms[indices]
+
+
+def rotate(atoms, a1, a2, b1, b2, rotate_cell=True):
+    """Rotate *atoms*, such that *a1* will be rotated to *a2* and *b1*
+    to *b2*."""
+    from numpy.linalg import norm, det
+    a1 = np.asarray(a1, dtype=float)/norm(a1)
+    a2 = np.asarray(a2, dtype=float)/norm(a2)
+    b1 = np.asarray(b1, dtype=float)/norm(b1)
+    b2 = np.asarray(b2, dtype=float)/norm(b2)
+    if norm(a2 - a1) < 1e-5:
+        n = 0.5*(a1 + a2)
+        a1, a2 = b1, b2
+    elif norm(b2 - b1) < 1e-5:
+        n = 0.5*(b1 + b2)
+    else:
+        n = np.cross(a2 - a1, b2 - b1)
+    n /= norm(n)
+    ap1 = a1 - np.dot(a1, n)*n
+    ap2 = a2 - np.dot(a2, n)*n
+    angle = np.arccos(np.dot(ap1, ap2)/(norm(ap1)*norm(ap2)))
+    angle *= np.sign(det((ap1, ap2, n)))
+    atoms.rotate(n, angle, rotate_cell=rotate_cell)
+
 
 
 #-----------------------------------------------------------------

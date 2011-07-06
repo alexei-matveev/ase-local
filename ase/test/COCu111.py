@@ -2,7 +2,7 @@ from math import sqrt
 from ase import Atoms, Atom
 from ase.calculators.emt import EMT
 from ase.constraints import FixAtoms
-from ase.optimize import QuasiNewton
+from ase.optimize import BFGS, QuasiNewton
 from ase.neb import NEB
 
 # Distance between Cu atoms on a (111) surface:
@@ -16,7 +16,7 @@ fcc111 = Atoms(symbols='Cu',
 slab = fcc111 * (2, 2, 4)
 slab.set_cell([2 * d, d * sqrt(3), 1])
 slab.set_pbc((1, 1, 0))
-slab.set_calculator(EMT())
+slab.calc = EMT()
 Z = slab.get_positions()[:, 2]
 indices = [i for i, z in enumerate(Z) if z < Z.mean()]
 constraint = FixAtoms(indices=indices)
@@ -42,7 +42,7 @@ images = [slab]
 for i in range(6):
     image = slab.copy()
     image.set_constraint(constraint)
-    image.set_calculator(EMT())
+    image.calc = EMT()
     images.append(image)
 image[-2].position = image[-1].position
 image[-1].x = d
@@ -65,7 +65,7 @@ for image in images:
 
 #dyn = MDMin(neb, dt=0.4)
 #dyn = FIRE(neb, dt=0.01)
-dyn = QuasiNewton(neb, maxstep=0.04, trajectory='mep.traj')
+dyn = BFGS(neb, maxstep=0.04, trajectory='mep.traj')
 #from ase.optimize.oldqn import GoodOldQuasiNewton
 #dyn = GoodOldQuasiNewton(neb)
 dyn.run(fmax=0.05)
@@ -73,7 +73,7 @@ dyn.run(fmax=0.05)
 for image in images:
     print image.positions[-1], image.get_potential_energy()
 
-if display:
+if locals().get('display'):
     import os
     error = os.system('ag mep.traj@-7:')
     assert error == 0

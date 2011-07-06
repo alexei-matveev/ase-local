@@ -67,14 +67,26 @@ def atomtypes_outpot(posfname, numsyms):
     tried = []
     files_in_dir = os.listdir('.')
     for fn in fnames:
-        tried.append(fn)
         if fn in files_in_dir:
+            tried.append(fn)
             at = get_atomtypes(fn)
             if len(at) == numsyms:
                 return at
 
     raise IOError('Could not determine chemical symbols. Tried files ' 
                   + str(tried))
+
+
+def get_atomtypes_from_formula(formula):
+    """Return atom types from chemical formula (optionally prepended
+    with and underscore).
+    """
+    from ase.atoms import string2symbols
+    symbols = string2symbols(formula.split('_')[0])
+    atomtypes = [symbols[0]]
+    for s in symbols[1:]:
+        if s != atomtypes[-1]: atomtypes.append(s)
+    return atomtypes
 
 
 def read_vasp(filename='CONTCAR'):
@@ -100,7 +112,12 @@ def read_vasp(filename='CONTCAR'):
     # as later in the file (and POTCAR for the full vasp run)
     atomtypes = f.readline().split()
 
-    lattice_constant = float(f.readline())
+    # Sometimes the first line in POSCAR/CONTCAR is of the form
+    # "CoP3_In-3.pos". Check for this case and extract atom types
+    if len(atomtypes) == 1 and '_' in atomtypes[0]:
+        atomtypes = get_atomtypes_from_formula(atomtypes[0])
+
+    lattice_constant = float(f.readline().split()[0])
 
     # Now the lattice vectors
     a = []
@@ -123,6 +140,12 @@ def read_vasp(filename='CONTCAR'):
     except ValueError:
         numofatoms = f.readline().split()
 
+    # check for comments in numofatoms line and get rid of them if necessary
+    commentcheck = np.array(['!' in s for s in numofatoms])
+    if commentcheck.any():
+        # only keep the elements up to the first including a '!':
+        numofatoms = numofatoms[:np.arange(len(numofatoms))[commentcheck][0]]
+        
     numsyms = len(numofatoms)
     if len(atomtypes) < numsyms:
         # First line in POSCAR/CONTCAR didn't contain enough symbols.
@@ -209,11 +232,13 @@ def read_vasp_out(filename='OUTCAR',index = -1):
     species = []
     species_num = []
     symbols = []
+    ecount = 0
+    poscount = 0
     for n,line in enumerate(data):
-        if 'POSCAR:' in line:
-            temp = line.split()
-            species = temp[1:]
+        if 'POTCAR:' in line:
+            species += [line.split()[2]]
         if 'ions per type' in line:
+            species = species[:len(species)/2]
             temp = line.split()
             for ispecies in range(len(species)):
                 species_num += [int(temp[ispecies+4])]
@@ -227,6 +252,10 @@ def read_vasp_out(filename='OUTCAR',index = -1):
             atoms.set_cell(cell)
         if 'FREE ENERGIE OF THE ION-ELECTRON SYSTEM' in line:
             energy = float(data[n+2].split()[4])
+            if ecount < poscount:
+                # reset energy for LAST set of atoms, not current one - VASP 5.11? and up
+                images[-1].calc.energy = energy
+            ecount += 1
         if 'POSITION          ' in line:
             forces = []
             for iatom in range(natoms):
@@ -236,6 +265,7 @@ def read_vasp_out(filename='OUTCAR',index = -1):
                 atoms.set_calculator(SinglePointCalculator(energy,forces,None,None,atoms))
             images += [atoms]
             atoms = Atoms(pbc = True)
+            poscount += 1
 
     # return requested images, code borrowed from ase/io/trajectory.py
     if isinstance(index, int):
@@ -264,7 +294,7 @@ def read_vasp_out(filename='OUTCAR',index = -1):
                     stop += len(images)
         return [images[i] for i in range(start, stop, step)]
 
-def write_vasp(filename, atoms, label='', direct=False, sort=None, symbol_count = None ):
+def write_vasp(filename, atoms, label='', direct=False, sort=None, symbol_count = None, long_format=True):
     """Method to write VASP position (POSCAR/CONTCAR) files.
 
     Writes label, scalefactor, unitcell, # of various kinds of atoms,
@@ -338,10 +368,14 @@ def write_vasp(filename, atoms, label='', direct=False, sort=None, symbol_count 
     # ase Atoms doesn't store the lattice constant separately, so always
     # write 1.0.
     f.write('%19.16f\n' % 1.0)
+    if long_format:
+        latt_form = ' %21.16f'
+    else:
+        latt_form = ' %11.6f'
     for vec in atoms.get_cell():
         f.write(' ')
         for el in vec:
-            f.write(' %21.16f' % el)
+            f.write(latt_form % el)
         f.write('\n')
 
     # Numbers of each atom
@@ -357,9 +391,13 @@ def write_vasp(filename, atoms, label='', direct=False, sort=None, symbol_count 
     else:
         f.write('Cartesian\n')
 
+    if long_format:
+        cform = ' %19.16f'
+    else:
+        cform = ' %9.6f'
     for iatom, atom in enumerate(coord):
         for dcoord in atom:
-            f.write(' %19.16f' % dcoord)
+            f.write(cform % dcoord)
         if atoms.constraints:
             for flag in sflags[iatom]:
                 if flag:

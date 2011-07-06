@@ -6,18 +6,20 @@ import os
 import gtk
 import tempfile
 from math import cos, sin, sqrt
+from os.path import basename
 
 import numpy as np
 
 from ase.data.colors import jmol_colors
 from ase.gui.repeat import Repeat
 from ase.gui.rotate import Rotate
+from ase.gui.render import Render
+from ase.gui.colors import ColorWindow
 from ase.utils import rotate
-
 
 class View:
     def __init__(self, vbox, rotations):
-        self.colors = [None] * (len(jmol_colors) + 1)
+        self.colormode = 'jmol'  # The default colors
         self.nselected = 0
         self.light_green_markings = 0
         self.axes = rotate(rotations)
@@ -61,6 +63,9 @@ class View:
 
         n = self.images.natoms
 
+        if self.frame > self.images.nimages:
+            self.frame = self.images.nimages - 1
+        
         if init or frame != self.frame:
             A = self.images.A
             nc = len(self.B1)
@@ -87,13 +92,13 @@ class View:
 
             filenames = self.images.filenames
             filename = filenames[frame]
-            if self.frame is None or filename != filenames[self.frame]:
+            if self.frame is None or filename != filenames[self.frame] or filename is None:
                 if filename is None:
                     filename = 'ase.gui'
-                self.window.set_title(filename)
-                
-        self.frame = frame
+            filename = basename(filename)
+            self.window.set_title(filename)
 
+        self.frame = frame
         self.X[:n] = self.images.P[frame]
         self.R = self.X[:n]
         if focus:
@@ -102,6 +107,12 @@ class View:
             self.draw()
         
     def set_colors(self):
+        self.colormode = 'jmol'
+        self.set_jmol_colors()
+
+    def set_jmol_colors(self):
+        self.colors = [None] * (len(jmol_colors) + 1)
+        self.colordata = []
         new = self.drawing_area.window.new_gc
         alloc = self.colormap.alloc_color
         for z in self.images.Z:
@@ -110,7 +121,12 @@ class View:
                 self.colors[z] = new(alloc(int(65535 * c),
                                            int(65535 * p),
                                            int(65535 * k)))
-            
+        hasfound = {}
+        for z in self.images.Z:
+            if z not in hasfound:
+                hasfound[z] = True
+                self.colordata.append([z, jmol_colors[z]])
+                
     def plot_cell(self):
         V = self.images.A[0]
         R1 = []
@@ -306,7 +322,10 @@ class View:
 
     def rotate_window(self, menuitem):
         Rotate(self)
-        
+
+    def colors_window(self, menuitem):
+        ColorWindow(self)
+
     def focus(self, x=None):
         if (self.images.natoms == 0 and not
             self.ui.get_widget('/MenuBar/ViewMenu/ShowUnitCell').get_active()):
@@ -329,6 +348,55 @@ class View:
             self.scale = self.width / S[0]
         self.draw()
 
+    def reset_view(self, menuitem):
+        self.axes = rotate('0.0x,0.0y,0.0z')
+        self.set_coordinates()
+        self.focus(self)
+
+    def get_colors(self, rgb = False):
+        Z = self.images.Z
+        if rgb:
+            # create a shape that is equivalent to self.colors,
+            # but contains rgb data instead gtk.gdk.GCX11 objects
+            colarray = [None] * max(len(jmol_colors)+1,len(self.colordata))
+            for z, c in self.colordata:
+                colarray[z] = c
+        else:
+            colarray = self.colors
+        if self.colormode == 'jmol' or self.colormode == 'atno':
+            colors = np.array(colarray)[Z]
+        elif self.colormode == 'tags':
+            colors = np.array(colarray)[self.images.T[self.frame]]
+        elif self.colormode == 'force':
+            F = self.images.F[self.frame]
+            F = np.sqrt((F*F).sum(axis=-1))  # The absolute force
+            nF = (F - self.colormode_force_data[0]) * self.colormode_force_data[1]
+            nF = np.clip(nF.astype(int), 0, len(self.colors)-1)
+            colors = np.array(colarray)[nF]
+        elif self.colormode == 'manual':
+            colors = colarray
+        elif self.colormode == 'same':
+            colors = [colarray[0]] * self.images.natoms
+        else:
+            raise RuntimeError('Unknown color mode: %s' % (self.colormode,))
+        return colors
+
+    def repeat_colors(self, repeat):
+        natoms = self.images.natoms
+        if self.colormode == 'manual':
+            a0 = 0
+            colors = self.colors
+            colordata = self.colordata
+            for i0 in range(repeat[0]):
+                for i1 in range(repeat[1]):
+                    for i2 in range(repeat[2]):
+                        a1 = a0 + natoms
+                        colors[a0:a1] = self.colors[:natoms]
+                        colordata[a0:a1] = self.colordata[:natoms]
+                        a0 = a1
+            self.colors = colors
+            self.colordata = colordata
+
     def draw(self, status=True):
         self.pixmap.draw_rectangle(self.white_gc, True, 0, 0,
                                    self.width, self.height)
@@ -349,9 +417,7 @@ class View:
         A = (P - r[:, None]).round().astype(int)
         d = (2 * r).round().astype(int)
         selected_gc = self.selected_gc
-
-        colors = self.colors
-        Z = self.images.Z
+        colors = self.get_colors()
         arc = self.pixmap.draw_arc
         line = self.pixmap.draw_line
         black_gc = self.black_gc
@@ -362,7 +428,7 @@ class View:
             if a < n:
                 ra = d[a]
                 if visible[a]:
-                    arc(colors[Z[a]], True, A[a, 0], A[a, 1], ra, ra, 0, 23040)
+                    arc(colors[a], True, A[a, 0], A[a, 1], ra, ra, 0, 23040)
                 if  self.light_green_markings and self.atoms_to_rotate_0[a]:
                     arc(self.green, False, A[a, 0] + 2, A[a, 1] + 2,
                         ra - 4, ra - 4, 0, 23040)
@@ -595,3 +661,7 @@ class View:
         self.images.write(filename)
         os.system('(%s %s &); (sleep 60; rm %s) &' %
                   (command, filename, filename))
+
+    def render_window(self, action):
+        Render(self)
+        

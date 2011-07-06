@@ -271,9 +271,9 @@ class NPT(MolecularDynamics):
         if self.pfactor_given is None:
             deltaeta = zeros(6, float)
         else:
+            stress = self.stresscalculator()
             deltaeta = -2*dt * (self.pfact * linalg.det(self.h)
-                                * (self.atoms.get_stress()
-                                   - self.externalstress))
+                                * (stress - self.externalstress))
         
         if self.frac_traceless == 1:
             eta_future = self.eta_past + self.mask * self._makeuppertriangular(deltaeta)
@@ -302,14 +302,19 @@ class NPT(MolecularDynamics):
         self.zeta = zeta_future
         self._synchronize()  # for parallel simulations.
         self.zeta_integrated += dt * self.zeta
-        #self.forcecalculator()
-        force = self.atoms.get_forces()
+        force = self.forcecalculator()
         # The periodic boundary conditions may have moved the atoms.
         self.post_pbc_fix(fixfuture=0)  
         self._calculate_q_future(force)
         self.atoms.set_momenta(dot(self.q_future-self.q_past, self.h/(2*dt)) *
                                self._getmasses())
         #self.stresscalculator()
+        
+    def forcecalculator(self):
+        return self.atoms.get_forces()
+    
+    def stresscalculator(self):
+        return self.atoms.get_stress()
 
     def initialize(self):
         """Initialize the dynamics.
@@ -352,7 +357,7 @@ class NPT(MolecularDynamics):
         first timestep, Initialize will be called.
         """
         if not self.initialized:
-            self.Initialize()
+            self.initialize()
         n = self._getnatoms()
         #tretaTeta = sum(diagonal(matrixmultiply(transpose(self.eta),
         #                                        self.eta)))
@@ -424,6 +429,51 @@ class NPT(MolecularDynamics):
                                            self.inv_h) - 0.5
         self._calculate_q_past_and_future()
         self.initialized = 1
+        
+    def attach(self, function, interval=1, *args, **kwargs):
+        """Attach callback function or trajectory.
+
+        At every *interval* steps, call *function* with arguments
+        *args* and keyword arguments *kwargs*.
+        
+        If *function* is a trajectory object, its write() method is
+        attached, but if *function* is a BundleTrajectory (or another
+        trajectory supporting set_extra_data(), said method is first
+        used to instruct the trajectory to also save internal
+        data from the NPT dynamics object.
+        """
+        if hasattr(function, "set_extra_data"):
+            # We are attaching a BundleTrajectory or similar
+            function.set_extra_data("npt_init",
+                                    WeakMethodWrapper(self, "get_init_data"),
+                                    once=True)
+            function.set_extra_data("npt_dynamics",
+                                    WeakMethodWrapper(self, "get_data"))
+        MolecularDynamics.attach(self, function, interval, *args, **kwargs)
+
+    def get_init_data(self):
+        "Return the data needed to initialize a new NPT dynamics."
+        return {'dt': self.dt,
+                'temperature': self.temperature,
+                'desiredEkin': self.desiredEkin,
+                'externalstress': self.externalstress,
+                'mask': self.mask,
+                'ttime': self.ttime,
+                'tfact': self.tfact,
+                'pfactor_given': self.pfactor_given,
+                'pfact': self.pfact,
+                'frac_traceless': self.frac_traceless}
+        
+    def get_data(self):
+        "Return data needed to restore the state."
+        return {'eta': self.eta,
+                'eta_past': self.eta_past,
+                'zeta': self.zeta,
+                'zeta_past': self.zeta_past,
+                'zeta_integrated': self.zeta_integrated,
+                'h': self.h,
+                'h_past': self.h_past,
+                'timeelapsed': self.timeelapsed}
     
     def _getbox(self):
         "Get the computational box."
@@ -571,7 +621,22 @@ class NPT(MolecularDynamics):
         self.q_past = zeros((natoms,3), float)
         self.q_future = zeros((natoms,3), float)
 
-
+class WeakMethodWrapper:
+    """A weak reference to a method.
+    
+    Create an object storing a weak reference to an instance and 
+    the name of the method to call.  When called, calls the method.
+    
+    Just storing a weak reference to a bound method would not work,
+    as the bound method object would go away immediately.
+    """
+    def __init__(self, obj, method):
+        self.obj = weakref.proxy(obj)
+        self.method = method
+        
+    def __call__(self, *args, **kwargs):
+        m = getattr(self.obj, self.method)
+        return m(*args, **kwargs)
 
 # class _HooverNPTTrajectory:
 #     """A Trajectory-like object storing data in a HooverNPT object."""

@@ -155,6 +155,20 @@ class FixAtoms(FixConstraint):
             self.index = np.asarray(index_new, int)
         return self
 
+    def delete_atom(self,ind):
+        """ Removes atom number ind from the index array, if present.
+        Required for removing atoms with existing FixAtoms constraints.
+        """
+        if self.index.dtype == bool:
+            self.index = np.delete(self.index,ind)
+        else:
+            if ind in self.index:
+                i = list(self.index).index(ind)
+                self.index = np.delete(self.index,i)
+            for i in range(len(self.index)):
+                if self.index[i] >= ind:
+                    self.index[i] -= 1
+
 def ints2string(x, threshold=10):
     """Convert ndarray of ints to string."""
     if len(x) <= threshold:
@@ -247,7 +261,7 @@ class FixedMode(FixConstraint):
         return FixedMode(self.index.copy(), self.mode)
 
     def __repr__(self):
-        return 'FixedMode(%d, %s)' % (ints2string(self.index), self.mode.tolist())
+        return 'FixedMode(%s, %s)' % (ints2string(self.index), self.mode.tolist())
 
 class FixedPlane(FixConstraintSingle):
     """Constrain an atom *a* to move in a given plane only.
@@ -302,15 +316,15 @@ class FixCartesian(FixConstraintSingle):
         self.mask = -(np.array(mask)-1)
 
     def adjust_positions(self, old, new):
-        step = new - old
-        step[self.a] *= self.mask
-        new = old + step
+        step = new[self.a] - old[self.a]
+        step *= self.mask
+        new[self.a] = old[self.a] + step
 
     def adjust_forces(self, positions, forces):
         forces[self.a] *= self.mask
 
     def copy(self):
-        return FixCartesian(self.a, self.mask)
+        return FixCartesian(self.a, 1 - self.mask)
 
     def __repr__(self):
         return 'FixCartesian(indice=%s mask=%s)' % (self.a, self.mask)
@@ -547,7 +561,7 @@ class StrainFilter:
     def __len__(self):
         return 2
 
-class UnitCellFilter:
+class UnitCellFilter(Filter):
     """Modify the supercell and the atom positions. """
     def __init__(self, atoms, mask=None):
         """Create a filter that returns the atomic forces and unit
@@ -589,6 +603,8 @@ class UnitCellFilter:
         0.0003 eV/A^3 = 0.048 GPa
         0.0001 eV/A^3 = 0.02 GPa
         """
+
+        Filter.__init__(self,atoms,indices=range(len(atoms)))
 
         self.atoms = atoms
         self.strain = np.zeros(6)

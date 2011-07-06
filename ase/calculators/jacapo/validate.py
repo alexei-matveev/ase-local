@@ -10,13 +10,15 @@ provides functions to validate all input variables to the Jacapo calculator.
 ### Validation functions
 ##########################################
 def valid_int(x):
-    return isinstance(x, int)
+    if (isinstance(x, int) or isinstance(x,np.int32)):
+        return True
 
 def valid_float(x):
     return isinstance(x, float)
 
 def valid_int_or_float(x):
-    return (isinstance(x, int) or isinstance(x, float))
+    return ((isinstance(x, int) or isinstance(x,np.int32))
+            or isinstance(x, float))
 
 def valid_boolean(x):
     return isinstance(x, bool)
@@ -57,13 +59,14 @@ def valid_calculate_stress(x):
 
 def valid_kpts(x):
     if isinstance(x, str):
-        return x in ['cc-6-1x1',
-                     'cc-12-2x3',
-                     'cc-18-sq3xsq3',
-                     'cc-18-1x1',
-                     'cc-54-sq3xsq3',
-                     'cc-54-1x1',
-                     'cc-162-1x1']
+        return x in ['cc6_1x1',
+                     'cc12_2x3',
+                     'cc18_sq3xsq3',
+                     'cc18_1x1',
+                     'cc54_sq3xsq3',
+                     'cc54_1x1',
+                     'cc162_sq3xsq3',
+                     'cc162_1x1']
     x = np.array(x)
     #empty arg is no good
     if x.shape == ():
@@ -106,6 +109,8 @@ def valid_pseudopotentials(x):
     #todo check that keys are symbols or numbers
     #todo check that psp files exist
 
+    return True
+
     DACAPOPATH = os.environ.get('DACAPOPATH', None)
     if DACAPOPATH is None:
         raise Exception, 'No $DACAPOPATH found. please set it in .cshrc or .bashrc'
@@ -136,7 +141,7 @@ def valid_extpot(x):
         return False
 
 def valid_ascii_debug(x):
-    return (x in ['Off', 'MediumLevel', 'HighLevel'])
+    return (x.strip() in ['Off', 'MediumLevel', 'HighLevel'])
 
 def valid_ncoutput(x):
     if x is None:
@@ -302,7 +307,7 @@ def valid_electronic_minimization(x):
                               'rmm-diis']:
                 return False
         elif key == 'diagsperband':
-            if not valid_int(x[key]):
+            if not (valid_int(x[key]) or x[key] is None):
                 return False
     return True
 

@@ -1,7 +1,7 @@
 "Base class for simulation windows"
 
 import gtk
-from ase.gui.widgets import oops, pack
+from ase.gui.widgets import oops, pack, help
 from ase import Atoms
 
 class Simulation(gtk.Window):
@@ -76,7 +76,7 @@ class Simulation(gtk.Window):
             assert self.start_radio_last.get_active()
             return nmax-1
 
-    def makebutbox(self, vbox):
+    def makebutbox(self, vbox, helptext=None):
         self.buttons = gtk.HButtonBox()
         runbut = gtk.Button("Run")
         runbut.connect('clicked', self.run)
@@ -85,7 +85,11 @@ class Simulation(gtk.Window):
         for w in (runbut, closebut):
             self.buttons.pack_start(w, 0, 0)
             w.show()
-        pack(vbox, [self.buttons], end=True, bottom=True)
+        if helptext:
+            helpbut = [help(helptext)]
+        else:
+            helpbut = []
+        pack(vbox, helpbut+[self.buttons], end=True, bottom=True)
 
     def setup_atoms(self):
         self.atoms = self.get_atoms()
@@ -106,8 +110,13 @@ class Simulation(gtk.Window):
             oops("No atoms present")
             return None
         n = self.getimagenumber()
-        return Atoms(positions=images.P[n], symbols=images.Z,
-                     cell=images.A[n], pbc=images.pbc)
+        natoms = len(images.P[n]) / images.repeat.prod()
+        return Atoms(positions=images.P[n,:natoms],
+                     symbols=images.Z[:natoms],
+                     cell=images.A[n],
+                     magmoms=images.M[n],
+                     tags=images.T[n],
+                     pbc=images.pbc)
 
     def begin(self, **kwargs):
         if self.gui.simulation.has_key('progress'):
