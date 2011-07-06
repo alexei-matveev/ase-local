@@ -1,6 +1,7 @@
 """Interfaces to different ASE compatible force-calculators."""
 
 import numpy as np
+from warnings import warn
 
 from ase import _deprecate_things_from_ase_module
 from ase.calculators.lj import LennardJones
@@ -32,7 +33,7 @@ try:
             obj = _locals[name]
             _locals[name] = Deprecate(obj, name, obj.__module__, 'ase.calculators')
 except ImportError:
-   print "WARNING: no GPAW available"
+   warn("WARNING: no GPAW available")
    if _deprecate_things_from_ase_module:
        from ase.utils.deprecate import Deprecate
        _locals = locals()
