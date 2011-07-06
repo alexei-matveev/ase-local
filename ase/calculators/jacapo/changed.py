@@ -14,7 +14,7 @@ def kpts_changed(calc, x):
     '''
     check if kpt grid has changed.
 
-    we have to take care to generate teh right k-points from x if
+    we have to take care to generate the right k-points from x if
     needed. if a user provides (4,4,4) we need to generate the MP
     grid, etc...
 
@@ -24,8 +24,8 @@ def kpts_changed(calc, x):
     '''
     #chadi-cohen
     if isinstance(x, str):
-        exec('from ase.dft.kpoints import %s' % kpts)
-        listofkpts = eval(kpts)
+        exec('from ase.dft.kpoints import %s' % x)
+        listofkpts = eval(x)
     #monkhorst-pack grid
     elif np.array(x).shape == (3,):
         from ase.dft.kpoints import monkhorst_pack
@@ -38,7 +38,7 @@ def kpts_changed(calc, x):
         raise Exception, 'apparent invalid setting for kpts'
 
     grid = calc.get_kpts()
-
+    
     if grid.shape != listofkpts.shape:
         return True
 
@@ -126,14 +126,27 @@ def decoupling_changed(calc, x):
     return False
 
 def dipole_changed(calc, x):
-    pars = calc.get_dipole()
-    if pars is False and x is False:
-        return False
-    elif pars is not False:
+
+    pars = calc.get_dipole() #pars stored in calculator
+
+    # pars = False if no dipole variables exist
+    if (pars is False and x is False):
+        return False #no change
+    elif (pars is False and x is not False):
+        return True
+
+    # both x and pars is a dictionary
+    if (type(pars) == type(dict) and
+        type(pars) == type(x)):
         for key in x:
+            if key == 'position':    # dipole layer position is never writen to the nc file
+                print 'need to do something special'
+                continue
             if x[key] != pars[key]:
                 return True
-        return False
+
+    #nothing seems to have changed.
+    return False
 
 def extpot_changed(calc, x):
     extpot = calc.get_extpot()
@@ -197,4 +210,29 @@ def mdos_changed(calc,x):
         for key in x:
             if x[key] != myx[key]:
                 return True
+    return False
+
+def pseudopotentials_changed(calc,x):
+
+    mypsp = calc.get_pseudopotentials()
+
+    if len(mypsp) != len(x):
+        return True
+
+    for key in x:
+        if key not in mypsp:
+            return True
+        if mypsp[key] != x[key]:
+            return True
+
+    for key in mypsp:
+        if key not in x:
+            return True
+        if mypsp[key] != x[key]:
+            return True
+    return False
+
+def status_changed(calc,x):
+    if calc.get_status() != x:
+        return True
     return False

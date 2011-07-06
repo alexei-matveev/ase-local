@@ -12,22 +12,23 @@ import numpy as np
 
 import ase.units as units
 from ase.io.trajectory import PickleTrajectory
-from ase.parallel import rank, barrier, paropen
+from ase.parallel import rank, paropen
+from ase.utils import opencew
 
 
 class Vibrations:
     """Class for calculating vibrational modes using finite difference.
 
-    The vibrational modes are calculated from a finite difference
-    approximation of the Hessian matrix.
+    The vibrational modes are calculated from a finite difference approximation
+    of the Hessian matrix.
 
-    The *summary()*, *get_energies()* and *get_frequencies()*
-    methods all take an optional *method* keyword.  Use
-    method='Frederiksen' to use the method described in:
+    The *summary()*, *get_energies()* and *get_frequencies()* methods all take
+    an optional *method* keyword.  Use method='Frederiksen' to use the method
+    described in:
 
       T. Frederiksen, M. Paulsson, M. Brandbyge, A. P. Jauho:
-      "Inelastic transport theory from first-principles: methodology
-      and applications for nanoscale devices", 
+      "Inelastic transport theory from first-principles: methodology and
+      applications for nanoscale devices", 
       Phys. Rev. B 75, 205413 (2007) 
 
     atoms: Atoms object
@@ -40,15 +41,15 @@ class Vibrations:
     delta: float
         Magnitude of displacements.
     nfree: int
-        Number of displacements per atom and cartesian coordinate,
-        2 and 4 are supported. Default is 2 which will displace 
-        each atom +delta and -delta for each cartesian coordinate.
+        Number of displacements per atom and cartesian coordinate, 2 and 4 are
+        supported. Default is 2 which will displace each atom +delta and -delta
+        for each cartesian coordinate. 
 
     Example:
 
     >>> from ase import Atoms
     >>> from ase.calculators.emt import EMT
-    >>> from ase.optimizers import BFGS
+    >>> from ase.optimize import BFGS
     >>> from ase.vibrations import Vibrations
     >>> n2 = Atoms('N2', [(0, 0, 0), (0, 0, 1.1)],
     ...            calculator=EMT())
@@ -81,6 +82,7 @@ class Vibrations:
     >>> vib.write_mode(-1)  # write last mode to trajectory file
 
     """
+      
     def __init__(self, atoms, indices=None, name='vib', delta=0.01, nfree=2):
         assert nfree in [2, 4]
         self.atoms = atoms
@@ -96,61 +98,54 @@ class Vibrations:
     def run(self):
         """Run the vibration calculations.
 
-        This will calculate the forces for 6 displacements per atom
-        ±x, ±y, ±z.  Only those calculations that are not already done
-        will be started. Be aware that an interrupted calculation may
-        produce an empty file (ending with .pckl), which must be deleted
-        before restarting the job. Otherwise the forces will not be
-        calculated for that displacement."""
+        This will calculate the forces for 6 displacements per atom ±x, ±y, ±z.
+        Only those calculations that are not already done will be started. Be
+        aware that an interrupted calculation may produce an empty file (ending
+        with .pckl), which must be deleted before restarting the job. Otherwise
+        the forces will not be calculated for that displacement.
+
+        Note that the calculations for the different displacements can be done
+        simultaneously by several independent processes. This feature relies on
+        the existence of files and the subsequent creation of the file in case
+        it is not found.
+
+        """
+        
         filename = self.name + '.eq.pckl'
-        if not isfile(filename):
-            barrier()
-            forces = self.atoms.get_forces()
-            if self.ir:
-                dipole = self.calc.get_dipole_moment(self.atoms)
-            if rank == 0:
-                fd = open(filename, 'w')
-                if self.ir:
-                    pickle.dump([forces, dipole], fd)
-                    sys.stdout.write(
-                        'Writing %s, dipole moment = (%.6f %.6f %.6f)\n' % 
-                        (filename, dipole[0], dipole[1], dipole[2]))
-                else:
-                    pickle.dump(forces, fd)
-                    sys.stdout.write('Writing %s\n' % filename)
-                fd.close()
-            sys.stdout.flush()
+        fd = opencew(filename)            
+        if fd is not None:
+            self.calculate(filename, fd)
         
         p = self.atoms.positions.copy()
         for a in self.indices:
             for i in range(3):
                 for sign in [-1, 1]:
-                    for ndis in range(1, self.nfree//2+1):
+                    for ndis in range(1, self.nfree // 2 + 1):
                         filename = ('%s.%d%s%s.pckl' %
-                                    (self.name, a, 'xyz'[i], ndis*' +-'[sign]))
-                        if isfile(filename):
-                            continue
-                        barrier()
-                        self.atoms.positions[a, i] = (p[a, i] +
-                                                      ndis * sign * self.delta)
-                        forces = self.atoms.get_forces()
-                        if self.ir:
-                            dipole = self.calc.get_dipole_moment(self.atoms)
-                        if rank == 0:
-                            fd = open(filename, 'w')
-                            if self.ir:
-                                pickle.dump([forces, dipole], fd)
-                                sys.stdout.write(
-                                    'Writing %s, ' % filename +
-                                    'dipole moment = (%.6f %.6f %.6f)\n' % 
-                                    (dipole[0], dipole[1], dipole[2]))
-                            else:
-                                pickle.dump(forces, fd)
-                                sys.stdout.write('Writing %s\n' % filename)
-                            fd.close()
-                        sys.stdout.flush()
-                        self.atoms.positions[a, i] = p[a, i]
-        self.atoms.set_positions(p)
+                                    (self.name, a, 'xyz'[i],
+                                     ndis * ' +-'[sign]))
+                        fd = opencew(filename)
+                        if fd is not None:
+                            disp = ndis * sign * self.delta
+                            self.atoms.positions[a, i] = p[a, i] + disp
+                            self.calculate(filename, fd)
+                            self.atoms.positions[a, i] = p[a, i]
+
+    def calculate(self, filename, fd):
+        forces = self.atoms.get_forces()
+        if self.ir:
+            dipole = self.calc.get_dipole_moment(self.atoms)
+        if rank == 0:
+            if self.ir:
+                pickle.dump([forces, dipole], fd)
+                sys.stdout.write(
+                    'Writing %s, dipole moment = (%.6f %.6f %.6f)\n' % 
+                    (filename, dipole[0], dipole[1], dipole[2]))
+            else:
+                pickle.dump(forces, fd)
+                sys.stdout.write('Writing %s\n' % filename)
+            fd.close()
+        sys.stdout.flush()
 
     def clean(self):
         if isfile(self.name + '.eq.pckl'):
@@ -159,8 +154,9 @@ class Vibrations:
         for a in self.indices:
             for i in 'xyz':
                 for sign in '-+':
-                    for ndis in range(1, self.nfree/2+1):
-                        name = '%s.%d%s%s.pckl' % (self.name, a, i, ndis*sign)
+                    for ndis in range(1, self.nfree // 2 + 1):
+                        name = '%s.%d%s%s.pckl' % (self.name, a, i,
+                                                   ndis * sign)
                         if isfile(name):
                             remove(name)
         
@@ -199,13 +195,19 @@ class Vibrations:
                                        fplusplus)[self.indices].ravel() / 12.0
                 elif self.direction == 'forward':
                     H[r] = (feq - fplus)[self.indices].ravel()
-                else: # self.direction == 'backward':
+                else:
+                    assert self.direction == 'backward'
                     H[r] = (fminus - feq)[self.indices].ravel()
                 H[r] /= 2 * self.delta
                 r += 1
         H += H.copy().T
         self.H = H
         m = self.atoms.get_masses()
+        if 0 in [m[index] for index in self.indices]:
+            raise RuntimeError('Zero mass encountered in one or more of '
+                               'the vibrated atoms. Use Atoms.set_masses()'
+                               ' to set all masses to non-zero values.')
+
         self.im = np.repeat(m[self.indices]**-0.5, 3)
         omega2, modes = np.linalg.eigh(self.im[:, None] * H * self.im)
         self.modes = modes.T.copy()
@@ -216,6 +218,7 @@ class Vibrations:
 
     def get_energies(self, method='standard', direction='central'):
         """Get vibration energies in eV."""
+        
         if (self.H is None or method.lower() != self.method or
             direction.lower() != self.direction):
             self.read(method, direction)
@@ -223,15 +226,13 @@ class Vibrations:
 
     def get_frequencies(self, method='standard', direction='central'):
         """Get vibration frequencies in cm^-1."""
+        
         s = 0.01 * units._e / units._c / units._hplanck
         return s * self.get_energies(method, direction)
 
     def summary(self, method='standard', direction='central', T=298., 
                 threshold=10, freq=None, log=sys.stdout):
-        """Print a summary of the frequencies and derived thermodynamic
-        properties. The equations for the calculation of the enthalpy and 
-        entropy diverge for zero frequencies and a threshold value is used
-        to ignore extremely low frequencies (default = 10 cm^-1).
+        """Print a summary of the vibrational frequencies.
 
         Parameters:
 
@@ -240,24 +241,14 @@ class Vibrations:
         direction: string
             Direction for finite differences. Can be one of 'central'
             (default), 'forward', 'backward'.
-        T : float
-            Temperature in K at which thermodynamic properties are calculated.
-        threshold : float
-            Threshold value for low frequencies (default 10 cm^-1).
         freq : numpy array
             Optional. Can be used to create a summary on a set of known
             frequencies.
-        destination : string or object with a .write() method
-            Where to print the summary info. Default is to print to
-            standard output. If another string is given, it creates that
-            text file and writes the output to it. If a file object (or any
-            object with a .write(string) function) is given, it writes to that
-            file.
-
-        Notes:
-
-        The enthalpy and entropy calculations are very sensitive to low
-        frequencies and the threshold value must be used with caution."""
+        log : if specified, write output to a different location than
+            stdout. Can be an object with a write() method or the name of a
+            file to create.
+            
+        """
 
         if isinstance(log, str):
             log = paropen(log, 'a')
@@ -277,40 +268,11 @@ class Vibrations:
                 e = e.imag
             else:
                 c = ' '
+                e = e.real
             write('%3d %6.1f%s  %7.1f%s\n' % (n, 1000 * e, c, s * e, c))
         write('---------------------\n')
         write('Zero-point energy: %.3f eV\n' %
               self.get_zero_point_energy(freq=freq))
-        write('Thermodynamic properties at %.2f K\n' % T)
-        write('Enthalpy: %.3f eV\n' % self.get_enthalpy(method=method,
-                                                        direction=direction,
-                                                        T=T,
-                                                        threshold=threshold,
-                                                        freq=freq))
-        write('Entropy : %.3f meV/K\n' % 
-              (1E3 * self.get_entropy(method=method,
-                                      direction=direction,
-                                      T=T,
-                                      threshold=threshold,
-                                      freq=freq)))
-        write('T*S     : %.3f eV\n' %
-              (T * self.get_entropy(method=method,
-                                    direction=direction,
-                                    T=T,
-                                    threshold=threshold,
-                                    freq=freq)))
-        write('E->G    : %.3f eV\n' %
-              (self.get_zero_point_energy(freq=freq) +
-               self.get_enthalpy(method=method,
-                                 direction=direction,
-                                 T=T,
-                                 threshold=threshold,
-                                 freq=freq) -
-               T * self.get_entropy(method=method,
-                                    direction=direction,
-                                    T=T,
-                                    threshold=threshold,
-                                    freq=freq)))
 
     def get_zero_point_energy(self, freq=None):
         if freq is None:
@@ -318,31 +280,6 @@ class Vibrations:
         else:
             s = 0.01 * units._e / units._c / units._hplanck
             return 0.5 * freq.real.sum() / s
-
-    def get_enthalpy(self, method='standard', direction='central', T=298.0,
-                     threshold=10, freq=None):
-        H = 0.0
-        if freq is None:
-            freq = self.get_frequencies(method=method, direction=direction)
-        for f in freq:
-            if f.imag == 0 and f.real >= threshold:
-                # The formula diverges for f->0
-                x = (f.real * 100 * units._hplanck * units._c) / units._k
-                H += units._k / units._e * x / (np.exp(x / T) - 1)
-        return H
-
-    def get_entropy(self, method='standard', direction='central', T=298.0,
-                    threshold=10, freq=None):
-        S = 0.0
-        if freq is None:
-            freq=self.get_frequencies(method=method, direction=direction)
-        for f in freq:
-            if f.imag == 0 and f.real >= threshold:
-                # The formula diverges for f->0
-                x = (f.real * 100 * units._hplanck * units._c) / units._k
-                S += (units._k / units._e * (((x / T) / (np.exp(x / T) - 1)) -
-                                             np.log(1 - np.exp(-x / T))))
-        return S
 
     def get_mode(self, n):
         mode = np.zeros((len(self.atoms), 3))
@@ -370,7 +307,7 @@ class Vibrations:
         fd = open(self.name + '.xyz', 'w')
         symbols = self.atoms.get_chemical_symbols()
         f = self.get_frequencies()
-        for n in range(3 * len(self.atoms)):
+        for n in range(3 * len(self.indices)):
             fd.write('%6d\n' % len(self.atoms))
             if f[n].imag != 0:
                 c = 'i'
@@ -386,5 +323,5 @@ class Vibrations:
             for i, pos in enumerate(self.atoms.positions):
                 fd.write('%2s %12.5f %12.5f %12.5f %12.5f %12.5f %12.5f \n' % 
                          (symbols[i], pos[0], pos[1], pos[2],
-                          mode[i,0], mode[i,1], mode[i,2]))
+                          mode[i, 0], mode[i, 1], mode[i, 2]))
         fd.close()

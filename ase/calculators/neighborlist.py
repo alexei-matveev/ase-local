@@ -16,7 +16,10 @@ class NeighborList:
         returned.
     self_interaction: bool
         Should an atom return itself as a neighbor?
-
+    bothways: bool
+        Return all neighbors.  Default is to return only "half" of
+        the neighbors.
+    
     Example::
 
       nl = NeighborList([2.3, 1.7])
@@ -25,11 +28,13 @@ class NeighborList:
       
     """
     
-    def __init__(self, cutoffs, skin=0.3, sorted=False, self_interaction=True):
+    def __init__(self, cutoffs, skin=0.3, sorted=False, self_interaction=True,
+                 bothways=False):
         self.cutoffs = np.asarray(cutoffs) + skin
         self.skin = skin
         self.sorted = sorted
         self.self_interaction = self_interaction
+        self.bothways = bothways
         self.nupdates = 0
 
     def update(self, atoms):
@@ -52,8 +57,11 @@ class NeighborList:
         self.positions = atoms.get_positions()
         self.pbc = atoms.get_pbc()
         self.cell = atoms.get_cell()
-        rcmax = self.cutoffs.max()
-        
+        if len(self.cutoffs) > 0:
+            rcmax = self.cutoffs.max()
+        else:
+            rcmax = 0.0
+
         icell = np.linalg.inv(self.cell)
         scaled = np.dot(self.positions, icell)
         scaled0 = scaled.copy()
@@ -104,6 +112,19 @@ class NeighborList:
                         self.displacements[a] = np.concatenate(
                             (self.displacements[a], disp))
 
+        if self.bothways:
+            neighbors2 = [[] for a in range(natoms)]
+            displacements2 = [[] for a in range(natoms)]
+            for a in range(natoms):
+                for b, disp in zip(self.neighbors[a], self.displacements[a]):
+                    neighbors2[b].append(a)
+                    displacements2[b].append(-disp)
+            for a in range(natoms):
+                self.neighbors[a] = np.concatenate((self.neighbors[a],
+                                                    neighbors2[a]))
+                self.displacements[a] = np.array(list(self.displacements[a]) +
+                                                 displacements2[a])
+
         if self.sorted:
             for a, i in enumerate(self.neighbors):
                 mask = (i < a)
@@ -133,6 +154,7 @@ class NeighborList:
               print atoms.positions[i] + dot(offset, atoms.get_cell())
 
         Notice that if get_neighbors(a) gives atom b as a neighbor,
-        then get_neighbors(b) will not return a as a neighbor!"""
+        then get_neighbors(b) will not return a as a neighbor - unless
+        bothways=True was used."""
         
         return self.neighbors[a], self.displacements[a]

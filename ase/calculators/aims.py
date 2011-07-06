@@ -16,6 +16,7 @@ import ase
 float_keys = [
     'charge',
     'charge_mix_param',
+    'default_initial_moment',
     'hartree_convergence_parameter',
     'ini_linear_mix_param',
     'ini_spin_mix_parma',
@@ -52,7 +53,8 @@ string_keys = [
 int_keys = [
     'empty_states',
     'ini_linear_mixing',
-    'max_relaxation_steps',    
+    'max_relaxation_steps',
+    'multiplicity',
     'n_max_pulay',   
     'sc_iter_limit',
     'walltime',
@@ -62,20 +64,24 @@ bool_keys = [
     'collect_eigenvectors',
     'compute_forces',
     'compute_kinetic',
+    'compute_numerical_stress',
     'distributed_spline_storage',
     'evaluate_work_function',
     'final_forces_cleaned',
     'hessian_to_restart_geometry',
     'MD_clean_rotations',
+    'MD_restart',
     'restart_relaxations',
     'squeeze_memory',
     'use_density_matrix',
     'use_dipole_correction',
     'use_local_index',
+    'use_logsbt',
     'vdw_correction_hirshfeld',
 ]
 
 list_keys = [
+    'init_hess',
     'k_grid',
     'k_offset',
     'MD_run',
@@ -310,6 +316,41 @@ class Aims(Calculator):
         output.write(prefix+'=======================================================\n\n')
         output.close()
 
+    def __repr__(self):
+        items =  self.float_params.items()+self.exp_params.items() \
+                +self.string_params.items()+self.int_params.items()
+        rep = 'Aims('
+        for key, val in items:
+            if val is not None:
+                rep += key+' '+str(val)+', '
+        for key, val in self.bool_params.items():
+            if val is not None:
+                if key == 'vdw_correction_hirshfeld' and val:
+                    rep += key + ', '
+                elif val:
+                    rep += key+' .true., '
+                elif key != 'vdw_correction_hirshfeld':
+                    rep += key+' .false., '
+        for key, val in self.list_params.items():
+            if val is not None:
+                if key == 'output':
+                    if not isinstance(val,(list,tuple)): 
+                        val = [val]
+                    for output_type in val:
+                        rep += key+' '+str(output_type)+', '
+                else:
+                    rep += key
+                    if isinstance(val,str): 
+                        rep += ' '+val
+                    else:
+                        for sub_value in val:
+                            rep += ' '+str(sub_value)
+                    rep += ', '
+        for key, val in self.input_parameters.items():
+            if val and val != input_parameters_default[key]:
+                rep += key+' '+val+', '
+        return rep[:-2]+')'
+        
     def write_control(self, file = 'control.in'):
         """Writes the control.in file."""
         self.write_parameters('#',file)
@@ -375,8 +416,24 @@ class Aims(Calculator):
                         forces[iatom, iforce] = float(data[2+iforce])
         return forces
 
+    def read_stress(self):
+        lines = open(self.out, 'r').readlines()
+        stress = None
+        for n, line in enumerate(lines):
+            if line.rfind('Calculation of numerical stress completed') > -1:
+                stress = []
+                for i in [n+8,n+9,n+10]:
+                    data = lines[i].split()
+                    stress += [float(data[2]),float(data[3]),float(data[4])]
+        # rearrange in 6-component form and return
+        if stress is not None:
+            return np.array([stress[0], stress[4], stress[8], stress[5], stress[2], stress[1]])
+        else:
+            return
+
     def get_stress(self, atoms):
-        raise NotImplementedError('Stresses are not currently available in FHI-aims, sorry. ')
+        self.update(atoms)
+        return self.stress
 
 # methods that should be quickly implemented some time, haven't had time yet:
     def read_fermi(self):

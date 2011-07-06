@@ -7,8 +7,9 @@ from zipfile import is_zipfile
 from ase.atoms import Atoms
 from ase.units import Bohr
 from ase.io.trajectory import PickleTrajectory
+from ase.io.bundletrajectory import BundleTrajectory
 
-__all__ = ['read', 'write', 'PickleTrajectory']
+__all__ = ['read', 'write', 'PickleTrajectory', 'BundleTrajectory']
 
 
 def read(filename, index=-1, format=None):
@@ -34,6 +35,7 @@ def read(filename, index=-1, format=None):
     Old ASE netCDF trajectory  nc
     Virtual Nano Lab file      vnl
     ASE pickle trajectory      traj
+    ASE bundle trajectory      bundle
     GPAW text output           gpaw-text
     CUBE file                  cube
     XCrySDen Structure File    xsf  
@@ -42,17 +44,12 @@ def read(filename, index=-1, format=None):
     VASP POSCAR/CONTCAR file   vasp
     VASP OUTCAR file           vasp_out
     Protein Data Bank          pdb
+    CIF-file                   cif
     FHI-aims geometry file     aims
     FHI-aims output file       aims_out
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
-    ParaGauss gxfile           gx
-    TURBOMOLE coord file       tmol
-    exciting input             exi
-    AtomEye configuration      cfg
-    WIEN2k structure file      struct
-    DftbPlus input file        dftb
     =========================  ===========
 
     """
@@ -105,6 +102,10 @@ def read(filename, index=-1, format=None):
         from ase.io.trajectory import read_trajectory
         return read_trajectory(filename, index)
 
+    if format == 'bundle':
+        from ase.io.bundletrajectory import read_bundletrajectory
+        return read_bundletrajectory(filename, index)
+
     if format == 'cube':
         from ase.io.cube import read_cube
         return read_cube(filename, index)
@@ -151,7 +152,7 @@ def read(filename, index=-1, format=None):
 
     if format == 'cif':
         from ase.io.cif import read_cif
-        return read_cif(filename)
+        return read_cif(filename, index)
 
     if format == 'struct':
         from ase.io.wien2k import read_struct
@@ -201,6 +202,14 @@ def read(filename, index=-1, format=None):
         from ase.io.sdf import read_sdf
         return read_sdf(filename)
 
+    if format == 'etsf':
+        from ase.io.etsf import ETSFReader
+        return ETSFReader(filename).read_atoms()
+
+    if format == 'gen':
+        from ase.io.gen import read_gen
+        return read_gen(filename)
+
     raise RuntimeError('File format descriptor '+format+' not recognized!')
 
 
@@ -221,10 +230,12 @@ def write(filename, images, format=None, **kwargs):
     format                     short name
     =========================  ===========
     ASE pickle trajectory      traj
+    ASE bundle trajectory      bundle
     CUBE file                  cube
     XYZ-file                   xyz
     VASP POSCAR/CONTCAR file   vasp
     Protein Data Bank          pdb
+    CIF-file                   cif
     XCrySDen Structure File    xsf
     FHI-aims geometry file     aims
     gOpenMol .plt file         plt  
@@ -235,12 +246,6 @@ def write(filename, images, format=None, **kwargs):
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
-    ParaGauss gxfile           gx
-    TURBOMOLE coord file       tmol
-    exciting                   exi
-    AtomEye configuration      cfg
-    WIEN2k structure file      struct
-    DftbPlus input file        dftb
     =========================  ===========
   
     The use of additional keywords is format specific.
@@ -300,6 +305,8 @@ def write(filename, images, format=None, **kwargs):
             format = 'vasp'
         elif 'OUTCAR' in filename:
             format = 'vasp_out'
+        elif filename.endswith('etsf.nc'):
+            format = 'etsf'
         else:
             suffix = filename.split('.')[-1]
             format = {}.get(suffix, suffix) # XXX this does not make sense
@@ -315,11 +322,16 @@ def write(filename, images, format=None, **kwargs):
         from ase.io.exciting import write_exciting
         write_exciting(filename, images)
         return
-
-
+    if format == 'cif':
+        from ase.io.cif import write_cif
+        write_cif(filename, images)
     if format == 'xyz':
         from ase.io.xyz import write_xyz
         write_xyz(filename, images)
+        return
+    if format == 'gen':
+        from ase.io.gen import write_gen
+        write_gen(filename, images)
         return
     elif format == 'in':
         format = 'aims'
@@ -335,8 +347,23 @@ def write(filename, images, format=None, **kwargs):
         from ase.io.wien2k import write_struct
         write_struct(filename, images, **kwargs)
         return
+    elif format == 'findsym':
+        from ase.io.findsym import write_findsym
+        write_findsym(filename, images)
+        return
+    elif format == 'etsf':
+        from ase.io.etsf import ETSFWriter
+        writer = ETSFWriter(filename)
+        if not isinstance(images, (list, tuple)):
+            images = [images]
+        writer.write_atoms(images[0])
+        writer.close()
+        return
 
-    format = {'traj': 'trajectory', 'nc': 'netcdf'}.get(format, format)
+    format = {'traj': 'trajectory',
+              'nc': 'netcdf',
+              'bundle': 'bundletrajectory'
+              }.get(format, format)
     name = 'write_' + format
 
     if format in ['vti', 'vts', 'vtu']:
@@ -368,6 +395,13 @@ def string2index(string):
 
 def filetype(filename):
     """Try to guess the type of the file."""
+    if os.path.isdir(filename):
+        # Potentially a BundleTrajectory
+        if BundleTrajectory.is_bundle(filename):
+            return 'bundle'
+        else:
+            raise IOError('Directory: ' + filename)
+    
     fileobj = open(filename)
     s3 = fileobj.read(3)
     if len(s3) == 0:
@@ -389,6 +423,8 @@ def filetype(filename):
             return 'nc'
         if history == 'Dacapo':
             return 'dacapo'
+        if hasattr(nc, 'file_format') and nc.file_format.startswith('ETSF'):
+            return 'etsf'
         raise IOError('Unknown netCDF file!')
 
     
@@ -411,9 +447,12 @@ def filetype(filename):
         in lines[:90]):
         return 'dacapo-text'
 
-    for word in ['ANIMSTEPS', 'CRYSTAL', 'SLAB', 'POLYMER', 'MOLECULE']:
-        if lines[0].startswith(word):
-            return 'xsf'
+
+    for line in lines:
+        if line[0] != '#':
+            word = line.strip()
+            if word in ['ANIMSTEPS', 'CRYSTAL', 'SLAB', 'POLYMER', 'MOLECULE']:
+                return 'xsf'
 
     filename_v = basename(filename) 
     if 'POSCAR' in filename_v or 'CONTCAR' in filename_v:
@@ -475,5 +514,8 @@ def filetype(filename):
 
     if filename.lower().endswith('.sdf'):
         return 'sdf'
+
+    if filename.lower().endswith('.gen'):
+        return 'gen'
 
     return 'xyz'

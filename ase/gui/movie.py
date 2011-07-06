@@ -5,7 +5,6 @@ import gobject
 from ase.gui.languages import translate as _
 from ase.gui.widgets import pack
 
-
 class Movie(gtk.Window):
     def __init__(self, gui):
         gtk.Window.__init__(self)
@@ -29,33 +28,37 @@ class Movie(gtk.Window):
                    gtk.Button(stock=gtk.STOCK_GO_FORWARD),
                    gtk.Button(stock=gtk.STOCK_GOTO_LAST)]
 
-        buttons[0].connect('clicked', self.click, -10000000)
+        buttons[0].connect('clicked', self.click, -1, True)
         buttons[1].connect('clicked', self.click, -1)
         buttons[2].connect('clicked', self.click, 1)
-        buttons[3].connect('clicked', self.click, 10000000)
+        buttons[3].connect('clicked', self.click, 1, True)
 
         pack(vbox, buttons)
 
-        play, stop = pack(vbox, [gtk.Button(_('Play')),
-                                 gtk.Button('Stop')])
+        play = gtk.Button(_('Play'))
         play.connect('clicked', self.play)
+        stop = gtk.Button('Stop')
         stop.connect('clicked', self.stop)
+        self.rock = gtk.CheckButton('Rock')
 
-        self.rock = pack(vbox, gtk.CheckButton('Rock'))
+        pack(vbox, [play, stop, gtk.Label('  '), self.rock])
 
-        self.time = gtk.Adjustment(2.0, 0.5, 9.0, 0.2)
-        hscale = pack(vbox, gtk.HScale(self.time))
-        hscale.set_update_policy(gtk.UPDATE_DISCONTINUOUS)
-            
-        self.time.connect('value-changed', self.new_time)
-
-        self.add(vbox)
-
-        if gtk.pygtk_version < (2, 12):
-            self.set_tip = gtk.Tooltips().set_tip
-            self.set_tip(hscale, _('Adjust play time.'))
+        if gui.images.nimages > 150:
+            skipdefault = gui.images.nimages/150
+            tdefault = min(max(gui.images.nimages/(skipdefault*5.0), 1.0), 30)
         else:
-            hscale.set_tooltip_text(_('Adjust play time.'))
+            skipdefault = 0
+            tdefault = min(max(gui.images.nimages/5.0, 1.0), 30)
+        self.time = gtk.Adjustment(tdefault, 1.0, 99, 0.1)
+        self.time_spin = gtk.SpinButton(self.time, 0, 0)
+        self.time_spin.set_digits(1)
+        self.time.connect("value-changed",self.frame_rate_changed)
+        self.skip = gtk.Adjustment(skipdefault, 0, 99, 1)
+        self.skip_spin = gtk.SpinButton(self.skip, 0, 0)
+        pack(vbox, [gtk.Label(' Frame rate: '), self.time_spin,
+                    gtk.Label(' Skip frames: '), self.skip_spin,
+                    gtk.Label('   ')])
+        self.add(vbox)
         vbox.show()
         self.show()
         self.gui = gui
@@ -71,20 +74,27 @@ class Movie(gtk.Window):
     def close(self, event):
         self.stop()
 
-    def click(self, button, step):
-        i = max(0, min(self.gui.images.nimages - 1, self.gui.frame + step))
+    def click(self, button, step, firstlast=False):
+        if firstlast and step < 0:
+            i = 0
+        elif firstlast:
+            i = self.gui.images.nimages - 1
+        else:
+            i = max(0, min(self.gui.images.nimages - 1, self.gui.frame + step))
         self.gui.set_frame(i)
         self.frame_number.value = i
-        self.direction = cmp(step, 0)
-        
+        if firstlast:
+            self.direction = cmp(-step, 0)
+        else:
+            self.direction = cmp(step, 0)
+            
     def new_frame(self, widget):
         self.gui.set_frame(int(self.frame_number.value))
 
     def play(self, widget=None):
         if self.id is not None:
             gobject.source_remove(self.id)
-
-        t = int(1000 * self.time.value / (self.gui.images.nimages - 1))
+        t = int(1000.0 / float(self.time.value))
         self.id = gobject.timeout_add(t, self.step)
 
     def stop(self, widget=None):
@@ -92,18 +102,23 @@ class Movie(gtk.Window):
             gobject.source_remove(self.id)
             self.id = None
 
+    def frame_rate_changed(self,widget=None):
+        if self.id is not None:
+            self.play()
+
     def step(self):
         i = self.gui.frame
         nimages = self.gui.images.nimages
+        delta = int(self.skip.value + 1)
         
         if self.rock.get_active():
-            if i == 0:
+            if i <= self.skip.value:
                 self.direction = 1
-            elif i == nimages - 1:
+            elif i >= nimages - delta:
                 self.direction = -1
-            i += self.direction
+            i += self.direction*delta
         else:
-            i = (i + self.direction + nimages) % nimages
+            i = (i + self.direction*delta + nimages) % nimages
             
         self.gui.set_frame(i)
         self.frame_number.value = i

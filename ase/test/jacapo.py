@@ -1,15 +1,15 @@
 # do some tests here before we import
 # Right version of Scientific?
 from ase.test import NotAvailable
-import string, os
+import os
 try:
     import Scientific
-    version = string.split(Scientific.__version__,".")
-    print 'Found ScientifPython version: ',Scientific.__version__
+    version = Scientific.__version__.split(".")
+    print 'Found ScientificPython version: ',Scientific.__version__
     if map(int,version) < [2,8]:
         print 'ScientificPython 2.8 or greater required for numpy support in NetCDF'
         raise NotAvailable('ScientificPython version 2.8 or greater is required')
-except:
+except (ImportError, NotAvailable):
     print "No Scientific python found. Check your PYTHONPATH"
     raise NotAvailable('ScientificPython version 2.8 or greater is required')
 

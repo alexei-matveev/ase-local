@@ -7,12 +7,14 @@ from ase.gui.simulation import Simulation
 from ase.gui.widgets import oops, pack
 
 class OutputFieldMixin:
-    def makeoutputfield(self, box, label="Output:"):
+    def makeoutputfield(self, box, label="Output:", heading = None):
         frame = gtk.Frame(label)
         if box is not None:
             box.pack_start(frame, True, True, 0)
         box2 = gtk.VBox()
         frame.add(box2)
+        if heading is not None:
+            pack(box2, [gtk.Label(heading)])
         #pack(box, [gtk.Label("Output:")])
         scrwin = gtk.ScrolledWindow()
         scrwin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
@@ -51,8 +53,8 @@ class OutputFieldMixin:
 class EnergyForces(Simulation, OutputFieldMixin):
     def __init__(self, gui):
         Simulation.__init__(self, gui)
-
-        self.set_default_size(-1, 300)
+        self.set_title("Potential energy and forces")
+        self.set_default_size(-1, 400)
         vbox = gtk.VBox()
         self.packtext(vbox,
                       "Calculate potential energy and the force on all atoms")
@@ -76,7 +78,8 @@ class EnergyForces(Simulation, OutputFieldMixin):
         self.begin()
         e = self.atoms.get_potential_energy()
         txt = "Potential Energy:\n"
-        txt += "  %8.3f eV\n\n" % (e,)
+        txt += "  %8.2f eV\n" % (e,)
+        txt += "  %8.4f eV/atom\n\n" % (e/len(self.atoms),)
         if self.forces.get_active():
             txt +="Forces:\n"
             forces = self.atoms.get_forces()

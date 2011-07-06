@@ -29,6 +29,7 @@
 #TODO: WHen rotate and move / hide the movie menu
 
 import os
+import sys
 import weakref
 import numpy as np
 
@@ -47,6 +48,8 @@ from ase.gui.calculator import SetCalculator
 from ase.gui.energyforces import EnergyForces
 from ase.gui.minimize import Minimize
 from ase.gui.scaling import HomogeneousDeformation
+from ase.gui.quickinfo import QuickInfo
+from ase.gui.defaults import read_defaults
 
 ui_info = """\
 <ui>
@@ -77,11 +80,14 @@ ui_info = """\
       <menuitem action='ShowAxes'/>
       <menuitem action='ShowBonds'/>
       <separator/>
+      <menuitem action='QuickInfo'/>
       <menuitem action='Repeat'/>
       <menuitem action='Rotate'/>
+      <menuitem action='Colors'/>
       <menuitem action='Focus'/>
       <menuitem action='ZoomIn'/>
       <menuitem action='ZoomOut'/>
+      <menuitem action='ResetView'/>
       <menuitem action='Settings'/>
       <menuitem action='VMD'/>
       <menuitem action='RasMol'/>
@@ -93,6 +99,7 @@ ui_info = """\
       <menuitem action='Movie'/>
       <menuitem action='EModify'/>
       <menuitem action='Constraints'/>
+      <menuitem action='RenderScene'/>
       <menuitem action='MoveAtoms'/>
       <menuitem action='RotateAtoms'/>
       <menuitem action='OrientAtoms'/>
@@ -186,12 +193,17 @@ class GUI(View, Status):
             ('Last', gtk.STOCK_GOTO_LAST, '_Last image', 'End',
              '',
              self.step),
+            ('QuickInfo', None, 'Quick Info ...', None,
+             '',
+             self.quick_info_window),
             ('Repeat', None, 'Repeat ...', None,
              '',
              self.repeat_window),
             ('Rotate', None, 'Rotate ...', None,
              '',
              self.rotate_window),
+            ('Colors', None, 'Colors ...', None, '',
+             self.colors_window),
             ('Focus', gtk.STOCK_ZOOM_FIT, 'Focus', 'F',
              '',
              self.focus),
@@ -201,6 +213,9 @@ class GUI(View, Status):
             ('ZoomOut', gtk.STOCK_ZOOM_OUT, 'Zoom out', 'minus',
              '',
              self.zoom),
+            ('ResetView', None, 'Reset View', 'equal',
+             '',
+             self.reset_view),
             ('Settings', gtk.STOCK_PREFERENCES, 'Settings ...', None,
              '',
              self.settings),
@@ -222,12 +237,15 @@ class GUI(View, Status):
             ('Movie', None, 'Movie ...', None,
              '',
              self.movie),
-            ('EModify', None, 'Expert modify ...', None,
+            ('EModify', None, 'Expert mode ...', '<control>E',
              '',
              self.execute),
             ('Constraints', None, 'Constraints ...', None,
              '',
              self.constraints_window),
+            ('RenderScene', None, 'Render scene ...', None,
+             '',
+             self.render_window),
             ('DFT', None, 'DFT ...', None,
              '',
              self.dft_window),
@@ -319,6 +337,7 @@ class GUI(View, Status):
         self.vulnerable_windows = []
         self.simulation = {}   # Used by modules on Calculate menu.
         self.module_state = {} # Used by modules to store their state.
+        self.config = read_defaults()
 
     def run(self, expr=None):
         self.set_colors()
@@ -328,8 +347,8 @@ class GUI(View, Status):
             self.movie()
 
         if expr is None and not np.isnan(self.images.E[0]):
-            expr = 'i, e - E[-1]'
-            
+            expr = self.config['gui_graphs_string']
+
         if expr is not None and expr != '' and self.images.nimages > 1:
             self.plot_graphs(expr=expr)
 
@@ -353,16 +372,17 @@ class GUI(View, Status):
         
     def zoom(self, action):
         """Zoom in/out on keypress or clicking menu item"""
-        x = {'ZoomIn': 1.2, 'ZoomOut':1 / 1.2}[action.get_name()]
+        x = {'ZoomIn': 1.2, 'ZoomOut':1 /1.2}[action.get_name()]
         self._do_zoom(x)
 
     def scroll_event(self, window, event):
         """Zoom in/out when using mouse wheel"""
+        SHIFT = event.state == gtk.gdk.SHIFT_MASK
         x = 1.0
         if event.direction == gtk.gdk.SCROLL_UP:
-            x = 1.2
+            x = 1.0 + (1-SHIFT)*0.2 + SHIFT*0.01
         elif event.direction == gtk.gdk.SCROLL_DOWN:
-            x = 1.0 / 1.2
+            x = 1.0 / (1.0 + (1-SHIFT)*0.2 + SHIFT*0.01)
         self._do_zoom(x)
 
     def settings(self, menuitem):
@@ -372,8 +392,8 @@ class GUI(View, Status):
         from copy import copy    
         CTRL = event.state == gtk.gdk.CONTROL_MASK
         SHIFT = event.state == gtk.gdk.SHIFT_MASK
-        dxdydz = {gtk.keysyms.KP_Add: ('zoom', 1.2, 0),
-                gtk.keysyms.KP_Subtract: ('zoom', 1 / 1.2, 0),
+        dxdydz = {gtk.keysyms.KP_Add: ('zoom', 1.0 + (1-SHIFT)*0.2 + SHIFT*0.01, 0),
+                gtk.keysyms.KP_Subtract: ('zoom', 1 / (1.0 + (1-SHIFT)*0.2 + SHIFT*0.01), 0),
                 gtk.keysyms.Up:    ( 0, +1 - CTRL, +CTRL),
                 gtk.keysyms.Down:  ( 0, -1 + CTRL, -CTRL),
                 gtk.keysyms.Right: (+1,  0, 0),
@@ -397,9 +417,7 @@ class GUI(View, Status):
         if dx == 'zoom':
             self._do_zoom(dy)
             return
-        if dx == 'zoom':
-            self._do_zoom(dy)
-            return
+
         d = self.scale * 0.1
         tvec = np.array([dx, dy, dz])
 
@@ -570,10 +588,10 @@ class GUI(View, Status):
                     a = ase.Atoms([ase.Atom(molecule)])
                 except:      
                     try:
-                        a = ase.molecule(molecule)
+                        a = ase.data.molecules.molecule(molecule)
                     except:
                         try:
-                            a = ase.read(molecule, -1)
+                            a = ase.io.read(molecule, -1)
                         except:
                             self.add_entries[1].set_text('?' + molecule) 
                             return ()
@@ -808,7 +826,7 @@ class GUI(View, Status):
  
             window.show()
         
-    def delete_selected_atoms(self, widget, data=None):
+    def delete_selected_atoms(self, widget=None, data=None):
         if data == 'OK':
             atoms = self.images.get_atoms(self.frame)
             lena = len(atoms)
@@ -820,15 +838,15 @@ class GUI(View, Status):
          
             self.draw()    
         if data:      
-            self.window.destroy()
+            self.delete_window.destroy()
              
         if not(data) and sum(self.images.selected):
             more = '' + (sum(self.images.selected) > 1) * 's'
-            self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-            self.window.set_title('Confirmation')
-            self.window.set_border_width(10)
+            self.delete_window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+            self.delete_window.set_title('Confirmation')
+            self.delete_window.set_border_width(10)
             self.box1 = gtk.HBox(False, 0)
-            self.window.add(self.box1)
+            self.delete_window.add(self.box1)
             self.button1 = gtk.Button('Delete selected atom%s?' % more)
             self.button1.connect("clicked", self.delete_selected_atoms, "OK")
             self.box1.pack_start(self.button1, True, True, 0)
@@ -840,7 +858,7 @@ class GUI(View, Status):
             self.button2.show()
 
             self.box1.show()
-            self.window.show()
+            self.delete_window.show()
                 
     def debug(self, x):
         from ase.gui.debug import Debug
@@ -915,7 +933,8 @@ class GUI(View, Status):
 
             if not ok:
                 return
-            
+
+        n_current = self.images.nimages
         self.reset_tools_modes()     
         self.images.read(filenames, slice(None))
         self.set_colors()
@@ -960,7 +979,9 @@ class GUI(View, Status):
                              ('Persistance of Vision', 'pov'),
                              ('Encapsulated PostScript', 'eps'),
                              ('FHI-aims geometry input', 'in'),
-                             ('VASP geometry input', 'POSCAR')]:
+                             ('VASP geometry input', 'POSCAR'),
+                             ('ASE bundle trajectory', 'bundle'),
+                             ]:
             if suffix is None:
                 name = _(name)
             else:
@@ -994,7 +1015,7 @@ class GUI(View, Status):
         while True:
             # Loop until the user selects a proper file name, or cancels.
             response = chooser.run()
-            if response == gtk.RESPONSE_CANCEL:
+            if response == gtk.RESPONSE_CANCEL or response == gtk.RESPONSE_DELETE_EVENT:
                 chooser.destroy()
                 return
             elif response != gtk.RESPONSE_OK:
@@ -1005,7 +1026,7 @@ class GUI(View, Status):
             filename = chooser.get_filename()
 
             suffix = os.path.splitext(filename)[1][1:]
-            if 'POSCAR' in filename:
+            if 'POSCAR' in filename or 'CONTCAR' in filename:
                 suffix = 'POSCAR'
             if suffix == '':
                 # No suffix given.  If the user has chosen a special
@@ -1036,6 +1057,9 @@ class GUI(View, Status):
         suc = self.ui.get_widget('/MenuBar/ViewMenu/ShowUnitCell').get_active()
         self.images.write(filename, self.axes, show_unit_cell=suc, bbox=bbox)
         
+    def quick_info_window(self, menuitem):
+        QuickInfo(self)
+
     def bulk_window(self, menuitem):
         SetupBulkCrystal(self)
 
@@ -1065,7 +1089,6 @@ class GUI(View, Status):
         
     def new_atoms(self, atoms, init_magmom=False):
         "Set a new atoms object."
-        self.notify_vulnerable()
         self.reset_tools_modes()
         
         rpt = getattr(self.images, 'repeat', None)
@@ -1075,6 +1098,7 @@ class GUI(View, Status):
         self.images.repeat_images(rpt)
         self.set_colors()
         self.set_coordinates(frame=0, focus=True)
+        self.notify_vulnerable()
 
     def prepare_new_atoms(self):
         "Marks that the next call to append_atoms should clear the images."
@@ -1110,6 +1134,7 @@ class GUI(View, Status):
         self.vulnerable_windows.append(weakref.ref(obj))
 
     def exit(self, button, event=None):
+        self.window.destroy()
         gtk.main_quit()
         return True
 

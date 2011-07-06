@@ -1,5 +1,5 @@
 from ase.atoms import Atom, Atoms
-from ase.calculators.singlepoint import SinglePointCalculator
+from ase.calculators.singlepoint import SinglePointDFTCalculator
 
 
 def read_gpaw_text(fileobj, index=-1):
@@ -54,11 +54,35 @@ def read_gpaw_text(fileobj, index=-1):
             assert line.startswith('Zero Kelvin:')
             e = float(line.split()[-1])
         try:
+            ii = index_startswith(lines, 'Fermi Level:')
+        except ValueError:
+            eFermi = None
+        else:
+            try:
+                eFermi = float(lines[ii].split()[2])
+            except ValueError: # we have two Fermi levels
+                fields = lines[ii].split()
+                def strip(string):
+                    for rubbish in '[],':
+                        string = string.replace(rubbish, '')
+                    return string
+                eFermi = [float(strip(fields[2])),
+                          float(strip(fields[3])) ]
+        try:
             ii = index_startswith(lines, 'Total Charge:')
         except ValueError:
             q = None
         else:
             q = float(lines[ii].split()[2])
+        try:
+            ii = index_startswith(lines, 'Local Magnetic Moments')
+        except ValueError:
+            magmoms = None
+        else:
+            magmoms = []
+            for i in range(ii + 1, ii + 1 + len(atoms)):
+                iii, magmom = lines[i].split()[:2]
+                magmoms.append(float(magmom))
         try:
             ii = lines.index('Forces in eV/Ang:\n')
         except ValueError:
@@ -76,8 +100,9 @@ def read_gpaw_text(fileobj, index=-1):
             break
 
         if e is not None or f is not None:
-            atoms.set_calculator(SinglePointCalculator(e, f, None, None, atoms)) ### Fixme magmoms
-        if q is not None:
+            calc = SinglePointDFTCalculator(e, f, None, magmoms, atoms, eFermi)
+            atoms.set_calculator(calc)
+        if q is not None and len(atoms) > 0:
             n = len(atoms)
             atoms.set_charges([q / n] * n)
 

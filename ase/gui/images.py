@@ -7,7 +7,7 @@ from ase.atoms import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import read, write, string2index
 from ase.constraints import FixAtoms
-
+from ase.gui.defaults import read_defaults
 
 class Images:
     def __init__(self, images=None):
@@ -28,10 +28,15 @@ class Images:
         self.K = np.empty(self.nimages)
         self.F = np.empty((self.nimages, self.natoms, 3))
         self.M = np.empty((self.nimages, self.natoms))
-        self.T = np.empty((self.natoms))
+        self.T = np.empty((self.nimages, self.natoms), int)
         self.A = np.empty((self.nimages, 3, 3))
         self.Z = images[0].get_atomic_numbers()
         self.pbc = images[0].get_pbc()
+        self.covalent_radii = covalent_radii
+        config = read_defaults()
+        if config['covalent_radii'] is not None:
+            for data in config['covalent_radii']:
+                self.covalent_radii[data[0]] = data[1]
         warning = False
         for i, atoms in enumerate(images):
             natomsi = len(atoms)
@@ -57,15 +62,15 @@ class Images:
                 if init_magmom:
                     self.M[i] = atoms.get_initial_magnetic_moments()
                 else:
-                  self.M[i] = atoms.get_magnetic_moments()
+                    self.M[i] = atoms.get_magnetic_moments()
             except (RuntimeError, AttributeError):
-                self.M[i] = 0.0
+                self.M[i] = atoms.get_initial_magnetic_moments()
                 
             # added support for tags
             try:
-                self.T = atoms.get_tags()
+                self.T[i] = atoms.get_tags()
             except RuntimeError:
-                self.T = np.nan
+                self.T[i] = 0
                 
 
         if warning:
@@ -91,9 +96,9 @@ class Images:
             i = 0
         else:
             i = self.nimages
-        for name in ('P', 'E', 'K', 'F', 'M', 'A'):
+        for name in ('P', 'E', 'K', 'F', 'M', 'A', 'T'):
             a = getattr(self, name)
-            newa = np.empty( (i+1,) + a.shape[1:] )
+            newa = np.empty( (i+1,) + a.shape[1:], a.dtype )
             if not self.next_append_clears:
                 newa[:-1] = a
             setattr(self, name, newa)
@@ -113,13 +118,20 @@ class Images:
             self.M[i] = atoms.get_magnetic_moments()
         except (RuntimeError, AttributeError):
             self.M[i] = np.nan
+        try:
+            self.T[i] = atoms.get_tags()
+        except AttributeError:
+            if i == 0:
+                self.T[i] = 0
+            else:
+                self.T[i] = self.T[i-1]
         self.nimages = i + 1
         self.filenames.append(filename)
         self.set_dynamic()
         return self.nimages
         
     def set_radii(self, scale):
-        self.r = covalent_radii[self.Z] * scale
+        self.r = self.covalent_radii[self.Z] * scale
                 
     def read(self, filenames, index=-1):
         images = []
@@ -150,7 +162,7 @@ class Images:
         natoms = self.natoms // n
         P = np.empty((self.nimages, natoms * N, 3))
         M = np.empty((self.nimages, natoms * N))
-        T = np.empty(natoms * N, int)
+        T = np.empty((self.nimages, natoms * N), int)
         F = np.empty((self.nimages, natoms * N, 3))
         Z = np.empty(natoms * N, int)
         r = np.empty(natoms * N)
@@ -165,7 +177,7 @@ class Images:
                                        np.dot((i0, i1, i2), self.A[i]))
                     F[:, a0:a1] = self.F[:, :natoms]
                     M[:, a0:a1] = self.M[:, :natoms]
-                    T[a0:a1] = self.T[:natoms]
+                    T[:, a0:a1] = self.T[:, :natoms]
                     Z[a0:a1] = self.Z[:natoms]
                     r[a0:a1] = self.r[:natoms]
                     dynamic[a0:a1] = self.dynamic[:natoms]
@@ -182,8 +194,14 @@ class Images:
         self.atoms_to_rotate_0 = np.zeros(self.natoms, bool)
         self.visible = np.ones(natoms * N, bool)
         self.nselected = 0
-        
+
+    def center(self):
+        """ center each image in the existing unit cell, keeping the cell constant. """
+        c = self.A.sum(axis=1) / 2.0 - self.P.mean(axis=1)
+        self.P += c[:, np.newaxis, :]
+            
     def graph(self, expr):
+        """ routine to create the data in ag graphs, defined by the string expr.  """
         import ase.units as units
         code = compile(expr + ',', 'atoms.py', 'eval')
 
@@ -226,6 +244,7 @@ class Images:
             R = self.P[i]
             F = self.F[i]
             A = self.A[i]
+            M = self.M[i]
             f = ((F * D)**2).sum(1)**.5
             fmax = max(f)
             fave = f.mean()
@@ -281,7 +300,7 @@ class Images:
         atoms = Atoms(positions=self.P[frame],
                       numbers=self.Z,
                       magmoms=self.M[0],
-                      tags=self.T,
+                      tags=self.T[frame],
                       cell=self.A[frame],
                       pbc=self.pbc)
         

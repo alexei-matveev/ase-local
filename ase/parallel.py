@@ -2,6 +2,8 @@ import sys
 import time
 import atexit
 
+import numpy as np
+
 
 def paropen(name, mode='r', buffering=0):
     """MPI-safe version of open function.
@@ -16,14 +18,14 @@ def paropen(name, mode='r', buffering=0):
 
 
 def parprint(*args, **kwargs):
-    """MPI save print - prints only from master.
+    """MPI-safe print - prints only from master.
 
     Tries to adopt python 3 behaviour.
     """
     if rank > 0:
         return
-    defaults = { 'end' : '\n',
-                 'file' : sys.stdout }
+    defaults = {'end': '\n',
+                'file': sys.stdout }
     for key in defaults:
         if not key in kwargs:
             kwargs[key] = defaults[key]
@@ -39,37 +41,43 @@ def parprint(*args, **kwargs):
     else:
         print last,
 
+
+class DummyMPI:
+    rank = 0
+    size = 1
+    def sum(self, a):
+        if isinstance(a, np.ndarray) and a.ndim > 0:
+            pass
+        else:
+            return a
+    
+    def barrier(self):
+        pass
+
+    def broadcast(self, a, rank):
+        pass
+
+
 # Check for special MPI-enabled Python interpreters:
 if '_gpaw' in sys.modules:
     # http://wiki.fysik.dtu.dk/gpaw
     from gpaw.mpi import world
-    rank = world.rank
-    size = world.size
-    barrier = world.barrier
 elif 'asapparallel3' in sys.modules:
     # http://wiki.fysik.dtu.dk/Asap
     # We cannot import asap3.mpi here, as that creates an import deadlock
     #from asap3.mpi import world
     import asapparallel3
     world = asapparallel3.Communicator()
-    rank = world.rank
-    size = world.size
-    barrier = world.barrier    
 elif 'Scientific_mpi' in sys.modules:
     # 
     from Scientific.MPI import world
-    rank = world.rank
-    size = world.size
-    barrier = world.barrier
 else:
     # This is a standard Python interpreter:
-    rank = 0
-    size = 1
-    world = None
-    def barrier():
-        pass
+    world = DummyMPI()
 
-
+rank = world.rank
+size = world.size
+barrier = world.barrier
 
 
 def register_parallel_cleanup_function():

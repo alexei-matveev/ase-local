@@ -35,7 +35,7 @@ class Spacegroup(object):
 
     Example:
     
-    >>> from spacegroup import Spacegroup
+    >>> from ase.lattice.spacegroup import Spacegroup
     >>> 
     >>> sg = Spacegroup(225)
     >>> print 'Space group', sg.no, sg.symbol
@@ -84,6 +84,7 @@ class Spacegroup(object):
         lambda self: len(self._subtrans), 
         doc='Number of cell-subtranslation vectors.')
     def _get_nsymop(self):
+        """Returns total number of symmetry operations."""
         if self.centrosymmetric:
             return 2 * len(self._rotations) * len(self._subtrans)
         else:
@@ -130,7 +131,7 @@ class Spacegroup(object):
             f.close()
 
     def __repr__(self):
-        return 'Spacegroup(%d, setting=%d)'%(self.no, self.setting)
+        return 'Spacegroup(%d, setting=%d)' % (self.no, self.setting)
     
     def __str__(self):
         """Return a string representation of the space group data in
@@ -182,12 +183,9 @@ class Spacegroup(object):
     def __eq__(self, other):
         """Chech whether *self* and *other* refer to the same
         spacegroup number and setting."""
-        if isinstance(other, int):
-            return self.no == other
-        elif isinstance(other, str):
-            return self.symbol == other
-        else:
-            return self.no == other.no and self.setting == other.setting
+        if not isinstance(other, Spacegroup):
+            other = Spacegroup(other)
+        return self.no == other.no and self.setting == other.setting
 
     def __index__(self):
         return self.no
@@ -202,10 +200,23 @@ class Spacegroup(object):
             parities.append(-1)
         for parity in parities:
             for subtrans in self.subtrans:
-                for rot,trans in zip(self.rotations, self.translations):
+                for rot, trans in zip(self.rotations, self.translations):
                     newtrans = np.mod(trans + subtrans, 1)
                     symop.append((parity*rot, newtrans))
         return symop
+
+    def get_op(self):
+        """Returns all symmetry operations (including inversions and
+        subtranslations), but unlike get_symop(), they are returned as
+        two ndarrays."""
+        if self.centrosymmetric:
+            rot = np.tile(np.vstack((self.rotations, -self.rotations)), 
+                          (self.nsubtrans, 1, 1))
+            trans = np.repeat(self.subtrans, 2*len(self.rotations), axis=0)
+        else:
+            rot = np.tile(self.rotations, (self.nsubtrans, 1, 1))
+            trans = np.repeat(self.subtrans, len(self.rotations), axis=0)
+        return rot, trans
 
     def get_rotations(self):
         """Return all rotations, including inversions for
@@ -221,9 +232,9 @@ class Spacegroup(object):
 
         Example:
 
-        >>> from spacegroup import Spacegroup
+        >>> from ase.lattice.spacegroup import Spacegroup
         >>> sg = Spacegroup(225)  # fcc
-        >>> sg.equivalent_reflections([[0,0,2]])
+        >>> sg.equivalent_reflections([[0, 0, 2]])
         array([[ 0,  0, -2],
                [ 0, -2,  0],
                [-2,  0,  0],
@@ -231,9 +242,9 @@ class Spacegroup(object):
                [ 0,  2,  0],
                [ 0,  0,  2]])
         """
-        hkl = np.array(hkl, dtype='int')
+        hkl = np.array(hkl, dtype='int', ndmin=2)
         rot = self.get_rotations()
-        n,nrot = len(hkl), len(rot)
+        n, nrot = len(hkl), len(rot)
         R = rot.transpose(0, 2, 1).reshape((3*nrot, 3)).T
         refl = np.dot(hkl, R).reshape((n*nrot, 3))
         ind = np.lexsort(refl.T)
@@ -241,6 +252,52 @@ class Spacegroup(object):
         diff = np.diff(refl, axis=0)
         mask = np.any(diff, axis=1)
         return np.vstack((refl[mask], refl[-1,:]))
+
+    def symmetry_normalised_reflections(self, hkl):
+        """Returns an array of same size as *hkl*, containing the
+        corresponding symmetry-equivalent reflections of lowest
+        indices.
+
+        Example:
+
+        >>> from ase.lattice.spacegroup import Spacegroup
+        >>> sg = Spacegroup(225)  # fcc
+        >>> sg.symmetry_normalised_reflections([[2, 0, 0], [0, 2, 0]])
+        array([[ 0,  0, -2],
+               [ 0,  0, -2]])
+        """
+        hkl = np.array(hkl, dtype=int, ndmin=2)
+        normalised = np.empty(hkl.shape, int)
+        R = self.get_rotations().transpose(0, 2, 1)
+        for i, g in enumerate(hkl):
+            gsym = np.dot(R, g)
+            j = np.lexsort(gsym.T)[0]
+            normalised[i,:] = gsym[j]
+        return normalised
+
+    def unique_reflections(self, hkl):
+        """Returns a subset *hkl* containing only the symmetry-unique
+        reflections.
+
+        Example:
+
+        >>> from ase.lattice.spacegroup import Spacegroup
+        >>> sg = Spacegroup(225)  # fcc
+        >>> sg.unique_reflections([[ 2,  0,  0], 
+        ...                        [ 0, -2,  0], 
+        ...                        [ 2,  2,  0], 
+        ...                        [ 0, -2, -2]])
+        array([[2, 0, 0],
+               [2, 2, 0]])
+        """
+        hkl = np.array(hkl, dtype=int, ndmin=2)
+        hklnorm = self.symmetry_normalised_reflections(hkl)
+        perm = np.lexsort(hklnorm.T)
+        iperm = perm.argsort()
+        xmask = np.abs(np.diff(hklnorm[perm], axis=0)).any(axis=1)
+        mask = np.concatenate(([True], xmask))
+        imask = mask[iperm]
+        return hkl[imask]
             
     def equivalent_sites(self, scaled_positions, ondublicates='error', 
                          symprec=1e-3):
@@ -274,11 +331,29 @@ class Spacegroup(object):
         kinds: list
             A list of integer indices specifying which input site is 
             equivalent to the corresponding returned site.
+
+        Example:
+
+        >>> from ase.lattice.spacegroup import Spacegroup
+        >>> sg = Spacegroup(225)  # fcc
+        >>> sites, kinds = sg.equivalent_sites([[0, 0, 0], [0.5, 0.0, 0.0]])
+        >>> sites
+        array([[ 0. ,  0. ,  0. ],
+               [ 0. ,  0.5,  0.5],
+               [ 0.5,  0. ,  0.5],
+               [ 0.5,  0.5,  0. ],
+               [ 0.5,  0. ,  0. ],
+               [ 0. ,  0.5,  0. ],
+               [ 0. ,  0. ,  0.5],
+               [ 0.5,  0.5,  0.5]])
+        >>> kinds
+        [0, 0, 0, 0, 1, 1, 1, 1]
         """
         kinds = []
         sites = []
         symprec2 = symprec**2
-        for kind, pos in enumerate(scaled_positions):
+        scaled = np.array(scaled_positions, ndmin=2)
+        for kind, pos in enumerate(scaled):
             for rot, trans in self.get_symop():
                 site = np.mod(np.dot(rot, pos) + trans, 1.)
                 if not sites:
@@ -311,8 +386,95 @@ class Spacegroup(object):
                     kinds.append(kind)
         return np.array(sites), kinds
 
+    def symmetry_normalised_sites(self, scaled_positions):
+        """Returns an array of same size as *scaled_positions*,
+        containing the corresponding symmetry-equivalent sites within
+        the unit cell of lowest indices.
 
+        Example:
 
+        >>> from ase.lattice.spacegroup import Spacegroup
+        >>> sg = Spacegroup(225)  # fcc
+        >>> sg.symmetry_normalised_sites([[0.0, 0.5, 0.5], [1.0, 1.0, 0.0]])
+        array([[ 0.,  0.,  0.],
+               [ 0.,  0.,  0.]])
+        """
+        scaled = np.array(scaled_positions, ndmin=2)
+        normalised = np.empty(scaled.shape, np.float)
+        rot, trans = self.get_op()
+        for i, pos in enumerate(scaled):
+            sympos = np.dot(rot, pos) + trans
+            # Must be done twice, see the scaled_positions.py test
+            sympos %= 1.0
+            sympos %= 1.0
+            j = np.lexsort(sympos.T)[0]
+            normalised[i,:] = sympos[j]
+        return normalised
+
+    def unique_sites(self, scaled_positions, symprec=1e-3, output_mask=False):
+        """Returns a subset of *scaled_positions* containing only the
+        symmetry-unique positions.  If *output_mask* is True, a boolean
+        array masking the subset is also returned.
+
+        Example:
+
+        >>> from ase.lattice.spacegroup import Spacegroup
+        >>> sg = Spacegroup(225)  # fcc
+        >>> sg.unique_sites([[0.0, 0.0, 0.0], 
+        ...                  [0.5, 0.5, 0.0], 
+        ...                  [1.0, 0.0, 0.0], 
+        ...                  [0.5, 0.0, 0.0]])
+        array([[ 0. ,  0. ,  0. ],
+               [ 0.5,  0. ,  0. ]])
+        """
+        scaled = np.array(scaled_positions, ndmin=2)
+        symnorm = self.symmetry_normalised_sites(scaled)
+        perm = np.lexsort(symnorm.T)
+        iperm = perm.argsort()
+        xmask = np.abs(np.diff(symnorm[perm], axis=0)).max(axis=1) > symprec
+        mask = np.concatenate(([True], xmask))
+        imask = mask[iperm]
+        if output_mask:
+            return scaled[imask], imask
+        else:
+            return scaled[imask]
+
+    def tag_sites(self, scaled_positions, symprec=1e-3):
+        """Returns an integer array of the same length as *scaled_positions*, 
+        tagging all equivalent atoms with the same index.
+
+        Example:
+
+        >>> from ase.lattice.spacegroup import Spacegroup
+        >>> sg = Spacegroup(225)  # fcc
+        >>> sg.tag_sites([[0.0, 0.0, 0.0], 
+        ...               [0.5, 0.5, 0.0], 
+        ...               [1.0, 0.0, 0.0], 
+        ...               [0.5, 0.0, 0.0]])
+        array([0, 0, 0, 1])
+        """
+        scaled = np.array(scaled_positions, ndmin=2)
+        scaled %= 1.0
+        scaled %= 1.0
+        tags = -np.ones((len(scaled), ), dtype=int)
+        mask = np.ones((len(scaled), ), dtype=np.bool)
+        rot, trans = self.get_op()
+        i = 0
+        while mask.any():
+            pos = scaled[mask][0]
+            sympos = np.dot(rot, pos) + trans
+            # Must be done twice, see the scaled_positions.py test
+            sympos %= 1.0
+            sympos %= 1.0
+            m = ~np.all(np.any(np.abs(scaled[np.newaxis,:,:] - 
+                                      sympos[:,np.newaxis,:]) > symprec, 
+                               axis=2), axis=0)
+            assert not np.any((~mask) & m)
+            tags[m] = i
+            mask &= ~m
+            i += 1
+        return tags
+    
 
 def get_datafile():
     """Return default path to datafile."""
@@ -365,8 +527,8 @@ def _read_datafile_entry(spg, no, symbol, setting, f):
     # primitive vectors
     f.readline()
     spg._scaled_primitive_cell = np.array([map(float, f.readline().split()) 
-                                       for i in range(3)], 
-                                      dtype=np.float)
+                                           for i in range(3)], 
+                                          dtype=np.float)
     # primitive reciprocal vectors
     f.readline()
     spg._reciprocal_cell = np.array([map(int, f.readline().split()) 
@@ -407,6 +569,102 @@ def _read_datafile(spg, spacegroup, setting, f):
             _skip_to_blank(f, spacegroup, setting)
                 
 
+def parse_sitesym(symlist, sep=','):
+    """Parses a sequence of site symmetries in the form used by
+    International Tables and returns corresponding rotation and
+    translation arrays.
+
+    Example:
+
+    >>> symlist = [
+    ...     'x,y,z',
+    ...     '-y+1/2,x+1/2,z',
+    ...     '-y,-x,-z',
+    ... ]
+    >>> rot, trans = parse_sitesym(symlist)
+    >>> rot
+    array([[[ 1,  0,  0],
+            [ 0,  1,  0],
+            [ 0,  0,  1]],
+    <BLANKLINE>
+           [[ 0, -1,  0],
+            [ 1,  0,  0],
+            [ 0,  0,  1]],
+    <BLANKLINE>
+           [[ 0, -1,  0],
+            [-1,  0,  0],
+            [ 0,  0, -1]]])
+    >>> trans
+    array([[ 0. ,  0. ,  0. ],
+           [ 0.5,  0.5,  0. ],
+           [ 0. ,  0. ,  0. ]])
+    """
+    nsym = len(symlist)
+    rot = np.zeros((nsym, 3, 3), dtype='int')
+    trans = np.zeros((nsym, 3))
+    for i, sym in enumerate(symlist):
+        for j, s in enumerate (sym.split(sep)):
+            for p in s.lower().strip().split('+'):
+                n = 0
+                if p[n] == '-':
+                    sign = -1
+                    n += 1
+                else:
+                    sign = 1
+                if p[n] in 'xyz':
+                    k = ord(p[n]) - ord('x')
+                    rot[i,j,k] = sign
+                elif p[n].isdigit():
+                    q, sp, r = p[n:].partition('/')
+                    trans[i,j] = float(q)/float(r)
+                else:
+                    raise SpacegroupValueError(
+                        'invalid site symmetry: %s' % sym)
+    return rot, trans
+                
+
+def spacegroup_from_data(no=None, symbol=None, setting=1, 
+                         centrosymmetric=None, scaled_primitive_cell=None, 
+                         reciprocal_cell=None, subtrans=None, sitesym=None, 
+                         rotations=None, translations=None, datafile=None):
+    """Manually create a new space group instance.  This might be
+    usefull when reading crystal data with its own spacegroup
+    definitions."""
+    if no is not None:
+        spg = Spacegroup(no, setting, datafile)
+    elif symbol is not None:
+        spg = Spacegroup(symbol, setting, datafile)
+    else:
+        raise SpacegroupValueError('either *no* or *symbol* must be given')
+
+    have_sym = False
+    if centrosymmetric is not None:
+        spg._centrosymmetric = bool(centrosymmetric)
+    if scaled_primitive_cell is not None:
+        spg._scaled_primitive_cell = np.array(scaled_primitive_cell)
+    if reciprocal_cell is not None:
+        spg._reciprocal_cell = np.array(reciprocal_cell)
+    if subtrans is not None:
+        spg._subtrans = np.atleast_2d(subtrans)
+        spg._nsubtrans = spg._subtrans.shape[0]
+    if sitesym is not None:
+        spg._rotations, spg._translations = parse_sitesym(sitesym)
+        have_sym = True
+    if rotations is not None:
+        spg._rotations = np.atleast_3d(rotations)
+        have_sym = True
+    if translations is not None:
+        spg._translations = np.atleast_2d(translations)
+        have_sym = True
+    if have_sym:
+        if spg._rotations.shape[0] != spg._translations.shape[0]:
+            raise SpacegroupValueError('inconsistent number of rotations and '
+                                       'translations')
+        spg._nsymop = spg._rotations.shape[0]
+    return spg
+
+
+ 
 
 #-----------------------------------------------------------------
 # Self test

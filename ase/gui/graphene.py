@@ -26,7 +26,7 @@ class SetupGraphene(SetupWindow):
     "Window for setting up a graphene sheet or nanoribbon."
     def __init__(self, gui):
         SetupWindow.__init__(self)
-        self.set_title("Nanotube")
+        self.set_title("Graphene")
         vbox = gtk.VBox()
 
         # Intoductory text
@@ -200,10 +200,10 @@ class SetupGraphene(SetupWindow):
                 elem2 = self.legal_element2
                 self.atoms = graphene_nanoribbon(n, m, type=orient, C_C=CC,
                                                  C_H=self.bondlength2.value,
-                                                 vacc=vacuum,
+                                                 vacuum=vacuum,
                                                  saturated=True,
                                                  main_element=elem,
-                                                 satur_element=elem2)
+                                                 saturate_element=elem2)
             else:
                 raise RuntimeError("Unknown structure in SetupGraphene!")
         # Now, rotate into the xy plane (ase.gui's default view plane)

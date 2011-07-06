@@ -2,12 +2,14 @@ from math import sqrt
 
 import numpy as np
 
-from ase.parallel import world, rank, size
+import ase.parallel as mpi
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import read
 
+
 class NEB:
-    def __init__(self, images, k=0.1, climb=False, parallel=False):
+    def __init__(self, images, k=0.1, climb=False, parallel=False,
+                 world=None):
         self.images = images
         self.k = k
         self.climb = climb
@@ -16,13 +18,24 @@ class NEB:
         self.nimages = len(images)
         self.emax = np.nan
 
+        if world is None:
+            world = mpi.world
+        self.world = world
+
+        assert not parallel or world.size % (self.nimages - 2) == 0
+
     def interpolate(self):
         pos1 = self.images[0].get_positions()
         pos2 = self.images[-1].get_positions()
         d = (pos2 - pos1) / (self.nimages - 1.0)
         for i in range(1, self.nimages - 1):
             self.images[i].set_positions(pos1 + i * d)
-
+            # Parallel NEB with Jacapo needs this:
+            try:
+                self.images[i].get_calculator().set_atoms(self.images[i])
+            except AttributeError:
+                pass
+            
     def get_positions(self):
         positions = np.empty(((self.nimages - 2) * self.natoms, 3))
         n1 = 0
@@ -38,6 +51,12 @@ class NEB:
             n2 = n1 + self.natoms
             image.set_positions(positions[n1:n2])
             n1 = n2
+
+            # Parallel NEB with Jacapo needs this:
+            try:
+                image.get_calculator().set_atoms(image)
+            except AttributeError:
+                pass
         
     def get_forces(self):
         """Evaluate and return the forces."""
@@ -52,23 +71,23 @@ class NEB:
                 forces[i - 1] = images[i].get_forces()
         else:
             # Parallelize over images:
-            i = rank * (self.nimages - 2) // size + 1
+            i = self.world.rank * (self.nimages - 2) // self.world.size + 1
             try:
                 energies[i - 1] = images[i].get_potential_energy()
                 forces[i - 1] = images[i].get_forces()
             except:
                 # Make sure other images also fail:
-                error = world.sum(1.0)
+                error = self.world.sum(1.0)
                 raise
             else:
-                error = world.sum(0.0)
+                error = self.world.sum(0.0)
                 if error:
                     raise RuntimeError('Parallel NEB failed!')
                 
             for i in range(1, self.nimages - 1):
-                root = (i - 1) * size // (self.nimages - 2)
-                world.broadcast(energies[i - 1:i], root)
-                world.broadcast(forces[i - 1], root)
+                root = (i - 1) * self.world.size // (self.nimages - 2)
+                self.world.broadcast(energies[i - 1:i], root)
+                self.world.broadcast(forces[i - 1], root)
 
         imax = 1 + np.argsort(energies)[-1]
         self.emax = energies[imax - 1]
@@ -103,6 +122,7 @@ class NEB:
 
     def __len__(self):
         return (self.nimages - 2) * self.natoms
+
 
 class SingleCalculatorNEB(NEB):
     def __init__(self, images, k=0.1, climb=False):
@@ -233,11 +253,13 @@ class SingleCalculatorNEB(NEB):
             self.images.append(image)
         return self
 
+
 def fit(images):
     E = [i.get_potential_energy() for i in images]
     F = [i.get_forces() for i in images]
     R = [i.get_positions() for i in images]
     return fit0(E, F, R)
+
 
 def fit0(E, F, R):
     E = np.array(E) - E[0]

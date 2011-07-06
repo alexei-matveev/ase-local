@@ -23,6 +23,17 @@ import subprocess as sp
 import validate
 import changed 
 
+try:
+    from uuid import uuid1
+except ImportError: #probably an old python before 2.5
+    import random, time
+    def uuid1():
+        t = time.asctime()
+        host = os.environ['HOSTNAME']
+        random.seed(host + str(t))
+        s = host + '-' + t + '-'+str(random.random())
+        return s.replace(' ','-')
+    
 import logging
 log = logging.getLogger('Jacapo')
 
@@ -32,7 +43,6 @@ formatter = logging.Formatter('''\
 %(message)s''')
 handler.setFormatter(formatter)
 log.addHandler(handler)
-
 
 class DacapoRunning(exceptions.Exception):
     """Raised when ncfile.status = 'running'"""
@@ -50,6 +60,12 @@ class DacapoAbnormalTermination(exceptions.Exception):
     """Raised when text file does not end correctly"""
     pass
 
+class DacapoDryrun(exceptions.Exception):
+    """Raised when text file does not end correctly"""
+    pass
+
+
+
 def read(ncfile):
     '''return atoms and calculator from ncfile
 
@@ -65,7 +81,7 @@ class Jacapo:
     '''
     
     __name__ = 'Jacapo'
-    __version__ = 0.4
+    __version__ = '0.4'
     
     #dictionary of valid input variables and default settings
     default_input = {'atoms':None,
@@ -234,15 +250,12 @@ class Jacapo:
 
         # need to set a default value for stay_alive
         self.stay_alive = stay_alive
+
+        # for correct updating, we need to set the correct frame number
+        # before setting atoms or calculator
+        self._set_frame_number()
         
-        # Jacapo('out.nc') should return a calculator with atoms in
-        # out.nc attached or initialize out.nc
         if os.path.exists(nc):
-
-            # for correct updating, we need to set the correct frame number
-            # before setting atoms or calculator
-
-            self._set_frame_number()
 
             self.atoms = self.read_only_atoms(nc)
 
@@ -294,6 +307,12 @@ class Jacapo:
         parameter is stored in dictionary that is processed later if a
         calculation is need.
         '''
+
+        if 'DACAPO_NOSET' in os.environ:
+            #it is probably a bug that this is detected so we raise an exception
+            raise Exception, 'DACAPO_NOSET detected, nothing is being set'
+            
+        
         for key in kwargs:
             if key not in self.default_input:
                 raise DacapoInput, '%s is not valid input' % key
@@ -323,8 +342,12 @@ class Jacapo:
                     continue
 
             log.debug('setting: %s. self.ready = False ' % key)
-            
-            self.pars[key] = kwargs[key]
+
+            # psp's are not stored in self.pars, everything else is
+            if key == 'psp':
+                self.psp[kwargs[key]['sym']] = kwargs[key]['psp']
+            else:
+                self.pars[key] = kwargs[key]
             self.pars_uptodate[key] = False
             self.ready = False
             log.debug('exiting set function')
@@ -335,6 +358,7 @@ class Jacapo:
         you must define a self._set_keyword function that does all the
         actual writing.
         '''
+        
         log.debug('Writing input variables out')
         log.debug(self.pars)
         
@@ -342,7 +366,10 @@ class Jacapo:
             raise Exception, 'DACAPO_READONLY set and you tried to write!'
         
         if self.ready:
+            log.debug('self.ready = %s' % self.ready)
+            log.debug('detected everything is ready, not writing input out')
             return
+
         # Only write out changed parameters. this function does not do
         # the writing, that is done for each variable in private
         # functions.
@@ -383,6 +410,27 @@ class Jacapo:
             self.pars[key] = eval(getf)
             self.pars_uptodate[key] = True
         return self.pars
+
+    def write(self, new=False):
+        '''write out everything to the ncfile : self.get_nc()
+
+        new determines whether to delete any existing ncfile, and rewrite it.
+        '''
+        nc = self.get_nc()
+
+        if new:
+            if os.path.exists(nc):
+                os.unlink(nc)
+            self.ready = False
+            for key in self.pars_uptodate:
+                self.pars_uptodate[key] = False
+
+        if not os.path.exists(nc):
+            self.initnc()
+
+        self.write_input()
+        self.write_nc()
+        
     
     def initnc(self, ncfile=None):
         '''create an ncfile with minimal dimensions in it
@@ -415,7 +463,8 @@ class Jacapo:
         ncf.createDimension('dim20', 20) #for longer strings
         ncf.status  = 'new'
         ncf.history = 'Dacapo'
-        ncf.jacapo_version = Jacapo.__version__
+        ncf.uuid = str(uuid1())
+        ncf.Jacapo_version = Jacapo.__version__
         ncf.close()
         
         self.ready = False
@@ -449,11 +498,13 @@ class Jacapo:
         if self.nc is None:
             return 'No netcdf file attached to this calculator'
         if not os.path.exists(self.nc):
-            return 'ncfile does not exist yet'
+            return 'ncfile (%s) does not exist yet' % self.nc
         
         nc = netCDF(self.nc, 'r')
         s.append('  ---------------------------------')
         s.append('  Dacapo calculation from %s' % self.nc)
+        if hasattr(nc, 'uuid'):
+            s.append('  uuid = %s' % nc.uuid)
         if hasattr(nc, 'status'):
             s.append('  status = %s' % nc.status)
         if hasattr(nc, 'version'):
@@ -537,7 +588,12 @@ class Jacapo:
             s.append('  XCfunctional        = %s' % self.get_xc())
         else:
             s.append('  XCfunctional        = Not defined')
-        s.append('  Planewavecutoff     = %i eV' % int(self.get_pw()))
+
+        pw = self.get_pw()
+        if pw is None:
+            pw = 'default (350eV)'
+            
+        s.append('  Planewavecutoff     = %s eV' % pw)
         dw = self.get_dw()
         if dw:
             s.append('  Densitywavecutoff   = %i eV' % int(self.get_dw()))
@@ -548,14 +604,20 @@ class Jacapo:
             s.append('  FermiTemperature    = %f kT' % ft)
         else:
             s.append('  FermiTemperature    = not defined')
-        nelectrons = self.get_valence()
+        try:
+            nelectrons = self.get_valence()
+        except:
+            nelectrons = None
         if nelectrons is not None:
             s.append('  Number of electrons = %1.1f'  % nelectrons)
         else:
-            s.append('  Number of electrons = None')
+            s.append('  Number of electrons = N/A')
         s.append('  Number of bands     = %s'  % self.get_nbands())
         s.append('  Kpoint grid         = %s' % str(self.get_kpts_type()))
         s.append('  Spin-polarized      = %s' % self.get_spin_polarized())
+#        if self.get_spin_polarized():
+#           s.append('    Unit cell magnetic moment = %1.2f bohr-magnetons' % \
+#                  self.get_magnetic_moment())
         s.append('  Dipole correction   = %s' % self.get_dipole())
         s.append('  Symmetry            = %s' % self.get_symmetry())
         s.append('  Constraints         = %s' % str(atoms._get_constraints()))
@@ -593,27 +655,43 @@ class Jacapo:
         self.psp = defaultpseudopotentials
 
     def _set_frame_number(self, frame=None):
-        'set framenumber in the netcdf file'
+        '''set framenumber in the netcdf file
+
+        this is equal to the number of ionic steps dimension'''
         
         if frame is None:
-            nc = netCDF(self.nc, 'r')
-            if 'TotalEnergy' in nc.variables:
-                frame = nc.variables['TotalEnergy'].shape[0]
-                # make sure the last energy is reasonable. Sometime
-                # the field is empty if the calculation ran out of
-                # walltime for example. Empty values get returned as
-                # 9.6E36.  Dacapos energies should always be negative,
-                # so if the energy is > 1E36, there is definitely
-                # something wrong and a restart is required.
-                if nc.variables.get('TotalEnergy', None)[-1] > 1E36:
-                    log.warn("Total energy > 1E36. NC file is incomplete. \
-                    calc.restart required")
-                    self.restart()
+            if os.path.exists(self.nc):
+                nc = netCDF(self.nc, 'r')
+                # nc.dimensions['number_ionic_steps'] is None
+                if 'TotalEnergy' in nc.variables:
+                    number_ionic_steps = nc.variables['TotalEnergy'].shape[0]
+                else:
+                    number_ionic_steps = nc.variables['DynamicAtomPositions'].shape[0]
+                    
+                frame = number_ionic_steps - 1
+                nc.close()
             else:
-                frame = 1
-            nc.close()
-            log.info("Current frame number is: %i" % (frame-1))
-        self._frame = frame-1  #netCDF starts counting with 1
+                if hasattr(self,'atoms'):
+                    frame = 1
+                else:
+                    #when atoms are set, the frame will be incremented
+                    frame = 0
+    
+##            if 'TotalEnergy' in nc.variables:
+##                frame = nc.variables['TotalEnergy'].shape[0]
+##                # make sure the last energy is reasonable. Sometime
+##                # the field is empty if the calculation ran out of
+##                # walltime for example. Empty values get returned as
+##                # 9.6E36.  Dacapos energies should always be negative,
+##                # so if the energy is > 1E36, there is definitely
+##                # something wrong and a restart is required.
+##                if nc.variables.get('TotalEnergy', None)[-1] > 1E36:
+##                    log.warn("Total energy > 1E36. NC file is incomplete. \
+##                    calc.restart may be required")
+##                    #self.restart()
+            
+        log.info("Current frame number is: %i" % (frame - 1))
+        self._frame = frame - 1  #netCDF starts counting with 1
 
     def _increment_frame(self):
         'increment the framenumber'
@@ -1138,7 +1216,19 @@ than density cutoff %i' % (pw, dw))
         #and I never want to set this myself.
         base = os.path.splitext(self.nc)[0]
         self.txt = base + '.txt'
-                 
+
+    def set_pseudopotentials(self, pspdict):
+        '''Set all the pseudopotentials from a dictionary.
+
+        The dictionary should have this form::
+
+            {symbol1: path1,
+             symbol2: path2}
+        '''
+        for key in pspdict:
+            self.set_psp(sym=key,
+                         psp=pspdict[key])
+            
     def set_psp(self,
                 sym=None,
                 z=None,
@@ -1195,6 +1285,8 @@ than density cutoff %i' % (pw, dw))
             ncf = netCDF(self.nc, 'a')
             vn = 'AtomProperty_%s' % sym
             if vn not in ncf.variables:
+                if 'dim20' not in ncf.dimensions:
+                    ncf.createDimension('dim20', 20)
                 p = ncf.createVariable(vn, 'c', ('dim20',))
             else:
                 p = ncf.variables[vn]
@@ -1212,7 +1304,7 @@ than density cutoff %i' % (pw, dw))
         psp = {}
         for atom in self.atoms:
             psp[atom.symbol] = self.psp[atom.symbol]
-        return psp
+        return {'pspdict':psp}
 
     def get_symmetry(self):
         '''return the type of symmetry used'''
@@ -1320,7 +1412,7 @@ than density cutoff %i' % (pw, dw))
     def get_extpot(self):
         'return the external potential set in teh calculator'
         
-        nc = netCDF(self.get_nc(), 'a')
+        nc = netCDF(self.get_nc(), 'r')
         if 'ExternalPotential' in nc.variables:
             v = nc.variables['ExternalPotential']
             extpot = v[:]
@@ -1486,7 +1578,7 @@ than density cutoff %i' % (pw, dw))
     def get_ncoutput(self):
         'returns the control variables for the ncfile'
         
-        nc = netCDF(self.get_nc(), 'a')
+        nc = netCDF(self.get_nc(), 'r')
         if 'NetCDFOutputControl' in nc.variables:
             v = nc.variables['NetCDFOutputControl']
             ncoutput = {}
@@ -1569,11 +1661,11 @@ than density cutoff %i' % (pw, dw))
             if hasattr(v, 'EnergyWindow'):
                 ados['energywindow'] = v.EnergyWindow
             if hasattr(v, 'EnergyWidth'):
-                ados['energywidth'] = v.EnergyWidth
+                ados['energywidth'] = v.EnergyWidth[0]
             if hasattr(v, 'NumberEnergyPoints'):
-                ados['npoints'] = v.NumberEnergyPoints
+                ados['npoints'] = v.NumberEnergyPoints[0]
             if hasattr(v, 'CutoffRadius'):
-                ados['cutoff'] = v.CutoffRadius
+                ados['cutoff'] = v.CutoffRadius[0]
         else:
             ados = None
 
@@ -2004,6 +2096,10 @@ than density cutoff %i' % (pw, dw))
         self.delete_ncattdimvar(self.nc,
                                 ncvars=['Dynamics'])
 
+        if (hasattr(self,'parent') or hasattr(self,'children')) and value == True:
+            log.debug("This is a parent/child calculator and stay_alive must be false.")
+            value = False
+
         if value in [True, False]:
             self.stay_alive = value
             #self._dacapo_is_running = False
@@ -2028,6 +2124,10 @@ than density cutoff %i' % (pw, dw))
                 soft.append(nc.dimensions[sd])
                 hard.append(nc.dimensions[hd])
         nc.close()
+        if soft == []:
+            soft = None
+        if hard == []:
+            hard = None
         return ({'soft':soft,
                  'hard':hard})
 
@@ -2042,7 +2142,7 @@ than density cutoff %i' % (pw, dw))
                 kpts_type = bv.gridtype #string saved in jacapo
             else:
                 #no grid attribute, this ncfile was created pre-jacapo
-                kpts_type = 'pre-Jacapo: %i kpts' % len(bv[:])
+                kpts_type = '%i kpts' % len(bv[:])
         else:
             kpts_type = 'BZKpoints not defined. [[0,0,0]] used by default.'
 
@@ -2057,7 +2157,7 @@ than density cutoff %i' % (pw, dw))
             bv = nc.variables['BZKpoints']
             kpts = bv[:]
         else:
-            kpts = ([0, 0, 0]) #default Gamma point used in Dacapo when
+            kpts = np.array(([0, 0, 0])) #default Gamma point used in Dacapo when
                              #BZKpoints not defined
 
         nc.close()
@@ -2126,7 +2226,9 @@ than density cutoff %i' % (pw, dw))
             pw = None
         ncf.close()
         
-        if isinstance(pw, int) or isinstance(pw, float):
+        if (isinstance(pw, int)
+            or isinstance(pw, float)
+            or isinstance(pw,np.int32)):
             return pw
         elif pw is None:
             return None
@@ -2145,7 +2247,9 @@ than density cutoff %i' % (pw, dw))
 
         #some old calculations apparently store ints, while newer ones
         #are lists
-        if isinstance(dw, int) or isinstance(dw, float):
+        if (isinstance(dw, int)
+            or isinstance(dw, float)
+            or isinstance(dw, np.int32)):
             return dw
         else:
             if dw is None:
@@ -2190,8 +2294,9 @@ than density cutoff %i' % (pw, dw))
             nc.close()
             return e 
         except (TypeError, KeyError):
-            raise RuntimeError('Error in calculating the total energy\n' +
-                               'Check ascii out file for error messages')
+            raise RuntimeError('Error in calculating the total energy\n'
+                               + 'check %s for error messages'
+                               % self.get_txt())
 
     def get_forces(self, atoms=None):
         """Calculate atomic forces"""
@@ -2247,6 +2352,8 @@ than density cutoff %i' % (pw, dw))
         you can only specify sym or z. Returns the pseudopotential
         filename, not the full path.
         '''
+        if sym is None and z is None:
+            return None
         
         if (sym is None and z is not None):
             from ase.data import chemical_symbols
@@ -2352,7 +2459,7 @@ than density cutoff %i' % (pw, dw))
         '''
         
         from struct import unpack
-        dacapopath = os.environ.get('DACAPOPATH')
+        dacapopath = os.environ.get('DACAPOPATH', '')
 
         if os.path.exists(psp):
             #the pspfile may be in the current directory
@@ -2468,7 +2575,6 @@ than density cutoff %i' % (pw, dw))
             possible_path_to_psp = os.path.join(base, psp)
             if os.path.exists(possible_path_to_psp):
                 fullpsp = possible_path_to_psp
-                
             else:
                 #or, it is in the default psp path
                 fullpsp = os.path.join(dacapopath, psp)
@@ -2483,7 +2589,8 @@ than density cutoff %i' % (pw, dw))
                 f.close()
                 totval += float(nvalence)
             else:
-                raise Exception, "%s does not exist" % fullpsp
+                print "%s does not exist" % fullpsp
+                totval = None
             
         return totval 
 
@@ -2582,6 +2689,19 @@ than density cutoff %i' % (pw, dw))
         raise IOError, "No suitable scratch directory and no write access \
         to current dir."
 
+    def set_parent(self,parent):
+        if hasattr(self,'children'):
+            raise RuntimeError,"Cannot create grandparents."
+        self.parent = parent
+
+    def attach_child(self,child):
+        if hasattr(self,'parent'):
+            raise RuntimeError,"Cannot create grandchildren!"
+        if not hasattr(self,'children'):
+            self.children = []
+        self.children.append(child)
+        child.set_parent(self)
+
     def calculate(self):
         '''run a calculation.
 
@@ -2592,8 +2712,18 @@ than density cutoff %i' % (pw, dw))
 
         #provide a way to make no calculation get run
         if os.environ.get('DACAPO_DRYRUN', None) is not None:
-            raise Exception, '$DACAPO_DRYRUN detected, and a calculation \
+            raise DacapoDryrun, '$DACAPO_DRYRUN detected, and a calculation \
             attempted'
+
+        if hasattr(self,'children'):
+                # We are a parent and call execute_parent_calculation
+                self.execute_parent_calculation()
+                return
+
+        if hasattr(self,'parent'):  # we're a child and call the parent
+                log.debug("I'm a child. Calling parent instead.")
+                self.parent.calculate()   # call the parent process to calculate all images
+                return
     
         if not self.ready:
             log.debug('Calculator is not ready.')
@@ -2602,19 +2732,17 @@ than density cutoff %i' % (pw, dw))
 
             log.debug('writing atoms out')
             log.debug(self.atoms)
-            
             self.write_nc() #write atoms to ncfile
 
             log.debug('writing input out')
             self.write_input() #make sure input is uptodate
-            
-
+   
             #check that the bands get set
-            if self.get_nbands() is None:
+            if self.get_nbands() is None:  
                 nelectrons = self.get_valence()
                 nbands = int(nelectrons * 0.65 + 4)
                 self.set_nbands(nbands) 
-            
+
         log.debug('running a calculation')
 
         nc = self.get_nc()
@@ -2626,53 +2754,117 @@ than density cutoff %i' % (pw, dw))
             self.ready = True
             self.set_status('finished')
         else:
+            # if Dynamics:ExternalIonMotion_script is set in the .nc file from a previous run
+            # and stay_alive is false for the continuation run, the Fortran executable continues
+            # taking steps of size 0 and ends in an infinite loop.
+            # Solution: remove the Dynamics variable if present when not running with stay_alive
+            # 
+            self.delete_ncattdimvar(self.nc,ncvars=['Dynamics'])
+	    cmd = 'dacapo.run  %(innc)s -out %(txt)s -scratch %(scratch)s'
+	    cmd = cmd % {'innc':nc,
+			 'txt':txt,
+			 'scratch':scratch}
+
+	    log.debug(cmd)
+	    # using subprocess instead of commands subprocess is more
+	    # flexible and works better for stay_alive
+	    self._dacapo = sp.Popen(cmd,
+				stdout=sp.PIPE,
+				stderr=sp.PIPE,
+				shell=True)
+	    status = self._dacapo.wait()
+	    [stdout, stderr] = self._dacapo.communicate()
+	    output = stdout+stderr
+    
+	    if status is 0: #that means it ended fine!
+		self.ready = True
+		self.set_status('finished')
+	    else:
+		log.debug('Status was not 0')
+		log.debug(output)
+		self.ready = False
+	    # directory cleanup has been moved to self.__del__()
+	    del self._dacapo
+
+	    #Sometimes dacapo dies or is killed abnormally, and in this
+	    #case an exception should be raised to prevent a geometry
+	    #optimization from continuing for example. The best way to
+	    #detect this right now is actually to check the end of the
+	    #text file to make sure it ends with the right line. The
+	    #line differs if the job was run in parallel or in serial.
+	    f = open(txt, 'r')
+	    lines = f.readlines()
+	    f.close()
+
+	    if 'PAR: msexit halting Master' in lines[-1]:
+		pass #standard parallel end
+	    elif ('TIM' in lines[-2]
+		  and 'clexit: exiting the program' in lines[-1]):
+		pass #standard serial end
+	    else:
+		# text file does not end as expected, print the last
+		# 10 lines and raise exception
+		log.debug(string.join(lines[-10:-1], ''))
+		s = 'Dacapo output txtfile (%s) did not end normally.\n'
+		s += ''.join(lines[-10:-1])
+		raise DacapoAbnormalTermination(s % txt)
+
+    def execute_parent_calculation(self):
+        '''
+        Implementation of an extra level of parallelization, where one jacapo calculator spawns several
+        dacapo.run processes. This is used for NEBs parallelized over images.
+        '''                
+        nchildren = len(self.children)
+        log.debug("I'm a parent and start a calculation for ",nchildren," children.")
+        self._dacapo = nchildren*[None]
+        # export the number of children to the environment
+        env = os.environ
+        env['JACAPO_NIMAGES'] = str(nchildren)
+        
+        # start a dacapo.run instance for each child
+        for i,child in enumerate(self.children):
+
+            nc = child.get_nc()
+            txt= child.get_txt()
+            scratch = child.get_scratch()
+
+            if not os.path.exists(nc):
+                child.initnc()
+            child.write_nc() #write atoms to ncfile
+            child.write_input() #make sure input is uptodate
+
+            #check that the bands get set
+            if child.get_nbands() is None:
+                nelectrons = child.get_valence()
+                nbands = int(nelectrons * 0.65 + 4)
+                child.set_nbands(nbands)
+
+            env['JACAPO_IMAGE'] = str(i)
             cmd = 'dacapo.run  %(innc)s -out %(txt)s -scratch %(scratch)s'
             cmd = cmd % {'innc':nc,
-                         'txt':txt,
-                         'scratch':scratch}
+                          'txt':txt,
+                      'scratch':scratch}
 
             log.debug(cmd)
-            # using subprocess instead of commands subprocess is more
-            # flexible and works better for stay_alive
-            self._dacapo = sp.Popen(cmd,
-                                    stdout=sp.PIPE,
-                                    stderr=sp.PIPE,
-                                    shell=True)
-            status = self._dacapo.wait()
-            [stdout, stderr] = self._dacapo.communicate()
+            self._dacapo[i] = sp.Popen(cmd,stdout=sp.PIPE,stderr=sp.PIPE,shell=True,env=env)
+        
+        print 'now waiting for all children to finish'
+        # now wait for all processes to finish
+        for i,child in enumerate(self.children):
+            status = self._dacapo[i].wait()
+            [stdout,stderr] = self._dacapo[i].communicate()
             output = stdout+stderr
-            
             if status is 0: #that means it ended fine!
-                self.ready = True
-                self.set_status('finished')
+                child.ready = True
+                child.set_status('finished')
             else:
                 log.debug('Status was not 0')
                 log.debug(output)
-                self.ready = False
-            # directory cleanup has been moved to self.__del__()
-            del self._dacapo
+                child.ready = False
 
-            #Sometimes dacapo dies or is killed abnormally, and in this
-            #case an exception should be raised to prevent a geometry
-            #optimization from continuing for example. The best way to
-            #detect this right now is actually to check the end of the
-            #text file to make sure it ends with the right line. The
-            #line differs if the job was run in parallel or in serial.
-            f = open(txt, 'r')
-            lines = f.readlines()
-            f.close()
-
-            if 'PAR: msexit halting Master' in lines[-1]:
-                pass #standard parallel end
-            elif ('TIM' in lines[-2]
-                  and 'clexit: exiting the program' in lines[-1]):
-                pass #standard serial end
-            else:
-                # text file does not end as expected, print the last
-                # 10 lines and raise exception
-                log.debug(string.join(lines[-10:-1], ''))
-                s = 'Dacapo output txtfile (%s) did not end normally.' 
-                raise DacapoAbnormalTermination(s % txt)
+        # could also check the end of the output .txt file to make sure everything was fine.
+        
+        del self._dacapo
 
     def execute_external_dynamics(self,
                                   nc=None,
@@ -2874,7 +3066,7 @@ s.recv(14)
 
         '''
 
-        log.debug('writing atoms to ncfile')
+        log.debug('writing atoms to ncfile with write_nc')
         #no filename was provided to function, use the current ncfile
         if nc is None: 
             nc = self.get_nc()
@@ -3515,7 +3707,7 @@ s.recv(14)
 
         log.debug('getting electronic minimization parameters')
         
-        nc = netCDF(self.get_nc(), 'a')
+        nc = netCDF(self.get_nc(), 'r')
         vname = 'ElectronicMinimization'
         if vname in nc.variables:
             v = nc.variables[vname]
@@ -4030,7 +4222,7 @@ s.recv(14)
         electron_dipole_moment *= -1.0 #we need the - here so the two
                                         #negatives don't cancel
         # now the ion charge center
-        psps = self.get_pseudopotentials()
+        psps = self.get_pseudopotentials()['pspdict']
         ion_charge_center = np.array([0.0, 0.0, 0.0])
         total_ion_charge = 0.0
         for atom in atoms:
@@ -4233,4 +4425,4 @@ Jacapo.get_esp = Jacapo.get_electrostatic_potential
 Jacapo.get_occ = Jacapo.get_occupation_numbers
 Jacapo.get_ef = Jacapo.get_fermi_level
 Jacapo.get_number_of_bands = Jacapo.get_nbands
-Jacapo.set_pseudopotentials = Jacapo.set_psp
+

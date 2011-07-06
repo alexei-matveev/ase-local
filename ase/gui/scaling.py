@@ -14,6 +14,32 @@ scaling_txt = """\
 This module is intended for calculating elastic constants by homogeneously
 deforming a system."""
 
+help_txt = """
+The homogeneous scaling module changes the size of a system by stretching it
+along on or more directions.  Small amounts of deformation can be used to
+calculate elastic constants, large amounts to simulate plastic deformation.
+
+You will have to choose along which axis/axes the deformation is done.  Usually,
+it only makes sense to deform along axes with periodic boundary conditions.  The
+<b>amount of deformation</b> is set in the Deformation frame.  A scale factor of
+e.g. 0.01 means that the system is changed incrementally from being 1% smaller
+than the initial configuration to 1% larger.  The offset alters this so it is
+not symmetric around 0% deformation.  A check-box can disable the negative
+deformation (compression).
+
+<b>'Atomic relaxations'</b> means that the individual atoms are allowed to move
+relative to the unit cell.  This is done by performing an energy minimization
+for each configuration.  You will have to choose the algorithm and minimization
+parameters.
+
+During the deformation, a number of steps is taken, with different system sizes.
+You can choose to load all configurations into the main window as a movie, to
+only load the configuration with the lowest energy, or to keep the original
+configuration loaded.  <b>Important:</b> If you repeat the calculation by
+pressing [Run] a second time, the starting configuration will have changed
+unless you keep the original configuration.
+"""
+
 class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
     "Window for homogeneous deformation and elastic constants."
     
@@ -56,9 +82,10 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
             (self.radio_x, (1,0,0)),
             (self.radio_y, (0,1,0)),
             (self.radio_z, (0,0,1))]
-        self.deform_label = gtk.Label("")
-        pack(vbox, [self.deform_label])
-        self.choose_possible_deformations(first=True)
+        self.allow_non_pbc = gtk.CheckButton(
+            "Allow deformation along non-periodic directions.")
+        pack(vbox, [self.allow_non_pbc])
+        self.allow_non_pbc.connect('toggled', self.choose_possible_deformations)
 
         # Parameters for the deformation
         framedef = gtk.Frame("Deformation:")
@@ -69,11 +96,14 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
         max_scale_spin = gtk.SpinButton(self.max_scale, 10.0, 3)
         pack(vbox2, [gtk.Label("Maximal scale factor: "), max_scale_spin])
         self.scale_offset = gtk.Adjustment(0.0, -10.0, 10.0, 0.001)
-        scale_offset_spin = gtk.SpinButton(self.scale_offset, 10.0, 3)
-        pack(vbox2, [gtk.Label("Scale offset: "), scale_offset_spin])
-        self.nsteps = gtk.Adjustment(5, 3, 100, 1)
+        self.scale_offset_spin = gtk.SpinButton(self.scale_offset, 10.0, 3)
+        pack(vbox2, [gtk.Label("Scale offset: "), self.scale_offset_spin])
+        self.nsteps = gtk.Adjustment(5, 3, 1000, 1)
         nsteps_spin = gtk.SpinButton(self.nsteps, 1, 0)
         pack(vbox2, [gtk.Label("Number of steps: "), nsteps_spin])
+        self.pull = gtk.CheckButton("Only positive deformation")
+        pack(vbox2, [self.pull])
+        self.pull.connect('toggled', self.pull_toggled)
         
         # Atomic relaxations
         framerel = gtk.Frame("Atomic relaxations:")
@@ -93,16 +123,20 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
         
         # Results
         pack(vbox, [gtk.Label("Results:")])
+        self.radio_results_keep = gtk.RadioButton(
+            None, "Keep original configuration")
         self.radio_results_optimal = gtk.RadioButton(
-            None, "Load optimal configuration")
+            self.radio_results_keep, "Load optimal configuration")
         self.radio_results_all =  gtk.RadioButton(
             self.radio_results_optimal, "Load all configurations")
-        self.radio_results_optimal.set_active(True)
+        self.radio_results_keep.set_active(True)
+        pack(vbox, [self.radio_results_keep])
         pack(vbox, [self.radio_results_optimal])
         pack(vbox, [self.radio_results_all])
 
         # Output field
-        outframe = self.makeoutputfield(None)
+        #label = gtk.Label("Strain\t\tEnergy [eV]\n")
+        outframe = self.makeoutputfield(None, heading="Strain\t\tEnergy [eV]")
         fitframe = gtk.Frame("Fit:")
         vbox2 = gtk.VBox()
         vbox2.show()
@@ -123,7 +157,6 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
         scrwin.add(txtview)
         scrwin.show_all()
         self.fit_win = scrwin
-        print "SIZE RQ:", scrwin.size_request()
         vbox2.pack_start(scrwin, True, True, 0)
         hbox = gtk.HBox(homogeneous=True)
         for w in [outframe, fitframe]:
@@ -135,15 +168,18 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
         # Status field
         self.status_label = gtk.Label("")
         pack(vbox, [self.status_label])
-        
+
+        # Activate the right deformation buttons
+        self.choose_possible_deformations(first=True)
+
         # Run buttons etc.
-        self.makebutbox(vbox)
+        self.makebutbox(vbox, helptext=help_txt)
         vbox.show()
         self.add(vbox)
         self.show()
         self.gui.register_vulnerable(self)
 
-    def choose_possible_deformations(self, first=False):
+    def choose_possible_deformations(self, widget=None, first=False):
         """Turn on sensible radio buttons.
 
         Only radio buttons corresponding to deformations in directions
@@ -152,7 +188,18 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
         if self.setup_atoms():
             pbc = self.atoms.get_pbc()
         else:
-            pbc = [False, False, False]
+            pbc = np.array([False, False, False], bool)
+        if (pbc == [True, True, True]).all():
+            self.allow_non_pbc.set_active(False)
+            self.allow_non_pbc.set_sensitive(False)
+        else:
+            self.allow_non_pbc.set_sensitive(True)
+        if self.allow_non_pbc.get_active():
+            pbc = [True, True, True]  #All is allowed
+            self.radio_relax_off.set_active(True)
+            self.radio_relax_on.set_sensitive(False)
+        else:
+            self.radio_relax_on.set_sensitive(True)
         for radio, requirement in self.deformtable:
             ok = True
             for i in range(3):
@@ -170,6 +217,10 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
         state = self.radio_relax_on.get_active()
         for widget in (self.algo, self.fmax_spin, self.steps_spin):
             widget.set_sensitive(state)
+
+    def pull_toggled(self, *args):
+        "When positive def. only, the scale offset is turned off."
+        self.scale_offset_spin.set_sensitive(not self.pull.get_active())
         
     def notify_atoms_changed(self):
         "When atoms have changed, check for the number of images."
@@ -218,15 +269,20 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
 
         # Do the scaling
         scale = self.max_scale.value
-        steps = np.linspace(-scale, scale, self.nsteps.value)
-        steps += self.scale_offset.value
+        if self.pull.get_active():
+            steps = np.linspace(0, scale, self.nsteps.value)
+        else:
+            steps = np.linspace(-scale, scale, self.nsteps.value)
+            steps += self.scale_offset.value
         undef_cell = self.atoms.get_cell()
         results = []
-        txt = "Strain\t\tEnergy [eV]\n"
+        #txt = "Strain\t\tEnergy [eV]\n"
+        txt = ""
         # If we load all configurations, prepare it.
         if self.radio_results_all.get_active():
             self.prepare_store_atoms()
 
+        stored_atoms = False
         try:
             # Now, do the deformation
             for i, d in enumerate(steps):
@@ -237,14 +293,19 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
                     self.gui.simulation['progress'].set_scale_progress(i)
                 if self.radio_relax_on.get_active():
                     algo = getattr(ase.optimize, mininame)
-                    minimizer = algo(self.atoms, logfile=logger)
+                    if mininame == "MDMin":
+                        minimizer = algo(self.atoms, logfile=logger,
+                                         dt=self.mdmin_dt.value)
+                    else:
+                        minimizer = algo(self.atoms, logfile=logger)
                     minimizer.run(fmax=fmax, steps=self.steps.value)
                 e = self.atoms.get_potential_energy()
                 results.append((d, e))
-                txt = txt + ("%.3f\t\t%.3f\n" % (d, e))
+                txt = txt + ("%.5f\t\t%.5f\n" % (d, e))
                 self.output.set_text(txt)
                 if self.radio_results_all.get_active():
                     self.store_atoms()
+                    stored_atoms = True
         except AseGuiCancelException:
             # Update display to reflect cancellation of simulation.
             self.status_label.set_text("Calculation CANCELLED.")
@@ -277,15 +338,17 @@ class HomogeneousDeformation(Simulation, MinimizeMixin, OutputFieldMixin):
                         minimizer.run(fmax=fmax, steps=self.steps.value)
                     # Store the optimal configuration.
                     self.prepare_store_atoms()
-                    self.store_atoms()  
+                    self.store_atoms()
+                    stored_atoms = True
                 else:
                     oops("No trustworthy minimum: Old configuration kept.")
             self.activate_output()
-            self.gui.notify_vulnerable()
+            if stored_atoms:
+                self.gui.notify_vulnerable()
         self.end()    
             
         # If we store all configurations: Open movie window and energy graph
-        if self.gui.images.nimages > 1:
+        if stored_atoms and self.gui.images.nimages > 1:
             self.gui.movie()
             assert not np.isnan(self.gui.images.E[0])
             if not self.gui.plot_graphs_newatoms():

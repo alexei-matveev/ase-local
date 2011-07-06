@@ -35,19 +35,48 @@ class Menu:
 
 
 class Help(gtk.Window):
+    __instance = None
+    def __new__(cls, *args, **kwargs):
+        # Make this a singleton.
+        if Help.__instance is None:
+            Help.__instance = gtk.Window.__new__(cls, *args, **kwargs)
+        return Help.__instance
     def __init__(self, text):
+        # Now, __init__ may be called multiple times!
+        if not hasattr(self, '_initialized'):
+            self.initialize(text)
+        else:
+            self.set_text(text)
+        self.present()  # Show the window.
+        
+    def initialize(self, text):
         gtk.Window.__init__(self)
+        self.set_title("Help")
+        self._initialized = True
         vbox = gtk.VBox()
         self.add(vbox)
-        label = pack(vbox, gtk.Label())
-        label.set_line_wrap(True)
-        text = _(text).replace('<c>', '<span foreground="blue">')
-        text = text.replace('</c>', '</span>')
-        label.set_markup(text)
-        close = pack(vbox, gtk.Button(_('Close')))
-        close.connect('clicked', lambda widget: self.destroy())
+        self.label = pack(vbox, gtk.Label())
+        self.label.set_line_wrap(True)
+        self.set_text(text)
+        close = gtk.Button(_('Close'))
+        pack(vbox, [close])
+        close.connect('clicked', self.destroy)
+        self.connect("delete-event", self.destroy) 
         self.show_all()
 
+    def set_text(self, text):
+        # Count line length
+        linelen = max([len(x) for x in text.split('\n')])
+        text = _(text).replace('<c>', '<span foreground="blue">')
+        text = text.replace('</c>', '</span>')
+        self.label.set_width_chars(linelen)
+        self.label.set_line_wrap(False)
+        self.label.set_markup(text)
+
+    def destroy(self, *args):
+        self.hide()
+        return True  # Prevents destruction of the window.
+        
 def help(text):
     button = gtk.Button(_('Help'))
     button.connect('clicked', lambda widget, text=text: Help(text))
@@ -74,28 +103,28 @@ class Window(gtk.Window):
         vbox.show()
         self.show()
 
-def pack(vbox, widgets, end=False, bottom=False):
+def pack(vbox, widgets, end=False, bottom=False, expand=False, padding=0):
     if not isinstance(widgets, list):
         widgets.show()
         if bottom:
-            vbox.pack_end(widgets, 0, 0)
+            vbox.pack_end(widgets, expand, expand, padding)
         else:
-            vbox.pack_start(widgets, 0, 0)
+            vbox.pack_start(widgets, expand, expand, padding)
         return widgets
     hbox = gtk.HBox(0, 0)
     hbox.show()
     if bottom:
-        vbox.pack_end(hbox, 0, 0)
+        vbox.pack_end(hbox, expand, expand, padding)
     else:
-        vbox.pack_start(hbox, 0, 0)
+        vbox.pack_start(hbox, expand, expand, padding)
     for widget in widgets:
         if type(widget) is gtk.Entry:
             widget.set_size_request(widget.get_max_length() * 9, 24)
         widget.show()
         if end and widget is widgets[-1]:
-            hbox.pack_end(widget, 0, 0)
+            hbox.pack_end(widget, expand, expand, padding)
         else:
-            hbox.pack_start(widget, 0, 0)
+            hbox.pack_start(widget, expand, expand, padding)
     return widgets
 
 class cancel_apply_ok(gtk.HButtonBox):
