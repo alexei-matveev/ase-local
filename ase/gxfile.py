@@ -30,7 +30,7 @@ LINA=0.529177
 # for private use only:
 class EOF(Exception): pass
 
-def fromgx( file = "gxfile",   lunitfgx=LUNIT):
+def fromgx( file = "gxfile",   lunitfgx=LINA):
     """Return a list of tuples (atnum, position) suitable for
     feeding into Atom() class constructor of ASE:
     E.g.:
