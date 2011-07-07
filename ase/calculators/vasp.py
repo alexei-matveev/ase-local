@@ -32,10 +32,20 @@ import ase
 
 # Parameters that can be set in INCAR. The values which are None
 # are not written and default parameters of VASP are used for them.
-keys = [
-    'prec',       # Precission of calculation (Low, Normal, Accurate)
-    'nbands',     # Number of bands
-    'encut',      # Planewave cutoff
+
+float_keys = [
+    'aexx',       # Fraction of exact/DFT exchange
+    'aggac',      # Fraction of gradient correction to correlation
+    'aggax',      # Fraction of gradient correction to exchange
+    'aldac',      # Fraction of LDA correlation energy
+    'amin',       #
+    'amix',       #
+    'amix_mag',   #
+    'bmix',       # tags for mixing
+    'bmix_mag',   #
+    'emax',       # energy-range for DOSCAR file
+    'emin',       #
+    'enmax',      # Another energy cutoff, defaults derived from data in POTCAR
     'enaug',      # Density cutoff
     'encut',      # Planewave cutoff
     'encutfock',  # FFT grid in the HF related routines
@@ -75,7 +85,10 @@ int_keys = [
     'istart',     # startjob: 0-new 1-cont 2-samecut
     'isym',       # symmetry: 0-nonsym 1-usesym 2-usePAWsym
     'iwavpr',     # prediction of wf.: 0-non 1-charg 2-wave 3-comb
-    'lmaxmix',    # 
+    'ldauprint',  # 0-silent, 1-occ. matrix written to OUTCAR, 2-1+pot. matrix written
+    'ldautype',   # L(S)DA+U: 1-Liechtenstein 2-Dudarev 4-Liechtenstein(LDAU)
+    'lmaxmix',    #
+    'lmaxpaw',    # maximum expansion of paw angular momenta
     'lorbit',     # create PROOUT
     'maxmix',     #
     'ngx',        # FFT mesh for wavefunctions, x
@@ -147,7 +160,11 @@ special_keys = [
     'lreal',      # non-local projectors in real space
 ]
 
-keys = [    
+dict_keys = [
+    'ldau_luj',   # dictionary with L(S)DA+U parameters, e.g. {'Fe':{'L':2, 'U':4.0, 'J':0.9}, ...}
+]
+
+keys = [
     # 'NBLOCK' and KBLOCK       inner block; outer block
     # 'NPACO' and APACO         distance and nr. of slots for P.C.
     # 'WEIMIN, EBREAK, DEPER    special control tags
