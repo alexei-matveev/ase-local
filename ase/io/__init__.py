@@ -50,6 +50,14 @@ def read(filename, index=-1, format=None):
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
+    ParaGauss gxfile           gx
+    TURBOMOLE coord file       tmol
+    exciting input             exi
+    AtomEye configuration      cfg
+    WIEN2k structure file      struct
+    DftbPlus input file        dftb
+    ETSF format                etsf.nc
+    DFTBPlus GEN format        gen
     =========================  ===========
 
     """
@@ -246,6 +254,14 @@ def write(filename, images, format=None, **kwargs):
     VTK XML Image Data         vti
     VTK XML Structured Grid    vts
     VTK XML Unstructured Grid  vtu
+    ParaGauss gxfile           gx
+    TURBOMOLE coord file       tmol
+    exciting                   exi
+    AtomEye configuration      cfg
+    WIEN2k structure file      struct
+    DftbPlus input file        dftb
+    ETSF                       etsf.nc
+    DFTBPlus GEN format        gen
     =========================  ===========
   
     The use of additional keywords is format specific.
