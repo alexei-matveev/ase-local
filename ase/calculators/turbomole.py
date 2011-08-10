@@ -19,6 +19,9 @@ class Turbomole(Calculator):
         self.label = label
         self.converged = False
         
+        # coord is special and thus not included here
+        # only control has to be there
+        self.input_files = ['control', 'basis', 'auxbasis', 'mos', 'alpha', 'beta']
         # set calculators for energy and forces
         self.calculate_energy = calculate_energy
         self.calculate_forces = calculate_forces
@@ -36,6 +39,37 @@ class Turbomole(Calculator):
         
         # POST-HF method 
         self.post_HF  = post_HF
+
+        self.files2store()
+
+    def files2store(self):
+        """
+        If the calculation is done in a separate folder, store
+        the files needed in strings to give them back
+        """
+        # control needs to be there
+        assert os.path.isfile('control')
+
+        self.files_string = [None for i in range(len(self.input_files))]
+
+        for i, file in enumerate(self.input_files):
+            if os.path.isfile(file):
+                print "got", file
+                f = open(file,"r")
+                self.files_string[i] = f.read()
+
+    def store2files(self):
+        """
+        If there have been stored some files as strings for the current
+        calculation, give them back. Needed if the calculation is done in
+        another folder than the initalising of the calculator
+        """
+        for name, string in zip(self.input_files, self.files_string):
+             if string != None:
+                 print "write", name
+                 f = open(name,"w")
+                 f.write(string)
+                 f.close()
 
     def initialize(self, atoms):
         self.numbers = atoms.get_atomic_numbers().copy()
@@ -98,14 +132,14 @@ class Turbomole(Calculator):
         return self.stress
         
     def set_atoms(self, atoms):
-        if self.atoms == atoms:
-            return
-        # performs an update of the atoms 
-        super(Turbomole, self).set_atoms(atoms)
+        if not self.atoms == atoms:
+            # energy and forces must be re-calculated
+            self.update_energy = True
+            self.update_forces = True
+            # performs an update of the atoms 
+            super(Turbomole, self).set_atoms(atoms)
+        self.store2files()
         write_turbomole('coord', atoms)
-        # energy and forces must be re-calculated
-        self.update_energy = True
-        self.update_forces = True
         
     def read_energy(self):
         """Read Energy from Turbomole energy file."""
