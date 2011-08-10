@@ -22,7 +22,7 @@ def slice2enlist(s):
         start = s.start
     return enumerate(range(start, s.stop, step))
 
-class FixConstraint:
+class FixConstraint(object):
     """Base class for classes that fix one or more atoms in some way."""
 
     def index_shuffle(self, ind):
