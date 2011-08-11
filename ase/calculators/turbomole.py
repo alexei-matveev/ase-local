@@ -11,6 +11,8 @@ from ase.units import Hartree, Bohr
 from ase.io.turbomole import write_turbomole
 from ase.calculators.general import Calculator
 
+# coord is special and thus not included here, only control is obligotary:
+TURBOMOLE_INPUT_FILES = ['control', 'basis', 'auxbasis', 'mos', 'alpha', 'beta']
 
 class Turbomole(Calculator):
     def __init__(self, label='turbomole',
@@ -19,9 +21,6 @@ class Turbomole(Calculator):
         self.label = label
         self.converged = False
         
-        # coord is special and thus not included here
-        # only control has to be there
-        self.input_files = ['control', 'basis', 'auxbasis', 'mos', 'alpha', 'beta']
         # set calculators for energy and forces
         self.calculate_energy = calculate_energy
         self.calculate_forces = calculate_forces
@@ -44,37 +43,44 @@ class Turbomole(Calculator):
         # Slurp input files into memory, for replicating them
         # when initiating a calculation in a separate directory:
         #
-        self.files2store()
+        self.files2store(TURBOMOLE_INPUT_FILES)
 
-    def files2store(self):
+    def files2store(self, input_files):
         """
         If the calculation is done in a separate folder, store
         the files needed in strings to give them back
+
+        Proceeds silently if some of the files were not found.
         """
+
         # control needs to be there
         assert os.path.isfile('control')
 
-        self.files_string = [None for file in self.input_files]
+        # empty dictionary:
+        self.text_files = {}
 
-        for i, file in enumerate(self.input_files):
+        for file in input_files:
             if os.path.isfile(file):
                 # print "got", file
-                f = open(file,"r")
-                self.files_string[i] = f.read()
+                f = open(file, "r")
+                self.text_files[file] = f.read()
                 f.close()
 
-    def store2files(self):
+    def store2files(self, input_files):
         """
         If there have been stored some files as strings for the current
         calculation, give them back. Needed if the calculation is done in
         another folder than the initalising of the calculator
+
+        Proceeds silently if some of the files were not found.
         """
-        for name, string in zip(self.input_files, self.files_string):
-             if string != None:
-                 # print "write", name
-                 f = open(name,"w")
-                 f.write(string)
-                 f.close()
+
+        for file in input_files:
+            if file in self.text_files:
+                # print "write", file
+                f = open(file, "w")
+                f.write(self.text_files[file])
+                f.close()
 
     def initialize(self, atoms):
         self.numbers = atoms.get_atomic_numbers().copy()
@@ -143,7 +149,13 @@ class Turbomole(Calculator):
             self.update_forces = True
             # performs an update of the atoms 
             super(Turbomole, self).set_atoms(atoms)
-        self.store2files()
+
+        #
+        # We may reside in a clean directory,
+        # Write 'control' and auxiliary files:
+        #
+        self.store2files(TURBOMOLE_INPUT_FILES)
+
         write_turbomole('coord', atoms)
         
     def read_energy(self):
