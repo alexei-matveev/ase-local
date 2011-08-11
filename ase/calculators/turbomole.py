@@ -40,6 +40,10 @@ class Turbomole(Calculator):
         # POST-HF method 
         self.post_HF  = post_HF
 
+        #
+        # Slurp input files into memory, for replicating them
+        # when initiating a calculation in a separate directory:
+        #
         self.files2store()
 
     def files2store(self):
@@ -50,13 +54,14 @@ class Turbomole(Calculator):
         # control needs to be there
         assert os.path.isfile('control')
 
-        self.files_string = [None for i in range(len(self.input_files))]
+        self.files_string = [None for file in self.input_files]
 
         for i, file in enumerate(self.input_files):
             if os.path.isfile(file):
-                print "got", file
+                # print "got", file
                 f = open(file,"r")
                 self.files_string[i] = f.read()
+                f.close()
 
     def store2files(self):
         """
@@ -66,7 +71,7 @@ class Turbomole(Calculator):
         """
         for name, string in zip(self.input_files, self.files_string):
              if string != None:
-                 print "write", name
+                 # print "write", name
                  f = open(name,"w")
                  f.write(string)
                  f.close()
