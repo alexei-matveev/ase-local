@@ -44,11 +44,25 @@ class ParaGauss:
 
       self.converged = False
 
+      #store metadata here, it might be needed (even in another directory)
+      self.data = {}
+
       file = open(self.input, "r")
 
       self.inputstring = file.read()
       file.close()
       #print self.inputstring
+      # there may be a gxfile from gxoptimizer
+      # we must not disturb its internal coordinates
+      if os.path.exists('gxfile'):
+          self.atnums, __, self.data["isyms"], self.data["inums"], self.data["iconns"], self.data["ivars"], \
+           __, __, loop = gxread('gxfile')
+      else:
+          self.data["isyms"] = np2.ones(n)
+          self.data["inums"] = np2.zeros(n)
+          self.data["iconns"] = np2.zeros((n,3))
+          self.data["ivars"] = np2.zeros((n,3))
+
 
     def update(self, atoms):
         """
@@ -115,26 +129,37 @@ class ParaGauss:
         """
         # read in actual positions and atomic numbers
         self.positions = atoms.get_positions().copy()
-        self.atnums = atoms.get_atomic_numbers().copy()
+        atnums = atoms.get_atomic_numbers().copy()
+        if (atnums != self.atnums).any() :
+            print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
+            print >> sys.stderr, "ERROR: (ParaGauss) gxfile contains wrong atoms!"
+            print >> sys.stderr, "Please delete or change it before restart"
+            raise Exception("gxfile does not fit, delete or adjust!")
+
         n = len(self.atnums)
         loop = 1
-        # there may be a gxfile from gxoptimizer
-        # we must not disturb its internal coordinates
+        # there may be a gxfile from another source
+        # make sure it contains the same meta data than our source:
+        t_gx = {}
         if os.path.exists('gxfile'):
-            atnums_d, xyz_d, self.isyms, inums, iconns, ivars, grads_dummy, energy_dummy, loop = gxread('gxfile')
-            if (atnums_d != self.atnums).any() :
+            atnums, __, t_gx["isyms"], t_gx["inums"], t_gx["iconns"], t_gx["ivars"], __, __, loop = gxread('gxfile')
+            for dat in self.data.keys():
+                if self.data[dat] != t_gx[dat]:
+                    print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
+                    print >> sys.stderr, "ERROR: (ParaGauss) gxfile contains wrong " + dat +" !"
+                    print >> sys.stderr, "Please delete or change it before restart"
+                    raise Exception("gxfile does not fit, delete or adjust!")
+
+            if atnums != self.atnums:
                 print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
+                print >> sys.stderr, "ERROR: (ParaGauss) gxfile contains wrong atoms!"
                 print >> sys.stderr, "Please delete or change it before restart"
                 raise Exception("gxfile does not fit, delete or adjust!")
-        else:
-            self.isyms = np2.ones(n)
-            inums = np2.zeros(n)
-            iconns = np2.zeros((n,3))
-            ivars = np2.zeros((n,3))
 
         # create gxfile with actual geometry for calculation
         # units of positions should be Bohrs in here, so they are changed
-        gxwrite(self.atnums, self.positions/Bohr, self.isyms, inums, iconns, ivars, None, None, loop, file='gxfile' )
+        gxwrite(self.atnums, self.positions/Bohr, self.data["isyms"], self.data["inums"], self.data["iconns"],\
+                     self.data["ivars"], None, None, loop, file='gxfile' )
         input = basename(self.input)
         inputfile = open(input, "w")
         inputfile.write(self.inputstring)
@@ -159,7 +184,7 @@ class ParaGauss:
         # even if we don't need the output.
         os.system("ls > /dev/null")
         if os.path.exists('gxfile'):
-            atnums_d, xyz_d, self.isyms, inums, iconns, ivars, self.__grads, self.__energy, loopi_d = gxread('gxfile')
+            __, __, __, __, __, __, self.__grads, self.__energy, loopi_d = gxread('gxfile')
             if self.__energy is not None:
                 return
         else:
