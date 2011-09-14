@@ -49,7 +49,13 @@ def fromgx( file = "gxfile",   lunitfgx=LINA):
 def gxread( file='gxfile' ):
     """Read gxfile in following format, return a list of lists (columns)
     that is a table in the row-major order.
-    So far only the geometry section is returned.
+    Reads in the atomic numbers and the geometries, as well as the metadata
+    about ParaGauss internal coordinates. Reads in forces and energies if they
+    are available but is able to find out on its own if they are there. In case
+    ParaGauss wants to provide some modified forces and energies (belonging to
+    a system with environment for example) they can just added after the usual
+    force/energy section, this wrapper will take the last forces and energies
+    present in the file.
 
     (first and last lines are not parts of the file, rather for field width extimation):
     ^12345 1234567890123456789012 1234567890123456789012 1234567890123456789012 123 123   123 123 123   123 123 123
