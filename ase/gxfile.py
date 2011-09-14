@@ -143,6 +143,32 @@ def gxread( file='gxfile' ):
                line = lines.next()
                grads.append( _parse_grad(line))
 
+        # try a second time for energy and forces
+        # If some modified forces for ParaGauss are calculated they
+        # can be easily provided here the same way as the unmodified before
+        second = False
+        try: # if the energy line is present ...
+             # consider units
+            fields = lines.next().split()
+            energy = float( fields[0] )
+            second = True
+        except StopIteration: # is raised by .next() on EOF
+            # no second energy, forces, just continue
+            pass
+        except IndexError:
+            raise EOF, "gxread: second energies empty"
+
+        if second:
+            # parse the next n_atoms line of the file:
+            # They contain the second forces section
+            grads = []
+            for at in atnums:
+                if is_dummy(at):
+                   grads.append(np.zeros(3))
+                else:
+                   line = lines.next()
+                   grads.append( _parse_grad(line))
+
         # convert to 2D array and consider units:
         grads = nx3(grads)
         # print "grads=", grads
