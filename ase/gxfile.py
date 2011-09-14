@@ -134,8 +134,14 @@ def gxread( file='gxfile' ):
         # Third, read in forces:
         #
 
-         # parse the rest of the file:
-        grads = [ _parse_grad(line) for line in lines ]
+        # parse the next lines of the file:
+        grads = []
+        for at in atnums:
+            if is_dummy(at):
+               grads.append(np.zeros(3))
+            else:
+               line = lines.next()
+               grads.append( _parse_grad(line))
 
         # convert to 2D array and consider units:
         grads = nx3(grads)
@@ -203,10 +209,12 @@ def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=N
     # energy  :
     write( " %23.12f %23.12f\n"  % (energy, energy ) )
 
+    inum = 1
     # gradients:
-    for inum, grad in enumerate(grads):
-        # enumerate starts from zero:
-        write( _tostr_grad(inum+1, grad) )
+    for at, grad in zip(atnums, grads):
+        if not is_dummy(at):
+            write( _tostr_grad(inum, grad) )
+            inum = inum + 1
 #end def
 
 def _tostr_geom(atnum, pos, isym, inum, iconn, ivar):
