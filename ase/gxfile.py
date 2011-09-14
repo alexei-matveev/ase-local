@@ -2,7 +2,7 @@
 
 __all__ = ["gxread", "gxwrite", "is_dummy"]
 
-from sys import stdout
+from sys import stdout, stderr, exit
 # from warnings import warn
 
 # to wrap the 3D vectors as V([x,y,z]):
