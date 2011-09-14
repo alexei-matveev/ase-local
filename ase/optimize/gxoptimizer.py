@@ -50,58 +50,58 @@ class GxOptimizer(Optimizer):
 
     def step(self, forces):
         """Called in a loop by .run() method of Optimizer class
-	with forces computed for current geometry.
-	"""
+        with forces computed for current geometry.
+        """
 
-	# read the metadata from gxfile in columns:
-	atnums, positions, isyms, inums, iconns, ivars, grads, energy, loop_d = gxread('gxfile')
+        # read the metadata from gxfile in columns:
+        atnums, positions, isyms, inums, iconns, ivars, grads, energy, loop_d = gxread('gxfile')
 
-	# use current positions as returned by the framework,
-	# in case the on-disk version is outdated (units?):
+        # use current positions as returned by the framework,
+        # in case the on-disk version is outdated (units?):
         positions = self.atoms.get_positions()
 
-	# the energy corresponding to the current geometry (units?):
-	energy = self.atoms.get_potential_energy()
+        # the energy corresponding to the current geometry (units?):
+        energy = self.atoms.get_potential_energy()
 
         if (loop_d != self._loop+1):
             print "WARNING: loop number of gxfile", loop_d, "and intern loop number", self._loop, "differ"
-	# for use in gxfile:
-	self._loop += 1
+        # for use in gxfile:
+        self._loop += 1
 
-	print "GxOptimizer: loop=", self._loop
-	print "GxOptimizer: energy=", energy
-	print "GxOptimizer: positions=\n", positions
-	print "GxOptimizer: forces=\n", forces
+        print "GxOptimizer: loop=", self._loop
+        print "GxOptimizer: energy=", energy
+        print "GxOptimizer: positions=\n", positions
+        print "GxOptimizer: forces=\n", forces
 
         # write gxfile to disk, note that energy gradients == - forces (units?):
         gxwrite(atnums, positions / Bohr, isyms, inums, iconns, ivars, -forces / Hartree * Bohr, energy/Hartree, file='gxfile', loop=self._loop)
 
         # run external executable to update geometry:
-	# exitcode = os.system('optimizer.exe')
+        # exitcode = os.system('optimizer.exe')
         tty = os.popen(self.cmdline,"r")
-	for line in tty:
-	    print "PGOptimizer: ", line.rstrip("\n")
+        for line in tty:
+            print "PGOptimizer: ", line.rstrip("\n")
 
-	# the last line of the output should tell if optimizer thinks it is converged:
-	line = line.rstrip("\n")
+        # the last line of the output should tell if optimizer thinks it is converged:
+        line = line.rstrip("\n")
 
-	if line.startswith(" optimizer_main: converged="):
-	  # in regular runs the last line should tell if convergence was reached:
-	  self._converged = line.endswith("T")
-	else:
-	  # on errors the last line could be anything, abort by faking convergence:
-	  print "GxOptimizer: ERROR! UNEXPECTED OUTPUT FROM EXTRENAL OPTIMIZER!"
-	  self._converged = True
+        if line.startswith(" optimizer_main: converged="):
+          # in regular runs the last line should tell if convergence was reached:
+          self._converged = line.endswith("T")
+        else:
+          # on errors the last line could be anything, abort by faking convergence:
+          print "GxOptimizer: ERROR! UNEXPECTED OUTPUT FROM EXTRENAL OPTIMIZER!"
+          self._converged = True
 
-	print "GxOptimizer: converged=", self._converged
+        print "GxOptimizer: converged=", self._converged
 
         # read the updated geometry from the gxfile:
-	atnums, positions1, isyms, inums, iconns, ivars,  grads, energy, loop_d = gxread('gxfile')
+        atnums, positions1, isyms, inums, iconns, ivars,  grads, energy, loop_d = gxread('gxfile')
 
         positions1 = positions1 * Bohr
 
-	print "GxOptimizer: new positions=\n", positions1
-	print "GxOptimizer: step=\n", positions1 - positions
+        print "GxOptimizer: new positions=\n", positions1
+        print "GxOptimizer: step=\n", positions1 - positions
 
         self.atoms.set_positions(positions1)
 
