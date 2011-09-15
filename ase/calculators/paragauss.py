@@ -159,7 +159,13 @@ class ParaGauss:
             if "isyms" in t_gx:
                 self.data.update(t_gx)
             else:
-                self.data["isyms"] = np2.ones(n)
+                def dummy_or_not(at):
+                    if at == 0:
+                        return 0
+                    else:
+                        return 1
+
+                self.data["isyms"] = np2.array([dummy_or_not(at) for at in atnums])
                 self.data["inums"] = np2.array(range(1,n+1))
                 self.data["iconns"] = np2.zeros((n,3))
                 self.data["ivars"] = np2.zeros((n,3))
