@@ -40,7 +40,7 @@ def fromgx( file = "gxfile",   lunitfgx=LINA):
     Note tuple expansion *a in argument to the Atom() constructor.
     """
 
-    atnums, positions, isyms, inums, iconns, ivars, __, __ , numstart = gxread( file )
+    atnums, positions, isyms, inums, iconns, ivars, __, __, __ , numstart = gxread( file )
 
     positions *= lunitfgx
     return zip( atnums, positions )
@@ -95,6 +95,16 @@ def gxread( file='gxfile' ):
     # a generator for lines of the file:
     lines = open(file)
 
+    additional = None
+    line_test = lines.next()
+    fs = line_test.split()
+    if len(fs) > 12:
+        l_new = True
+    else:
+        l_new = False
+
+    lines.seek(0)
+
     # force generator to list:
     rows = list( parse(lines) )
     # print "rows=", rows
@@ -103,7 +113,12 @@ def gxread( file='gxfile' ):
     cols = zip( *rows )
 
     # unpack, we will change the type of "xyz":
-    atnums, xyz, isyms, inums, iconns, ivars = cols
+    atnums, xyz, isyms, inums, iconns, ivars, last = cols
+
+    # last might be just contain a repeatition of last ivars line
+    # Then we ignore it, but else it will be further handed on
+    if l_new:
+        additional = last
 
     # helper funciton to convert a list of 3-vectors to Nx3 numpy array:
     def nx3(xyz):
@@ -184,10 +199,10 @@ def gxread( file='gxfile' ):
     #end try
 
     # return all columns and scalar energy:
-    return atnums, xyz, isyms, inums, iconns, ivars, grads, energy, loopnum
+    return atnums, xyz, isyms, inums, iconns, ivars, additional, grads, energy, loopnum
 #end def
 
-def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=None, loop=1, file='-'):
+def gxwrite(atnums, positions, isyms, inums, iconns, ivars, additional = None, grads=None, energy=None, loop=1, file='-'):
     """Write gxfile in following format,
     (first and last lines are not parts of the file, rather for field width extimation):
     #12345 1234567890123456789012 1234567890123456789012 1234567890123456789012 123 123   123 123 123   123 123 123
@@ -220,11 +235,18 @@ def gxwrite(atnums, positions, isyms, inums, iconns, ivars, grads=None, energy=N
 
     #
     # First, the geometry section ...
-    cols = (atnums, positions , isyms, inums, iconns, ivars)
-    rows = zip( *cols )
+    if additional == None:
+        cols = (atnums, positions , isyms, inums, iconns, ivars)
+        rows = zip( *cols )
 
-    for row in rows: # row = (atnum, pos, isym, inum, iconn, ivar)
-        write( _tostr_geom( *row ) )
+        for row in rows: # row = (atnum, pos, isym, inum, iconn, ivar)
+            write( _tostr_geom( *row ) )
+    else:
+        cols = (atnums, positions , isyms, inums, iconns, ivars, additional)
+        rows = zip( *cols )
+
+        for row in rows: # row = (atnum, pos, isym, inum, iconn, ivar)
+            write( _tostr_geom_extended( *row ) )
     #end for
 
     #
@@ -269,6 +291,26 @@ def _tostr_geom(atnum, pos, isym, inum, iconn, ivar):
                  % fields )
 #end def
 
+def _tostr_geom_extended(atnum, pos, isym, inum, iconn, ivar, add):
+    """Return a line of gxfile in following format:
+    ^ 1.00        -5.184294677816         2.993153927796         0.427911418660   5  18     6   1   3     4   7   0
+    """
+
+    # extract the fields from records:
+
+    if is_dummy(atnum):
+        # gxfile convention for dummy atoms:
+        atnum = 99.0
+    else:
+        atnum = float(atnum)
+
+    # concatenate tuples, the first one is a singleton:
+    fields = (atnum,) + tuple(pos) + (isym, inum) + tuple(iconn) + tuple(ivar) + (add,)
+
+    return ( "%5.2f %22.12f %22.12f %22.12f %3i %3i   %3i %3i %3i   %3i %3i %3i  %3i\n" \
+                 % fields )
+#end def
+
 def _tostr_grad(inum, grad):
     """Return a line of gxfile containg cartesian gradients:
     ^   20       -0.000000596917  -0.000000344630   0.000002806462
@@ -303,7 +345,7 @@ def _parse_geom(line):
     if atnum < 0:
         # this is the only usefull field in this line,
         # but there is no use for it here ...
-        return ( atnum, None, None, None, None, None )
+        return ( atnum, None, None, None, None, None, None )
 
     # 3D vector of atomic position:
     pos    = [ float(i) for i in fields[1:4] ] # yes, three fields 1 <= xyz < 4
@@ -324,7 +366,10 @@ def _parse_geom(line):
     # zero for "constrained" internal coordinates:
     ivar  = [ int(i) for i in fields[9:12] ] # three fields
 
-    return ( atnum, pos, isym, inum, iconn, ivar )
+    # might be 12, might be 13 already
+    last  = int(fields[-1])
+
+    return ( atnum, pos, isym, inum, iconn, ivar, last )
 #enddef
 
 def _parse_grad(line):

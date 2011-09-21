@@ -54,7 +54,7 @@ class GxOptimizer(Optimizer):
         """
 
         # read the metadata from gxfile in columns:
-        atnums, positions, isyms, inums, iconns, ivars, grads, energy, loop_d = gxread('gxfile')
+        atnums, positions, isyms, inums, iconns, ivars, adds, grads, energy, loop_d = gxread('gxfile')
 
         # use current positions as returned by the framework,
         # in case the on-disk version is outdated (units?):
@@ -74,7 +74,7 @@ class GxOptimizer(Optimizer):
         print "GxOptimizer: forces=\n", forces
 
         # write gxfile to disk, note that energy gradients == - forces (units?):
-        gxwrite(atnums, positions / Bohr, isyms, inums, iconns, ivars, -forces / Hartree * Bohr, energy/Hartree, file='gxfile', loop=self._loop)
+        gxwrite(atnums, positions / Bohr, isyms, inums, iconns, ivars, adds, -forces / Hartree * Bohr, energy/Hartree, file='gxfile', loop=self._loop)
 
         # run external executable to update geometry:
         # exitcode = os.system('optimizer.exe')
@@ -96,7 +96,7 @@ class GxOptimizer(Optimizer):
         print "GxOptimizer: converged=", self._converged
 
         # read the updated geometry from the gxfile:
-        atnums, positions1, isyms, inums, iconns, ivars,  grads, energy, loop_d = gxread('gxfile')
+        atnums, positions1, isyms, inums, iconns, ivars, adds,  grads, energy, loop_d = gxread('gxfile')
 
         positions1 = positions1 * Bohr
 

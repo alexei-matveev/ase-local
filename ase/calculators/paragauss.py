@@ -57,7 +57,7 @@ class ParaGauss:
       # we must not disturb its internal coordinates
       if os.path.exists('gxfile'):
           self.atnums, __, self.data["isyms"], self.data["inums"], self.data["iconns"], self.data["ivars"], \
-           __, __, loop = gxread('gxfile')
+          self.data["additional"], __, __, loop = gxread('gxfile')
 
 
     def update(self, atoms):
@@ -140,7 +140,7 @@ class ParaGauss:
         # make sure it contains the same meta data than our source:
         t_gx = {}
         if os.path.exists('gxfile'):
-            atnums, __, t_gx["isyms"], t_gx["inums"], t_gx["iconns"], t_gx["ivars"], __, __, loop = gxread('gxfile')
+            atnums, __, t_gx["isyms"], t_gx["inums"], t_gx["iconns"], t_gx["ivars"], t_gx["additional"], __, __, loop = gxread('gxfile')
             for dat in self.data.keys():
                 if (np2.asarray(self.data[dat]) != np2.array(t_gx[dat])).any():
                     print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
@@ -169,10 +169,11 @@ class ParaGauss:
                 self.data["inums"] = np2.array(range(1,n+1))
                 self.data["iconns"] = np2.zeros((n,3))
                 self.data["ivars"] = np2.zeros((n,3))
+                self.data["additional"] = None
         # create gxfile with actual geometry for calculation
         # units of positions should be Bohrs in here, so they are changed
         gxwrite(self.atnums, self.positions/Bohr, self.data["isyms"], self.data["inums"], self.data["iconns"],\
-                     self.data["ivars"], None, None, loop, file='gxfile' )
+                     self.data["ivars"], self.data["additional"], None, None, loop, file='gxfile' )
         input = basename(self.input)
         inputfile = open(input, "w")
         inputfile.write(self.inputstring)
@@ -197,7 +198,7 @@ class ParaGauss:
         # even if we don't need the output.
         os.system("ls > /dev/null")
         if os.path.exists('gxfile'):
-            __, __, __, __, __, __, self.__grads, self.__energy, loopi_d = gxread('gxfile')
+            __, __, __, __, __, __,__, self.__grads, self.__energy, loopi_d = gxread('gxfile')
             if self.__energy is not None:
                 return
         else:

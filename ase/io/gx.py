@@ -13,7 +13,7 @@ def read_gx(file = "gxfile"):
     return atoms
 
 
-def write_gx(filename, atoms, with_energy = False, with_gradients = False, loop = 1, isyms = None, inums = None, iconns = None, ivars = None):
+def write_gx(filename, atoms, with_energy = False, with_gradients = False, loop = 1, isyms = None, inums = None, iconns = None, ivars = None, additionals = None):
     energy = None
     if with_energy:
         energy = atoms.get_potential_energy() / Hartree
@@ -34,5 +34,5 @@ def write_gx(filename, atoms, with_energy = False, with_gradients = False, loop 
     if ivars == None:
         ivars = zeros((n,3))
 
-    gxwrite(atnums, positions/Bohr, isyms, inums, iconns, ivars, grads, energy, loop, file=filename )
+    gxwrite(atnums, positions/Bohr, isyms, inums, iconns, ivars, additionals, grads, energy, loop, file=filename )
 
