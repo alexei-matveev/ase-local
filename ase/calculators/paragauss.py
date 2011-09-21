@@ -19,6 +19,7 @@ class ParaGauss:
           input = "input",
           cmdline = "runpg /users/alexei/exe/openmpi/mainscf_V3.1.4b7-64",
           silence = True,
+          optimizer = None
           ):
 
 
@@ -33,10 +34,12 @@ class ParaGauss:
 
                       runpg /users/alexei/exe/openmpi/mainscf_V3.1.4
 
-      |writeowninput| if true the Programm does not build its own input
-                      file, but reads in the one named as input parameter
-                      needs this file to exist
-                      so far the option false is not implemented
+      |silence|       if True (is as default) ParaGauss stdout will go to a separate file
+                      if False it would go to the normal stdout
+
+      |optimizer|     If optimizer input is needed for a ParaGauss single point calculation
+                      the programm takes the content from optimizer and provides it as
+		      optimizer.input in the directory the calculation runs
       """
       self.input = input
       self.cmdline = cmdline
@@ -51,6 +54,13 @@ class ParaGauss:
 
       self.inputstring = file.read()
       file.close()
+      if optimizer == None:
+          self.optimizer = None
+      else:
+          file = open(optimizer, "r")
+          self.optimizer = file.read()
+          file.close()
+
       self.atnums = None
       #print self.inputstring
       # there may be a gxfile from gxoptimizer
@@ -178,6 +188,11 @@ class ParaGauss:
         inputfile = open(input, "w")
         inputfile.write(self.inputstring)
         inputfile.close()
+        if not self.optimizer == None:
+            optifile = open("optimizer.input", "w")
+            optifile.write(self.optimizer)
+            optifile.close()
+
         # the actual calcualtion
         cmd = self.cmdline + ' ' + input
         if self.silence:
