@@ -3,6 +3,7 @@
 """
 import os, sys
 from os.path import basename
+from os.path import isfile
 import numpy as np2
 from ase.gxfile import gxread, gxwrite
 from ase.units import Bohr, Hartree
@@ -19,7 +20,8 @@ class ParaGauss:
           input = "input",
           cmdline = "runpg /users/alexei/exe/openmpi/mainscf_V3.1.4b7-64",
           silence = True,
-          optimizer = None
+          optimizer = None,
+          copy_input = "always"
           ):
 
 
@@ -40,20 +42,34 @@ class ParaGauss:
       |optimizer|     If optimizer input is needed for a ParaGauss single point calculation
                       the programm takes the content from optimizer and provides it as
 		      optimizer.input in the directory the calculation runs
+
+      |copy_input|    Allows three different modes:
+                      always      (is the default) will create new input file from
+                                  storage each time a quantum chemistry calculation starts
+                      never       will never create an input file
+                      inexistent  will create a new input file for a quantum chemistry
+                                  calculation if it finds that the file does not exist
+
+                      Both always and inexistent will fetch the input file they will create
+                      lateron in the current working directory during initalization
       """
       self.input = input
       self.cmdline = cmdline
       self.silence = silence
+      assert (copy_input in ["always", "never", "inexistent"])
+      self.copy_input = copy_input
 
       self.converged = False
 
       #store metadata here, it might be needed (even in another directory)
       self.data = {}
 
-      file = open(self.input, "r")
+      if not self.copy_input == "never":
+          file = open(self.input, "r")
 
-      self.inputstring = file.read()
-      file.close()
+          self.inputstring = file.read()
+          file.close()
+
       if optimizer == None:
           self.optimizer = None
       else:
@@ -185,9 +201,17 @@ class ParaGauss:
         gxwrite(self.atnums, self.positions/Bohr, self.data["isyms"], self.data["inums"], self.data["iconns"],\
                      self.data["ivars"], self.data["additional"], None, None, loop, file='gxfile' )
         input = basename(self.input)
-        inputfile = open(input, "w")
-        inputfile.write(self.inputstring)
-        inputfile.close()
+
+        copy_inp = (self.copy_input == "always")
+
+        if self.copy_input == "inexistent":
+            copy_inp = (not isfile(input))
+
+        if copy_inp:
+            inputfile = open(input, "w")
+            inputfile.write(self.inputstring)
+            inputfile.close()
+
         if not self.optimizer == None:
             optifile = open("optimizer.input", "w")
             optifile.write(self.optimizer)
