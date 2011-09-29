@@ -2,7 +2,7 @@ from ase.atom import Atom
 from ase.atoms import Atoms
 from ase.gxfile import fromgx, gxwrite
 from ase.units import Bohr, Hartree
-from numpy import ones, zeros
+from numpy import ones, zeros, array
 
 def read_gx(file = "gxfile"):
     """
@@ -26,7 +26,13 @@ def write_gx(filename, atoms, with_energy = False, with_gradients = False, loop 
     atnums = atoms.get_atomic_numbers().copy()
     n = len(atnums)
     if isyms == None:
-        isyms = ones(n)
+        def dummy_or_not(at):
+            if at == 0:
+                return 0
+            else:
+                return 1
+
+        isyms = array([dummy_or_not(at) for at in atnums])
     if inums == None:
         inums = zeros(n)
     if iconns == None:
