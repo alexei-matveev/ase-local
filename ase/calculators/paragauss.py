@@ -220,7 +220,7 @@ class ParaGauss:
         # the actual calcualtion
         cmd = self.cmdline + ' ' + input
         if self.silence:
-            cmd +=  ' >> ParaGauss.out'
+            cmd +=  ' > ParaGauss.out'
         tty = os.system(cmd)
         # reads in new energy and forces
         self.read()
@@ -236,6 +236,18 @@ class ParaGauss:
         # to a file that should but isn't there. So it makes sense to read all the files that are there,
         # even if we don't need the output.
         os.system("ls > /dev/null")
+
+        if isfile('o.' + basename(self.input) + '/trace_output'):
+            # If there are some trace files keep content of them, as if several calcualtions
+            # have been performed after another, only for the last iteration the trace would
+            # be available
+            f = open('o.' + basename(self.input) + '/trace_output', "r")
+            keep = f.read()
+            f.close()
+            f = open("keep_traces", "a")
+            f.write(keep)
+            f.close()
+
         if os.path.exists('gxfile'):
             __, __, __, __, __, __,__, self.__grads, self.__energy, loopi_d = gxread('gxfile')
             if self.__energy is not None:
