@@ -225,7 +225,23 @@ class ParaGauss:
         # reads in new energy and forces
         self.read()
 
+        self.report(atoms, "ParaGauss.xyz")
+
         self.converged = True
+
+
+    def report(self, atoms, file):
+        #
+        # Report the energy (and the geometry currently calculated on)
+        # after a finshed calculation in ASE units
+        #
+        symbols = atoms.get_chemical_symbols()
+        natoms = len(symbols)
+        f = open(file, "w")
+        f.write('%d\nE = %22.15f eV\n' % (natoms, self.__energy * Hartree))
+        for s, (x, y, z) in zip(symbols, atoms.get_positions()):
+            f.write('%-2s %22.15f %22.15f %22.15f\n' % (s, x, y, z))
+        f.close()
 
 
     def read(self):
