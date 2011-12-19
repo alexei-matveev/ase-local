@@ -444,7 +444,7 @@ class Vasp(Calculator):
             sys.stderr = open(p['txt'], 'w')
         if os.environ.has_key('VASP_COMMAND'):
             vasp = os.environ['VASP_COMMAND']
-            exitcode = os.system('%s > %s' % (vasp, self.out))
+            exitcode = os.system('%s >> %s' % (vasp, self.out))
         elif os.environ.has_key('VASP_SCRIPT'):
             vasp = os.environ['VASP_SCRIPT']
             locals={}
