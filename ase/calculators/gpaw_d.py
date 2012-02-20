@@ -110,7 +110,7 @@ class GPAW_d3(GPAW):
         self.ks_scf_energy = GPAW.get_potential_energy(self, atoms, force_consistent)
         #
         # Get functional name as string
-        self.functional = str.lower(GPAW.get_xc_functional(self))
+	self.functional = xc_name(str.lower(GPAW.get_xc_functional(self)))
         #
         # Call DFT-D module: Energy and gradients
         self.dispersion_correction, self.dft_d_gradient_contribution = d3_pbc(atoms, self.functional)

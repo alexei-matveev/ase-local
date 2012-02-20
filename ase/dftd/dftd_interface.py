@@ -509,7 +509,7 @@ def get_interaction_controls(atoms):
 #
 # Convert xc_functional designators
 def xc_name(raw_xc_name):
-  conv_xc_name = '000'
+  conv_xc_name = str.lower(raw_xc_name)
   if (str.lower(raw_xc_name) == 'pbe'):
     conv_xc_name = 'pbe'
   if (str.lower(raw_xc_name) == 'ps'):
