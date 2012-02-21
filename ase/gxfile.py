@@ -26,7 +26,7 @@ def is_dummy(atnum):
 
 #conversion factors from Angstrom and eV
 EINEV=27.2113845
-LINA=0.529177
+LINA=Bohr
 
 # for private use only:
 class EOF(Exception): pass
