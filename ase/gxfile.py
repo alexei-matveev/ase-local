@@ -9,6 +9,7 @@ from sys import stdout, stderr, exit
 # from vector import Vector as V
 import numpy as np
 from numpy import array as V
+from ase.units import Bohr
 # from derivatives import DerivVector as V
 
 # Dummy atoms have to be distinguished from real  ones.
