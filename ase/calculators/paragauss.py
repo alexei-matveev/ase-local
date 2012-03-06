@@ -24,8 +24,6 @@ class ParaGauss:
                  optimizer = None,
                  copy_input = "always"
                  ):
-
-
         """
         Parameters
         ==========
@@ -85,6 +83,20 @@ class ParaGauss:
         self.copy_input = copy_input
 
         self.converged = False
+
+        # I am  getting tired of  this voodoo, FIXME: factor  this out
+        # into a function:
+        if input.startswith("i."):
+            # e.g. i.h2o:
+            input_base_name = input[2:]
+        else:
+            # e.g. input, or anything else:
+            input_base_name = input
+
+        if input_base_name == "input":
+            self.output = "output"
+        else:
+            self.output = "o." + input_base_name + "/output"
 
         # store  metadata here, it  might be  needed (even  in another
         # directory)
@@ -299,7 +311,7 @@ class ParaGauss:
             print "ERROR: I quit!!"
             sys.exit(1)
 
-        self.__energy = self.parse_output('o.' + basename(self.input) + '/output')
+        self.__energy = self.parse_output(self.output)
 
     def parse_output(self, output): # not actually using |self|
         """
