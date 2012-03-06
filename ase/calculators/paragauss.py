@@ -17,73 +17,99 @@ class ParaGauss:
 
     """
     def __init__(self,
-          input = "input",
-          cmdline = "runpg /users/alexei/exe/openmpi/mainscf_V3.1.4b7-64",
-          silence = True,
-          optimizer = None,
-          copy_input = "always"
-          ):
+                 input = "input",
+                 cmdline = "runpg /users/alexei/exe/openmpi/mainscf_V3.1.4b7-64",
+                 silence = True,
+                 optimizer = None,
+                 copy_input = "always"
+                 ):
 
 
-      """
-      Parameters
-      ==========
-      |input|         name of the input file wich contains all the informations
-                      ParaGauss needs
+        """
+        Parameters
+        ==========
 
-      |cmdline|       Shell command to start ParaGauss, it will be executed in working directory.
-                      A typical command line reads:
+        |input|
 
-                      runpg /users/alexei/exe/openmpi/mainscf_V3.1.4
+            name of the input  file wich contains all the informations
+            ParaGauss needs
 
-      |silence|       if True (is as default) ParaGauss stdout will go to a separate file
-                      if False it would go to the normal stdout
+        |cmdline|
 
-      |optimizer|     If optimizer input is needed for a ParaGauss single point calculation
-                      the programm takes the content from optimizer and provides it as
-		      optimizer.input in the directory the calculation runs
+            Shell command  to start ParaGauss, it will  be executed in
+            working directory.  A typical command line reads:
 
-      |copy_input|    Allows three different modes:
-                      always      (is the default) will create new input file from
-                                  storage each time a quantum chemistry calculation starts
-                      never       will never create an input file
-                      inexistent  will create a new input file for a quantum chemistry
-                                  calculation if it finds that the file does not exist
+                runpg /users/alexei/exe/openmpi/mainscf_V3.1.4
 
-                      Both always and inexistent will fetch the input file they will create
-                      lateron in the current working directory during initalization
-      """
-      self.input = input
-      self.cmdline = cmdline
-      self.silence = silence
-      assert (copy_input in ["always", "never", "inexistent"])
-      self.copy_input = copy_input
+        |silence|
 
-      self.converged = False
+            if  True (is  as default)  ParaGauss stdout  will go  to a
+            separate file if False it would go to the normal stdout
 
-      #store metadata here, it might be needed (even in another directory)
-      self.data = {}
+        |optimizer|
 
-      if not self.copy_input == "never":
-          file = open(self.input, "r")
+            If optimizer input is  needed for a ParaGauss single point
+            calculation the programm  takes the content from optimizer
+            and provides  it as  optimizer.input in the  directory the
+            calculation runs
 
-          self.inputstring = file.read()
-          file.close()
+        |copy_input|
 
-      if optimizer == None:
-          self.optimizer = None
-      else:
-          file = open(optimizer, "r")
-          self.optimizer = file.read()
-          file.close()
+            Allows three different modes:
 
-      self.atnums = None
-      #print self.inputstring
-      # there may be a gxfile from gxoptimizer
-      # we must not disturb its internal coordinates
-      if os.path.exists('gxfile'):
-          self.atnums, __, self.data["isyms"], self.data["inums"], self.data["iconns"], self.data["ivars"], \
-          self.data["additional"], __, __, loop = gxread('gxfile')
+            always
+
+                (is  the  default) will  create  new  input file  from
+                storage  each  time  a quantum  chemistry  calculation
+                starts
+
+            never
+
+                will never create an input file
+
+            inexistent
+
+                will create  a new input file for  a quantum chemistry
+                calculation if it finds that the file does not exist
+
+                Both always  and inexistent will fetch  the input file
+                they  will  create  lateron  in  the  current  working
+                directory during initalization
+        """
+
+        self.input = input
+        self.cmdline = cmdline
+        self.silence = silence
+        assert (copy_input in ["always", "never", "inexistent"])
+        self.copy_input = copy_input
+
+        self.converged = False
+
+        # store  metadata here, it  might be  needed (even  in another
+        # directory)
+        self.data = {}
+
+        if not self.copy_input == "never":
+            file = open(self.input, "r")
+
+            self.inputstring = file.read()
+            file.close()
+
+        if optimizer == None:
+            self.optimizer = None
+        else:
+            file = open(optimizer, "r")
+            self.optimizer = file.read()
+            file.close()
+        # print self.inputstring
+
+        self.atnums = None
+
+        # there may be  a gxfile from gxoptimizer we  must not disturb
+        # its internal coordinates
+        if os.path.exists('gxfile'):
+            self.atnums, __, self.data["isyms"], self.data["inums"], self.data["iconns"], self.data["ivars"], \
+                self.data["additional"], __, __, loop = gxread('gxfile')
 
 
     def update(self, atoms):
