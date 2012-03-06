@@ -1,3 +1,4 @@
+from __future__ import with_statement
 """This module defines an ASE interface to ParaGauss.
 
 """
@@ -90,17 +91,14 @@ class ParaGauss:
         self.data = {}
 
         if not self.copy_input == "never":
-            file = open(self.input, "r")
-
-            self.inputstring = file.read()
-            file.close()
+            with open(self.input, "r") as file:
+                self.inputstring = file.read()
 
         if optimizer == None:
             self.optimizer = None
         else:
-            file = open(optimizer, "r")
-            self.optimizer = file.read()
-            file.close()
+            with open(optimizer, "r") as file:
+                self.optimizer = file.read()
         # print self.inputstring
 
         self.atnums = None
