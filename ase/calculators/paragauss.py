@@ -9,6 +9,7 @@ import numpy as np2
 from ase.gxfile import gxread, gxwrite
 from ase.units import Bohr, Hartree
 
+from general import Calculator
 
 class ParaGauss:
     """Class for doing ParaGauss calculations.
@@ -338,4 +339,367 @@ class ParaGauss:
         # print 'e_sum=',e_sum
         # FIXME: should we somehow close() the file? It happens that close() is not in scope.
         return e_sum
+
+
+
+class PG(Calculator):
+  #
+  # Alternative calculator, in a more ASE-like style to set up calculations quickly
+  #
+  def __init__( self
+              , exe = "/home/soini/PROGRAMMING/paragauss_mac_working/bin/runpg /home/soini/PROGRAMMING/paragauss_mac_working/mainscf_4test_suite"
+              ,**kwargs ):
+    #
+    #
+    self.__cmd__ = exe
+    self.flag_keys   = {'uks'        : False
+		       ,'jexact'     : False
+		       ,'saveread_ks': True
+		       }
+    self.int_keys    = {'max_scf'    : 20
+	               ,'ndiis'      : 5
+	               ,'sdiis'      : 5
+		       ,'nrad'       : 150
+		       ,'nang'       : 291
+		       }
+    self.real_keys   = {'e_conv'     : 1.0e-8
+		       ,'d_conv'     : 1.0e-6
+		       ,'scale_crit' : 1.0
+		       ,'fmix'       : 0.25
+		       }
+    self.str_keys    = {'task'       : 'Gradients'
+                       ,'sym'        : 'C1'
+                       ,'rel'        : 'FALSE'
+		       ,'xc'         : 'PBE'
+		       }
+    self.list_keys   = {'ea'         : [1]
+		       ,'basis'      : {}
+		       }
+    #
+    for key, val in kwargs.iteritems():
+      if self.flag_keys.has_key( key ):
+        self.flag_keys[key] = val
+      if self.int_keys.has_key( key ):
+        self.int_keys[key] = val
+      if self.real_keys.has_key( key ):
+        self.real_keys[key] = val
+      if self.str_keys.has_key( key ):
+        self.str_keys[key] = val
+      if self.list_keys.has_key( key ):
+        self.list_keys[key] = val
+    #
+    self.atoms = None
+    #
+    self.__e_tot = None
+    self.__forces = None
+    #
+    os.system('rm -rf trace.log')
+    #
+  def set_atoms(self, atoms):
+    if (atoms != self.atoms):
+      self.__got_output = False
+    self.atoms = atoms.copy()
+    #
+  def get_potential_energy(self, atoms):
+    from ase.units import Hartree
+    self.update(atoms)
+    if self.__got_output:
+      energies = []
+      for line in self.read( 'e_sum' ):
+        if '[' in line:
+          energies += [float(line[2])]
+      try:
+        self.__e_tot = energies[-1]*Hartree
+      except:
+        self.__pg_error__( 'No energies found in output.\n            Check Paragauss.out!                ' )
+    else:
+      self.__pg_error__( 'Failed while trying to retrieve energy from output' )
+    return self.__e_tot
+    #
+  def get_forces(self, atoms):
+    from ase.units import Hartree, Bohr
+    from numpy import zeros
+    self.update(atoms)
+    if self.__got_output:
+      grads = zeros( (atoms.get_number_of_atoms(), 3) )
+      i_run = 0
+      for line in self.read( 'Equal Center:' ):
+        grads[i_run,0] = line[2]
+        grads[i_run,1] = line[3]
+        grads[i_run,2] = line[4]
+        i_run += 1
+      self.__forces = - grads * Hartree / Bohr
+    else:
+      self.__pg_error__( 'Failed while trying to retrieve forces from output' )
+    return self.__forces
+    #
+  def get_stress(self, atoms):
+    raise NotImplementedError
+    #
+  def update( self, atoms ):
+    from os import path
+    if self.atoms != atoms or not self.__got_output:
+      self.set_atoms( atoms )
+      self.__write_input__( self.atoms )
+      self.calculate()
+      # We should have an output at this point
+      if path.exists('o.input/output'):
+        self.__got_output = True
+      else:
+        self.__pg_error__( 'No output under o.input/output. Something went terribly wrong' )
+    #
+  def calculate( self ):
+    os.system('rm -rf o.input')
+    cmd = self.__cmd__ + ' ' + 'input'
+    cmd +=  ' > ParaGauss.out'
+    tty = os.system(cmd)
+    os.system('cat o.input/trace_output >> trace.log')
+    #
+  def read( self, arg ):
+    resultlines = []
+    for line in open('o.input/output'):
+      if arg in line:
+	resultlines += [line.split()]
+    return resultlines
+    #
+  def __write_input__( self, atoms ):
+    from time import clock
+    from os import path
+    inputtext = [ ' #~~~~~~~# calculation definition #~~~~~~~#']
+    # Define all PG namelists here...
+    #
+    # NAMELIST TASKS
+    if self.__check_entry__( self.str_keys['task']
+                           , allowed=['SinglePoint', 'Gradients']
+                           , entryname='task' ):
+      nml = { 'TASK': '"'+self.str_keys['task']+'"' }
+      inputtext += self.__write_namelist__( 'tasks', nml )
+    #
+    # NAMELIST MAIN_OPTIONS
+    nml = { 'SPIN_RESTRICTED': not self.flag_keys['uks']
+	  , 'RELATIVISTIC': '"'+self.str_keys['rel']+'"'
+	  # DEFAULTS !!
+	  , 'INTEGRALS_ON_FILE': 'FALSE'
+	  , 'PERTURBATION_THEORY': 'FALSE' }
+    inputtext += self.__write_namelist__( 'main_options', nml )
+    #
+    # NAMELIST RECOVER_OPTIONS
+    nml = { 'SAVE_KSMATRIX' : self.flag_keys['saveread_ks']  
+          , 'READ_KSMATRIX' : self.flag_keys['saveread_ks'] and path.exists('saved_ksmatrix.dat') }
+    inputtext += self.__write_namelist__( 'recover_options', nml )
+    #
+    # NAMELIST MIXING
+    if ( self.int_keys['ndiis'] > 0 ):
+      nml = { 'CHMIX' : 1.0
+            , 'SPMIX' : 1.0
+	    , 'XCMIX' : 1.0
+	    , 'START_AFTER_CYCLE' : 10000 }
+    inputtext += self.__write_namelist__( 'mixing', nml )
+    #
+    # NAMELIST DIIS
+    nml = { 'DIIS_ON'    : self.int_keys['ndiis'] > 0
+          , 'MMAX'       : self.int_keys['ndiis']
+	  , 'LOOP_START' : self.int_keys['sdiis']
+	  , 'THRESHOLD'  : 0.15
+	  , 'CFIX'       : self.real_keys['fmix'] }
+    inputtext += self.__write_namelist__( 'diis', nml )
+    #
+    # NAMELIST CONVERGENCE_LIST
+    self.__scale_convergency_criteria__()
+    nml = { 'MAX_ITERATION': self.int_keys['max_scf']
+          , 'ENERGY_CRITERION': self.real_keys['e_conv']*self.scale_crit
+	  , 'ENERGY_DEV_CHECKED': 3
+          , 'DENSITY_CRITERION': self.real_keys['d_conv']*self.scale_crit }
+    inputtext += self.__write_namelist__( 'convergence_list', nml )
+    #
+    # NAMELIST XC_CONTROL
+    nml = { 'XC': self.str_keys['xc'] }
+    inputtext += self.__write_namelist__( 'xc_control', nml )
+    #
+    # NAMELIST ERI4C
+    nml = { 'ERI4C': self.flag_keys['jexact'] }
+    inputtext += self.__write_namelist__( 'eri4c', nml )
+    #
+    #
+    inputtext += self.__write_uniques__( atoms )
+    #
+    inputtext += self.__write_basis__( atoms )
+    #
+    inputtext += ['',' #~~~~~~~# written at '+str(clock())+'  #~~~~~~~#']
+    #
+    input = open('input','w')
+    for line in inputtext:
+      input.write("%s\n" % line )
+    input.close()
+    #
+  def __write_namelist__( self, namelist, entries ):
+    inputtext = [ '', ' &'+namelist ]
+    for key, val in entries.iteritems():
+      inputtext.append( '   '+key+' = '+str(val) )
+    inputtext.append( ' /'+namelist )
+    return inputtext
+    #
+  def __write_uniques__( self, atoms ):
+    from ase.units import Bohr
+    inputtext = [ '', ' #~~~~~~~# system definition #~~~~~~~#' ]
+    #
+    # Some preparations... check if input consistent with symmetry
+    if self.__check_entry__( self.str_keys['sym']
+                           , allowed=self.__point_groups__()
+                           , entryname='sym' ):
+      if self.str_keys['sym'] == 'C1' or atoms.get_number_of_atoms() == 1:
+        self.list_keys['ea'] = [1]*atoms.get_number_of_atoms()
+    self.p_ua     = [None]*len( self.list_keys['ea'] )
+    i_run         = 0
+    for i_ua in range(len(self.p_ua)):
+      self.p_ua[i_ua] = i_run
+      i_run           += self.list_keys['ea'][i_run]
+    self.n_ua     = len( self.list_keys['ea'] )
+    #
+    # NAMELIST SYMMETRY_GROUP
+    nml = { 'POINT_GROUP': '"'+self.str_keys['sym']+'"' }
+    inputtext += self.__write_namelist__( 'symmetry_group', nml )
+    #
+    # NAMELIST UNIQUE_ATOM_NUMBER
+    nml = { 'N_UNIQUE_ATOMS': self.n_ua }
+    inputtext += self.__write_namelist__( 'unique_atom_number', nml )
+
+    for i_ua in range(self.n_ua):
+      i_run = self.p_ua[i_ua]
+      #
+      # NAMELIST N_UNIQUE_ATOMS
+      nml = { 'NAME': '"'+atoms.get_chemical_symbols()[i_run]+'"'
+	    , 'Z'   : str(atoms.get_atomic_numbers()[i_run])+'.0'
+	    , 'N_EQUAL_ATOMS' : self.list_keys['ea'][i_ua]
+	    }
+      inputtext += self.__write_namelist__( 'unique_atom # number'+str(i_ua+1), nml )
+      inputtext += self.__write_array__( atoms.get_positions()[i_run]/Bohr )
+    #
+    inputtext += [ '', ' #~~~~~~~# grid definition #~~~~~~~#' ]
+    # NAMELIST GRID
+    nml = { 'SYM_REDUCE': True }
+    inputtext += self.__write_namelist__( 'grid', nml )
+    #
+    for i_ua in range(self.n_ua):
+      i_run = self.p_ua[i_ua]
+      #
+      # NAMELIST GRIDATOM
+      nml = { 'NRAD': self.int_keys['nrad']
+            , 'NANG': self.int_keys['nang']
+	    }
+      inputtext += self.__write_namelist__( 'gridatom # number'+str(i_ua+1), nml )
+    #
+    return inputtext
+    #
+  def __write_basis__( self, atoms ):
+    from os import path
+    inputtext = [ '', ' #~~~~~~~# basis definition #~~~~~~~#', '' ]
+    #
+    bas_raw = self.list_keys['basis']
+    #
+    # Check if everything is ok
+    self.el = {}
+    for a in atoms:
+      try:
+        self.el[a.symbol] += 1
+      except:
+        self.el[a.symbol] = 1
+    self.n_el = len(self.el)
+    if len( bas_raw ) < self.n_el:
+      self.__pg_error__( 'Need '+str(self.n_el)+' basis sets. Received only '+str(len( bas_raw )) )
+    for el, bas in bas_raw.iteritems():
+      if not path.exists( bas ):
+	self.__pg_error__( 'Basis set file '+bas+' missing' )
+    #
+    # Unpack basis
+    for i_ua in range(self.n_ua):
+      i_run = self.p_ua[i_ua]
+      a = atoms[i_run]
+      #
+      try:
+        inputtext += ['~'+bas_raw[a.symbol]]
+      except:
+        self.__pg_error__( 'Need basis set for element '+a.symbol )
+    return inputtext
+    #
+  def __write_array__( self, array ):
+    line = '   '
+    for float in array:
+      line += "%.8f" % float+'   '
+    return [line]
+    #
+  def __check_entry__( self, entry, allowed=[True,False], entryname='abcdefg' ):
+    if entry not in allowed:
+      print 'ERROR: only one out of'
+      for x in allowed:
+	print str(x)
+      print '       allowed for keyword '+str(entryname)
+      sys.exit()
+    return True
+    #
+  def __scale_convergency_criteria__( self ):
+    from ase.units import Hartree, Bohr
+    if self.real_keys['scale_crit'] > 1.0:
+      if self.__forces != None:
+	# Scale according to forces. Upper bound is 0.1, lower bound is e_conv and d_conv
+        self.scale_crit = min([ 0.1/max([self.real_keys['e_conv'],self.real_keys['d_conv']])
+	                      , max( [ 1.0, self.real_keys['scale_crit'] * self.__max_force__( self.__forces * Bohr / Hartree )] )] )
+      else:
+	# Scale assuming forces of 1.0
+	self.scale_crit = self.real_keys['scale_crit']
+	# 
+  def __max_force__( self, grads ):
+    max_force = 0.0
+    for grad in grads:
+      max_force = max( [max_force, (grad[0]*grad[0]+grad[1]*grad[1]+grad[2]*grad[2])**0.5 ] )
+    return max_force
+    #
+  def __pg_error__( self, msg ):
+    import sys
+    print
+    print ' #### ERROR: '+msg+' ####'
+    print
+    sys.exit()
+    #
+  def __point_groups__( self ):
+    return ['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','Ci'
+	   ,'CS','S4','S6','S8','S10','S12','S14','S16','S18','S20'
+           ,'D2','D3','D4','D5','D6','D7','D8','D9','D10'
+	   ,'D2H','D3H','D4H','D5H','D6H','D7H','D8H','D9H','D10H','Dinh'
+           ,'D2D','D3D','D4D','D5D','D6D','D7D','D8D','D9D','D10D'
+           ,'C2V','C3V','C4V','C5V','C6V','C7V','C8V','C9V','C10V','Cinv'
+           ,'C2H','C3H','C4H','C5H','C6H','C7H','C8H','C9H','C10H'
+	   ,'O','T','OH','TH','TD','I','IH']
+    #
+# class PG_nml():
+#   def __init__( nml_name='namelist_name', nml_keys={'key':'value'}, nml_data=[] ):
+#     # A PG namelist consists of
+#     # 1) a title (string)
+#     # 2) some key-value pairs (dictionary)
+#     # 3) an optional data-appendix (list, arbitrary type)
+#     self.name = nml_name
+#     self.keys = nml_keys
+#     self.data = nml_data
+#   def write( self ):
+#     # Leave whitespace for better readability
+#     inputtext =  ['']
+#     # Namelist header
+#     inputtext += [ '  &' + self.name ]
+#     # Namelist entries
+#     for key, val in self.keys.iteritems():
+#       # Should allow every type
+#       inputtext += ['   ' + key + ' = '.join(str([val])).replace('[','').replace(',','').replace(']','') ]
+#     # Conclude Namelist
+#     inputtext += [ '  /' + self.name ]
+#     # Data entries
+#     for line in self.nml_data:
+#       inputtext += ['   '.join(str([line])).replace('[','').replace(',','').replace(']','') ]
+#   #
+# def PG_define_nmls(self):
+#   # Define input as a list of PG_nml types
+#   return [
+
+#          
+#          ]
+
 
