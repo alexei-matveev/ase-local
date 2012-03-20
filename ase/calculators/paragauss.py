@@ -416,7 +416,7 @@ class PG(Calculator):
       if self.real_keys.has_key( key ):
         self.real_keys[key] = val
       if self.str_keys.has_key( key ):
-        self.str_keys[key] = val
+        self.str_keys[key] = '"' + val + '"'
       if self.list_keys.has_key( key ):
         self.list_keys[key] = val
     #
@@ -470,6 +470,7 @@ class PG(Calculator):
     #
   def update( self, atoms ):
     from os import path
+    self.__scale_convergency_criteria__()
     if self.atoms != atoms or not self.__got_output:
       self.set_atoms( atoms )
       self.__write_input__( self.atoms )
@@ -495,73 +496,16 @@ class PG(Calculator):
     return resultlines
     #
   def __write_input__( self, atoms ):
-    from time import clock
-    from os import path
-    inputtext = [ ' #~~~~~~~# calculation definition #~~~~~~~#']
-    # Define all PG namelists here...
     #
-    # NAMELIST TASKS
-    if self.__check_entry__( self.str_keys['task']
-                           , allowed=['SinglePoint', 'Gradients']
-                           , entryname='task' ):
-      nml = { 'TASK': '"'+self.str_keys['task']+'"' }
-      inputtext += self.__write_namelist__( 'tasks', nml )
+    self.p_ua, self.n_ua = self.check_sym( atoms )
+    self.n_el, self.b_ua = self.check_bas( self.p_ua, atoms, self.list_keys['basis'] )
     #
-    # NAMELIST MAIN_OPTIONS
-    nml = { 'SPIN_RESTRICTED': not self.flag_keys['uks']
-	  , 'RELATIVISTIC': '"'+self.str_keys['rel']+'"'
-	  # DEFAULTS !!
-	  , 'INTEGRALS_ON_FILE': 'FALSE'
-	  , 'PERTURBATION_THEORY': 'FALSE' }
-    inputtext += self.__write_namelist__( 'main_options', nml )
-    #
-    # NAMELIST RECOVER_OPTIONS
-    nml = { 'SAVE_KSMATRIX' : self.flag_keys['saveread_ks']  
-          , 'READ_KSMATRIX' : self.flag_keys['saveread_ks'] and path.exists('saved_ksmatrix.dat') }
-    inputtext += self.__write_namelist__( 'recover_options', nml )
-    #
-    # NAMELIST MIXING
-    if ( self.int_keys['ndiis'] > 0 ):
-      nml = { 'CHMIX' : 1.0
-            , 'SPMIX' : 1.0
-	    , 'XCMIX' : 1.0
-	    , 'START_AFTER_CYCLE' : 10000 }
-    inputtext += self.__write_namelist__( 'mixing', nml )
-    #
-    # NAMELIST DIIS
-    nml = { 'DIIS_ON'    : self.int_keys['ndiis'] > 0
-          , 'MMAX'       : self.int_keys['ndiis']
-	  , 'LOOP_START' : self.int_keys['sdiis']
-	  , 'THRESHOLD'  : 0.15
-	  , 'CFIX'       : self.real_keys['fmix'] }
-    inputtext += self.__write_namelist__( 'diis', nml )
-    #
-    # NAMELIST CONVERGENCE_LIST
-    self.__scale_convergency_criteria__()
-    nml = { 'MAX_ITERATION': self.int_keys['max_scf']
-          , 'ENERGY_CRITERION': self.real_keys['e_conv']*self.scale_crit
-	  , 'ENERGY_DEV_CHECKED': 3
-          , 'DENSITY_CRITERION': self.real_keys['d_conv']*self.scale_crit }
-    inputtext += self.__write_namelist__( 'convergence_list', nml )
-    #
-    # NAMELIST XC_CONTROL
-    nml = { 'XC': self.str_keys['xc'] }
-    inputtext += self.__write_namelist__( 'xc_control', nml )
-    #
-    # NAMELIST ERI4C
-    nml = { 'ERI4C': self.flag_keys['jexact'] }
-    inputtext += self.__write_namelist__( 'eri4c', nml )
-    #
-    #
-    inputtext += self.__write_uniques__( atoms )
-    #
-    inputtext += self.__write_basis__( atoms )
-    #
-    inputtext += ['',' #~~~~~~~# written at '+str(clock())+'  #~~~~~~~#']
+    nmls = self.define_nmls( atoms )
     #
     input = open('input','w')
-    for line in inputtext:
-      input.write("%s\n" % line )
+    for nml in nmls:
+      for line in nml.write():
+        input.write("%s\n" % line )
     input.close()
     #
   def __write_namelist__( self, namelist, entries ):
@@ -571,103 +515,15 @@ class PG(Calculator):
     inputtext.append( ' /'+namelist )
     return inputtext
     #
-  def __write_uniques__( self, atoms ):
-    from ase.units import Bohr
-    inputtext = [ '', ' #~~~~~~~# system definition #~~~~~~~#' ]
     #
-    # Some preparations... check if input consistent with symmetry
-    if self.__check_entry__( self.str_keys['sym']
-                           , allowed=self.__point_groups__()
-                           , entryname='sym' ):
-      if self.str_keys['sym'] == 'C1' or atoms.get_number_of_atoms() == 1:
-        self.list_keys['ea'] = [1]*atoms.get_number_of_atoms()
-    self.p_ua     = [None]*len( self.list_keys['ea'] )
-    i_run         = 0
-    for i_ua in range(len(self.p_ua)):
-      self.p_ua[i_ua] = i_run
-      i_run           += self.list_keys['ea'][i_run]
-    self.n_ua     = len( self.list_keys['ea'] )
-    #
-    # NAMELIST SYMMETRY_GROUP
-    nml = { 'POINT_GROUP': '"'+self.str_keys['sym']+'"' }
-    inputtext += self.__write_namelist__( 'symmetry_group', nml )
-    #
-    # NAMELIST UNIQUE_ATOM_NUMBER
-    nml = { 'N_UNIQUE_ATOMS': self.n_ua }
-    inputtext += self.__write_namelist__( 'unique_atom_number', nml )
-
-    for i_ua in range(self.n_ua):
-      i_run = self.p_ua[i_ua]
-      #
-      # NAMELIST N_UNIQUE_ATOMS
-      nml = { 'NAME': '"'+atoms.get_chemical_symbols()[i_run]+'"'
-	    , 'Z'   : str(atoms.get_atomic_numbers()[i_run])+'.0'
-	    , 'N_EQUAL_ATOMS' : self.list_keys['ea'][i_ua]
-	    }
-      inputtext += self.__write_namelist__( 'unique_atom # number'+str(i_ua+1), nml )
-      inputtext += self.__write_array__( atoms.get_positions()[i_run]/Bohr )
-    #
-    inputtext += [ '', ' #~~~~~~~# grid definition #~~~~~~~#' ]
-    # NAMELIST GRID
-    nml = { 'SYM_REDUCE': True }
-    inputtext += self.__write_namelist__( 'grid', nml )
-    #
-    for i_ua in range(self.n_ua):
-      i_run = self.p_ua[i_ua]
-      #
-      # NAMELIST GRIDATOM
-      nml = { 'NRAD': self.int_keys['nrad']
-            , 'NANG': self.int_keys['nang']
-	    }
-      inputtext += self.__write_namelist__( 'gridatom # number'+str(i_ua+1), nml )
-    #
-    return inputtext
-    #
-  def __write_basis__( self, atoms ):
-    from os import path
-    inputtext = [ '', ' #~~~~~~~# basis definition #~~~~~~~#', '' ]
-    #
-    bas_raw = self.list_keys['basis']
-    #
-    # Check if everything is ok
-    self.el = {}
-    for a in atoms:
-      try:
-        self.el[a.symbol] += 1
-      except:
-        self.el[a.symbol] = 1
-    self.n_el = len(self.el)
-    if len( bas_raw ) < self.n_el:
-      self.__pg_error__( 'Need '+str(self.n_el)+' basis sets. Received only '+str(len( bas_raw )) )
-    for el, bas in bas_raw.iteritems():
-      if not path.exists( bas ):
-	self.__pg_error__( 'Basis set file '+bas+' missing' )
-    #
-    # Unpack basis
-    for i_ua in range(self.n_ua):
-      i_run = self.p_ua[i_ua]
-      a = atoms[i_run]
-      #
-      try:
-        inputtext += ['~'+bas_raw[a.symbol]]
-      except:
-        self.__pg_error__( 'Need basis set for element '+a.symbol )
-    return inputtext
-    #
-  def __write_array__( self, array ):
-    line = '   '
-    for float in array:
-      line += "%.8f" % float+'   '
-    return [line]
-    #
-  def __check_entry__( self, entry, allowed=[True,False], entryname='abcdefg' ):
+  def __check__( self, entry, allowed=[True,False], entryname='abcdefg' ):
     if entry not in allowed:
-      print 'ERROR: only one out of'
+      print 'ERROR: only'
       for x in allowed:
 	print str(x)
-      print '       allowed for keyword '+str(entryname)
+      print '       allowed for '+str(entryname)
       sys.exit()
-    return True
+    return entry
     #
   def __scale_convergency_criteria__( self ):
     from ase.units import Hartree, Bohr
@@ -694,44 +550,158 @@ class PG(Calculator):
     sys.exit()
     #
   def __point_groups__( self ):
-    return ['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','Ci'
-	   ,'CS','S4','S6','S8','S10','S12','S14','S16','S18','S20'
-           ,'D2','D3','D4','D5','D6','D7','D8','D9','D10'
-	   ,'D2H','D3H','D4H','D5H','D6H','D7H','D8H','D9H','D10H','Dinh'
-           ,'D2D','D3D','D4D','D5D','D6D','D7D','D8D','D9D','D10D'
-           ,'C2V','C3V','C4V','C5V','C6V','C7V','C8V','C9V','C10V','Cinv'
-           ,'C2H','C3H','C4H','C5H','C6H','C7H','C8H','C9H','C10H'
-	   ,'O','T','OH','TH','TD','I','IH']
+    return ['"C1"','"C2"','"C3"','"C4"','"C5"','"C6"','"C7"','"C8"','"C9"','"C10"','"Ci"'
+	   ,'"CS"','"S4"','"S6"','"S8"','"S10"','"S12"','"S14"','"S16"','"S18"','"S20"'
+           ,'"D2"','"D3"','"D4"','"D5"','"D6"','"D7"','"D8"','"D9"','"D10"'
+	   ,'"D2H"','"D3H"','"D4H"','"D5H"','"D6H"','"D7H"','"D8H"','"D9H"','"D10H"','"Dinh"'
+           ,'"D2D"','"D3D"','"D4D"','"D5D"','"D6D"','"D7D"','"D8D"','"D9D"','"D10D"'
+           ,'"C2V"','"C3V"','"C4V"','"C5V"','"C6V"','"C7V"','"C8V"','"C9V"','"C10V"','"Cinv"'
+           ,'"C2H"','"C3H"','"C4H"','"C5H"','"C6H"','"C7H"','"C8H"','"C9H"','"C10H"'
+	   ,'"O"','"T"','"OH"','"TH"','"TD"','"I"','"IH"']
     #
-# class PG_nml():
-#   def __init__( nml_name='namelist_name', nml_keys={'key':'value'}, nml_data=[] ):
-#     # A PG namelist consists of
-#     # 1) a title (string)
-#     # 2) some key-value pairs (dictionary)
-#     # 3) an optional data-appendix (list, arbitrary type)
-#     self.name = nml_name
-#     self.keys = nml_keys
-#     self.data = nml_data
-#   def write( self ):
-#     # Leave whitespace for better readability
-#     inputtext =  ['']
-#     # Namelist header
-#     inputtext += [ '  &' + self.name ]
-#     # Namelist entries
-#     for key, val in self.keys.iteritems():
-#       # Should allow every type
-#       inputtext += ['   ' + key + ' = '.join(str([val])).replace('[','').replace(',','').replace(']','') ]
-#     # Conclude Namelist
-#     inputtext += [ '  /' + self.name ]
-#     # Data entries
-#     for line in self.nml_data:
-#       inputtext += ['   '.join(str([line])).replace('[','').replace(',','').replace(']','') ]
-#   #
-# def PG_define_nmls(self):
-#   # Define input as a list of PG_nml types
-#   return [
-
-#          
-#          ]
-
+  def check_sym( self, atoms ):
+    #
+    self.str_keys['sym'] = self.__check__( self.str_keys['sym'].upper()
+                                         , allowed=self.__point_groups__()
+                                         , entryname='sym' )
+    #
+    if self.str_keys['sym'] == 'C1' or atoms.get_number_of_atoms() == 1 and sum(abs(atoms.get_positions())) == 0.0:
+      self.list_keys['ea'] = [1]*atoms.get_number_of_atoms()
+    #
+    p_ua     = [None]*len( self.list_keys['ea'] )
+    i_run         = 0
+    for i_ua in range(len(p_ua)):
+      p_ua[i_ua] = i_run
+      i_run           += self.list_keys['ea'][i_run]
+    self.__check__( i_run, [atoms.get_number_of_atoms()], entryname='p_ua' )
+    n_ua     = len( self.list_keys['ea'] )
+    return p_ua, n_ua
+    #
+  def check_bas( self, p_ua, atoms, bas_raw ):
+    from os import path
+    # check given basis for consistency
+    el = {}
+    bl = []
+    for i_run in p_ua:
+      symbol = atoms.get_chemical_symbols()[i_run].lower()
+      # count elements
+      try:
+        el[symbol] += 1
+      except:
+        el[symbol] = 1
+      #
+      if bas_raw.has_key( symbol ):
+        basisfilename = bas_raw[symbol]
+        if path.exists( basisfilename ):
+          bl += [basisfilename]
+        else:
+          self.__pg_error__( 'Basis set file '+basisfilename+' missing' )
+      else:
+        self.__pg_error__( 'Need basis set for element '+symbol )
+    return len( el ), basisfilename
+    #
+  def define_nmls( self, atoms ):
+    from time import clock
+    from os import path
+    # Define input as a list of PG_nml types.
+    # Where applicable, pass input through __check__ filter
+    #
+    # Add header for section
+    head1 = PG_annotation( '\n#'+('# define calculation #').center(80,'~')+'#' )
+    #
+    # namelist TASKS
+    tasks = PG_nml( 'tasks',
+      { 'task': self.__check__( self.str_keys['task'].lower(), ['"singlepoint"','"gradients"'], 'task' ) } )
+    #
+    # namelist MAIN_OPTIONS
+    maino = PG_nml( 'main_options'
+                  , { 'spin_restricted' : not self.flag_keys['uks']
+                    , 'relativistic'    : self.__check__( self.str_keys['rel'].lower(), ['"true"','"false"','"adkh"'] )
+                    # override internal ParaGauss defaults !!
+                    , 'integrals_on_file'   : 'False # override PG-default'
+                    , 'perturbation_theory' : 'False # override PG-default' } )
+    #
+    # NAMELIST RECOVER_OPTIONS
+    recoo = PG_nml( 'recover_options'
+                  , { 'save_ksmatrix' : self.flag_keys['saveread_ks']
+                    , 'read_ksmatrix' : self.flag_keys['saveread_ks'] and path.exists('saved_ksmatrix.dat') } )
+    #
+    if self.int_keys['ndiis'] > 0:
+      # NAMELIST MIXING
+      mixin = PG_nml( 'mixing'
+                    , { 'chmix' : 1.0
+                      , 'spmix' : 1.0
+                      , 'xcmix' : 1.0
+                      , 'start_after_cycle' : 1000000 } )
+      #
+      # NAMELIST DIIS
+      diis  = PG_nml( 'diis'
+                    , { 'diis_on'    : self.int_keys['ndiis'] > 0
+                      , 'mmax'       : self.int_keys['ndiis']
+                      , 'loop_start' : self.int_keys['sdiis']
+                      , 'threshold'  : 0.15
+                      , 'cfix'       : self.real_keys['fmix'] } )
+    else:
+      mixin = PG_nml( 'mixing' , { } )
+      diis  = PG_nml( 'diis'   , { } )
+    #
+    # NAMELIST CONVERGENCE_LIST
+    convl = PG_nml( 'convergence_list'
+                  , { 'max_iteration': self.int_keys['max_scf']
+                    , 'energy_criterion': self.real_keys['e_conv']*self.scale_crit
+                    , 'density_criterion': self.real_keys['d_conv']*self.scale_crit
+                    , 'energy_dev_checked': 3 } )
+    #
+    # NAMELIST XC_CONTROL
+    xccnt = PG_nml( 'xc_control'
+                  , { 'xc': self.str_keys['xc'] } )
+    #
+    # NAMELIST ERI4C
+    eri4c = PG_nml( 'eri4c'
+                  , { 'eri4c': self.flag_keys['jexact'] } )
+    #
+    head2 = PG_annotation( '\n#'+('# define system #').center(80,'~')+'#' )
+    #
+    # NAMELIST SYMMETRY_GROUP
+    symgr = PG_nml( 'symmetry_group'
+                  , { 'point_group': self.str_keys['sym'] } )
+    #
+    # NAMELIST UNIQUE_ATOM_NUMBER
+    uanum = PG_nml( 'unique_atom_number'
+                  , { 'n_unique_atoms': self.n_ua } )
+    #
+    uanml = []
+    for i_ua in range(self.n_ua):
+      i_run = self.p_ua[i_ua]
+      #
+      # NAMELIST N_UNIQUE_ATOMS
+      uanml += [ PG_nml( 'unique_atom # '+str(i_ua+1)
+                       , { 'name'         : '"'+atoms.get_chemical_symbols()[i_run]+'"'
+                         , 'z'            : str(atoms.get_atomic_numbers()[i_run])+'.0'
+                         , 'n_equal_atoms': self.list_keys['ea'][i_ua] }
+                       , [list(atoms.get_positions()[i_run]/Bohr)] ) ]
+    #
+    head3 = PG_annotation( '\n#'+('# define grid and basis #').center(80,'~')+'#' )
+    #
+    # NAMELIST GRID
+    grid  = PG_nml( 'grid', { 'sym_reduce': True } )
+    #
+    ganml = []
+    for i_ua in range(self.n_ua):
+      # NAMELIST GRIDATOM
+      ganml += [ PG_nml( 'gridatom # '+str(i_ua+1)
+                       , { 'nrad': self.int_keys['nrad']
+                         , 'nang': self.int_keys['nang'] } ) ]
+    #
+    blist = []
+    for i_ua in range(self.n_ua):
+      # GIVE BASIS SET FILE # no explicit namelists for now
+      blist +=[ PG_annotation( '\n~'+self.b_ua ) ]
+    #
+    # FINAL LINE
+    final = PG_annotation( '\n#'+('# compiled at '+str(clock())+' #').center(80,'~')+'#\n' )
+    #
+    return [ head1, tasks, maino, recoo, mixin, diis, convl, xccnt, eri4c
+           , head2, symgr, uanum ]+uanml+[
+             head3, grid]+ganml+blist+[ final ]
 
