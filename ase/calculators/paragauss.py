@@ -389,8 +389,8 @@ class PG(Calculator):
 		       ,'saveread_ks': True
 		       }
     self.int_keys    = {'max_scf'    : 20
-	               ,'ndiis'      : 5
-	               ,'sdiis'      : 5
+		       ,'ndiis'      : 5
+		       ,'sdiis'      : 5
 		       ,'nrad'       : 150
 		       ,'nang'       : 291
 		       }
@@ -399,10 +399,10 @@ class PG(Calculator):
 		       ,'scale_crit' : 1.0
 		       ,'fmix'       : 0.25
 		       }
-    self.str_keys    = {'task'       : 'Gradients'
-                       ,'sym'        : 'C1'
-                       ,'rel'        : 'FALSE'
-		       ,'xc'         : 'PBE'
+    self.str_keys    = {'task'       : '"Gradients"'
+                       ,'sym'        : '"C1"'
+                       ,'rel'        : '"FALSE"'
+                       ,'xc'         : '"PBE"'
 		       }
     self.list_keys   = {'ea'         : [1]
 		       ,'basis'      : {}
@@ -675,11 +675,11 @@ class PG(Calculator):
       if self.__forces != None:
 	# Scale according to forces. Upper bound is 0.1, lower bound is e_conv and d_conv
         self.scale_crit = min([ 0.1/max([self.real_keys['e_conv'],self.real_keys['d_conv']])
-	                      , max( [ 1.0, self.real_keys['scale_crit'] * self.__max_force__( self.__forces * Bohr / Hartree )] )] )
+			      , max( [ 1.0, self.real_keys['scale_crit'] * self.__max_force__( self.__forces * Bohr / Hartree )] )] )
       else:
 	# Scale assuming forces of 1.0
 	self.scale_crit = self.real_keys['scale_crit']
-	# 
+	#
   def __max_force__( self, grads ):
     max_force = 0.0
     for grad in grads:
