@@ -341,7 +341,39 @@ class ParaGauss:
         return e_sum
 
 
-
+class PG_nml():
+  def __init__( self, nml_name='namelist_name', nml_keys={'key':'value'}, nml_data=[] ):
+    # A PG namelist consists of
+    # 1) a title (string)
+    # 2) some key-value pairs (dictionary)
+    # 3) an optional data-appendix (list, arbitrary type)
+    self.name = nml_name
+    self.keys = nml_keys
+    self.data = nml_data
+  def write( self ):
+    # Leave whitespace for better readability
+    inputtext =  ['']
+    # Namelist header
+    inputtext += [ '  &' + self.name ]
+    # Namelist entries
+    for key, val in self.keys.iteritems():
+      # Should allow every type
+      inputtext += ['    ' + key + ' = '+''.join(str([val])).replace('[','').replace(',','').replace(']','').replace('\'','') ]
+    # Conclude Namelist
+    inputtext += [ '  /' + self.name ]
+    # Data entries
+    for line in self.data:
+      inputtext += ['    '+''.join(str([line])).replace('[','').replace(',','').replace(']','') ]
+    return inputtext
+  #
+class PG_annotation():
+  def __init__( self, nml_text='#' ):
+    # A PG annotiation consists of
+    # 1) a simple text (string)
+    self.text = nml_text
+  def write( self ):
+    return [self.text]
+  #
 class PG(Calculator):
   #
   # Alternative calculator, in a more ASE-like style to set up calculations quickly
