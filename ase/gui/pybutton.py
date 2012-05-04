@@ -26,6 +26,7 @@ object when needed.
 """
 
 import gtk
+from gettext import gettext as _
 import time
 from ase.gui.widgets import oops, pack
 
@@ -33,41 +34,42 @@ from ase.gui.widgets import oops, pack
 class PyButton(gtk.Button):
     "A button for displaying Python code."
     def __init__(self, title):
-        gtk.Button.__init__(self, "Python")
+        gtk.Button.__init__(self, _("Python"))
         self.title = title
         self.python = None
         self.connect_after('clicked', self.run)
 
     def run(self, *args):
-        "The method called when the button is click."
+        "The method called when the button is clicked."
         if self.python:
             now = time.ctime()
             win = PyWindow(self.title, now, self.python)
         else:
-            oops("No Python code",
-                 "You have not (yet) specified a consistent set of parameters.")
+            oops(_("No Python code"),
+                 _("You have not (yet) specified a "
+                   "consistent set of parameters."))
 
-fr1_template = """
-Title: %s
-Time: %s
-"""
+fr1_template = _("""
+Title: %(title)s
+Time: %(time)s
+""")
 
 class PyWindow(gtk.Window):
     "A window displaying Python code."
     def __init__(self, title, time, code):
         gtk.Window.__init__(self)
-        self.set_title("ag: Python code")
+        self.set_title(_("ag: Python code"))
         vbox = gtk.VBox()
-        lbl = gtk.Label(fr1_template % (title, time))
+        lbl = gtk.Label(fr1_template % dict(title=title, time=time))
         lbl.set_alignment(0.0, 0.5)
-        fr = gtk.Frame("Information:")
+        fr = gtk.Frame(_("Information:"))
         fr.add(lbl)
         pack(vbox, fr)
         txtbuf = gtk.TextBuffer()
         txtbuf.set_text(code)
         txtview = gtk.TextView(txtbuf)
         txtview.set_editable(False)
-        fr = gtk.Frame("Python code:")
+        fr = gtk.Frame(_("Python code:"))
         fr.add(txtview)
         fr.set_label_align(0.0, 0.5)
         pack(vbox, fr)

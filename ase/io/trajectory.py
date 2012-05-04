@@ -1,4 +1,5 @@
 import os
+import sys
 import cPickle as pickle
 import warnings
 
@@ -9,13 +10,14 @@ from ase.utils import devnull
 
 
 class PickleTrajectory:
-    "Reads/writes Atoms objects into a .traj file."
+    """Reads/writes Atoms objects into a .traj file."""
     # Per default, write these quantities
     write_energy = True
     write_forces = True
     write_stress = True
     write_magmoms = True
     write_momenta = True
+    write_info = True
 
     def __init__(self, filename, mode='r', atoms=None, master=None,
                  backup=True):
@@ -194,6 +196,9 @@ class PickleTrajectory:
 
         if 'magmoms' not in d and atoms.has('magmoms'):
             d['magmoms'] = atoms.get_initial_magnetic_moments()
+
+        if self.write_info:
+            d['info'] = stringnify_info(atoms.info)
             
         if self.master:
             pickle.dump(d, self.fd, protocol=-1)
@@ -212,7 +217,7 @@ class PickleTrajectory:
             masses = atoms.get_masses()
         else:
             masses = None
-        d = {'version': 2,
+        d = {'version': 3,
              'pbc': atoms.get_pbc(),
              'numbers': atoms.get_atomic_numbers(),
              'tags': tags,
@@ -234,6 +239,9 @@ class PickleTrajectory:
         self.fd.close()
 
     def __getitem__(self, i=-1):
+        if isinstance(i, slice):
+            return [self[j] for j in range(*i.indices(len(self)))]
+
         N = len(self.offsets)
         if 0 <= i < N:
             self.fd.seek(self.offsets[i])
@@ -255,6 +263,7 @@ class PickleTrajectory:
                           tags=self.tags,
                           masses=self.masses,
                           pbc=self.pbc,
+                          info=unstringnify_info(d.get('info', {})),
                           constraint=[c.copy() for c in self.constraints])
             if 'energy' in d:
                 calc = SinglePointCalculator(
@@ -274,6 +283,8 @@ class PickleTrajectory:
         return self[i]
 
     def __len__(self):
+        if len(self.offsets) == 0:
+            return 0
         N = len(self.offsets) - 1
         while True:
             self.fd.seek(self.offsets[N])
@@ -350,15 +361,55 @@ class PickleTrajectory:
         All other arguments are stored, and passed to the function.
         """
         if not callable(function):
-            raise ValueError("Callback object must be callable.")
+            raise ValueError('Callback object must be callable.')
         self.post_observers.append((function, interval, args, kwargs))
 
     def _call_observers(self, obs):
-        "Call pre/post write observers."
+        """Call pre/post write observers."""
         for function, interval, args, kwargs in obs:
             if self.write_counter % interval == 0:
                 function(*args, **kwargs)
-    
+
+
+def stringnify_info(info):
+    """Return a stringnified version of the dict *info* that is
+    ensured to be picklable.  Items with non-string keys or
+    unpicklable values are dropped and a warning is issued."""
+    stringnified = {}
+    for k, v in info.items():
+        if not isinstance(k, basestring):
+            warnings.warn('Non-string info-dict key is not stored in ' +
+                          'trajectory: ' + repr(k), UserWarning)
+            continue
+        try:
+            # Should highest protocol be used here for efficiency?
+            # Protocol 2 seems not to raise an exception when one
+            # tries to pickle a file object, so by using that, we
+            # might end up with file objects in inconsistent states.
+            s = pickle.dumps(v)
+        except:
+            warnings.warn('Skipping not picklable info-dict item: ' +
+                          '"%s" (%s)' % (k, sys.exc_info()[1]), UserWarning)
+        else:
+            stringnified[k] = s
+    return stringnified
+
+
+def unstringnify_info(stringnified):
+    """Convert the dict *stringnified* to a dict with unstringnified
+    objects and return it.  Objects that cannot be unpickled will be
+    skipped and a warning will be issued."""
+    info = {}
+    for k, s in stringnified.items():
+        try:
+            v = pickle.loads(s)
+        except:
+            warnings.warn('Skipping not unpicklable info-dict item: ' +
+                          '"%s" (%s)' % (k, sys.exc_info()[1]), UserWarning)
+        else:
+            info[k] = v
+    return info
+
 
 def read_trajectory(filename, index=-1):
     traj = PickleTrajectory(filename, mode='r')
@@ -437,7 +488,7 @@ def dict2constraints(d):
 
     if version == 1:
         return d['constraints']
-    elif version == 2:
+    elif version in (2, 3):
         try:
             return pickle.loads(d['constraints_string'])
         except (AttributeError, KeyError, EOFError):

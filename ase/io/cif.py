@@ -15,9 +15,28 @@ from ase.lattice.spacegroup import crystal
 from ase.lattice.spacegroup.spacegroup import spacegroup_from_data
 
 
+def get_lineno(fileobj):
+    """Returns the line number of current line in fileobj."""
+    pos = fileobj.tell()
+    try:
+        fileobj.seek(0)
+        s = fileobj.read(pos)
+        lineno = s.count('\n') 
+    finally:
+        fileobj.seek(pos)
+    return lineno
+
 
 def unread_line(fileobj):
     """Unread the last line read from *fileobj*."""
+
+    # If previous line ends with CRLF, we have to back up one extra 
+    # character before entering the loop below
+    if fileobj.tell() > 2:
+        fileobj.seek(-2, 1)
+        if fileobj.read(2) == '\r\n':
+            fileobj.seek(-1, 1)
+
     while True:
         if fileobj.tell() == 0:
             break
@@ -42,26 +61,32 @@ def convert_value(value):
         return value
 
 
+def parse_multiline_string(fileobj, line):
+    """Parse semicolon-enclosed multiline string and return it."""
+    assert line[0] == ';'
+    lines = [line[1:].lstrip()]
+    while True:
+        line = fileobj.readline().strip()
+        if line == ';':
+            break
+        lines.append(line)
+    return '\n'.join(lines).strip()
+
+
 def parse_singletag(fileobj, line):
     """Parse a CIF tag (entries starting with underscore). Returns
     a key-value pair."""
     kv = line.split(None, 1)
-    if len(kv) == 1:  # _key
+    if len(kv) == 1:
         key = line
         line = fileobj.readline().strip()
-        while line == '':
+        while not line or line[0] == '#':
             line = fileobj.readline().strip()
-        if line == ';':  # multiline string 
-            lines = [line[1:].lstrip()]
-            while True:
-                line = fileobj.readline().strip()
-                if line == ';':
-                    break
-                lines.append(line)
-            value = '\n'.join(lines).strip()
-        else:           # value on next line
+        if line[0] == ';':
+            value = parse_multiline_string(fileobj, line)
+        else:
             value = line
-    else:   # _key, value
+    else:
         key, value = kv
     return key, convert_value(value)
 
@@ -75,6 +100,8 @@ def parse_loop(fileobj):
         header.append(line.lower())
         line = fileobj.readline().strip()
     columns = dict([(h, []) for h in header])
+
+    tokens = []
     while True:
         lowerline = line.lower()
         if (not line or 
@@ -85,10 +112,21 @@ def parse_loop(fileobj):
         if line.startswith('#'):
             line = fileobj.readline().strip()
             continue
-        tokens = shlex.split(line)
+        if line.startswith(';'):
+            t = [parse_multiline_string(fileobj, line)]
+        else:
+            t = shlex.split(line)
+
+        line = fileobj.readline().strip()
+
+        tokens.extend(t)
+        if len(tokens) < len(columns):
+            continue
+        assert len(tokens) == len(header)
+
         for h, t in zip(header, tokens):
             columns[h].append(convert_value(t))
-        line = fileobj.readline().strip()
+        tokens = []
     if line:
         unread_line(fileobj)
     return columns
@@ -113,9 +151,11 @@ def parse_items(fileobj, line):
         elif lowerline.startswith('data_'):
             unread_line(fileobj)
             break
+        elif line.startswith(';'):
+            temp = parse_multiline_string(fileobj, line)
         else:
-            raise ValueError('%s: Unexpected CIF file entry: %s'%(
-                    fileobj.name, line))
+            raise ValueError('%s:%d: Unexpected CIF file entry: "%s"'%(
+                    fileobj.name, get_lineno(fileobj), line))
     return tags
 
 
@@ -146,8 +186,11 @@ def parse_cif(fileobj):
     return blocks
 
 
-def tags2atoms(tags, **kwargs):
-    """Returns an Atoms object from a cif tags dictionary."""
+def tags2atoms(tags, store_tags=False, **kwargs):
+    """Returns an Atoms object from a cif tags dictionary.  If
+    *store_tags* is true, the *info* attribute of the returned Atoms
+    object will be populated with all the cif tags.  Keyword arguments
+    are passed to the Atoms constructor."""
     a = tags['_cell_length_a']
     b = tags['_cell_length_b']
     c = tags['_cell_length_c']
@@ -175,16 +218,18 @@ def tags2atoms(tags, **kwargs):
     # complete list of official keys.  In addition we also try to
     # support some commonly used depricated notations
     no = None
-    if '_space_group.IT_number' in tags:
-        no = tags['_space_group.IT_number']
+    if '_space_group.it_number' in tags:
+        no = tags['_space_group.it_number']
+    elif '_space_group_it_number' in tags:
+        no = tags['_space_group_it_number']
     elif '_symmetry_int_tables_number' in tags:
         no = tags['_symmetry_int_tables_number']
 
     symbolHM = None
-    if '_space_group.Patterson_name_H-M' in tags:
-        symbolHM = tags['_space_group.Patterson_name_H-M']
-    elif '_symmetry_space_group_name_H-M' in tags:
-        symbolsHM = tags['_symmetry_space_group_name_H-M']
+    if '_space_group.Patterson_name_h-m' in tags:
+        symbolHM = tags['_space_group.patterson_name_h-m']
+    elif '_symmetry_space_group_name_h-m' in tags:
+        symbolHM = tags['_symmetry_space_group_name_h-m']
 
     sitesym = None
     if '_space_group_symop.operation_xyz' in tags:
@@ -203,16 +248,31 @@ def tags2atoms(tags, **kwargs):
     else:
         spacegroup = 1
 
+    if store_tags:
+        info = tags.copy()
+        if 'info' in kwargs:
+            info.update(kwargs['info'])
+        kwargs['info'] = info
+
     atoms = crystal(symbols, basis=scaled_positions, 
                     cellpar=[a, b, c, alpha, beta, gamma],
                     spacegroup=spacegroup, **kwargs)
     return atoms
     
 
-def read_cif(fileobj, index=-1, **kwargs):
+def read_cif(fileobj, index=-1, store_tags=False, **kwargs):
     """Read Atoms object from CIF file. *index* specifies the data
-    block number or name (if string) to return.  Keyword arguments are
-    passed on to ase.lattice.spacegroup.crystal()."""
+    block number or name (if string) to return.  
+
+    If *index* is None or a slice object, a list of atoms objects will
+    be returned. In the case of *index* is *None* or *slice(None)*,
+    only blocks with valid crystal data will be included.
+
+    If *store_tags* is true, the *info* attribute of the returned
+    Atoms object will be populated with all tags in the corresponding
+    cif data block.
+
+    Keyword arguments are passed on to the Atoms constructor."""
     blocks = parse_cif(fileobj)
     if isinstance(index, str):
         tags = dict(blocks)[index]
@@ -220,9 +280,24 @@ def read_cif(fileobj, index=-1, **kwargs):
     elif isinstance(index, int):
         name, tags = blocks[index]
         return tags2atoms(tags, **kwargs)
+    elif index is None or index == slice(None):
+        # Return all CIF blocks with valid crystal data
+        images = []
+        for name, tags in blocks:
+            try:
+                atoms = tags2atoms(tags)
+                images.append(atoms)
+            except KeyError:
+                pass
+        if not images:
+            # No block contained a a valid atoms object
+            # Provide an useful error by try converting the first
+            # block to atoms
+            name, tags = blocks[0]
+            tags2atoms(tags)
+        return images
     else:
         return [tags2atoms(tags) for name, tags in blocks[index]]
-
 
 
 def write_cif(fileobj, images):

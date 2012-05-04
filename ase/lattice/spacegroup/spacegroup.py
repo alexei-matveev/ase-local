@@ -481,6 +481,26 @@ def get_datafile():
     return os.path.join(os.path.dirname(__file__), 'spacegroup.dat')
 
 
+def format_symbol(symbol):
+    """Returns well formatted Hermann-Mauguin symbol as extected by
+    the database, by correcting the case and adding missing or
+    removing dublicated spaces."""
+    fixed = []
+    s = symbol.strip()
+    s = s[0].upper() + s[1:].lower()
+    for c in s:
+        if c.isalpha():
+            fixed.append(' ' + c + ' ')
+        elif c.isspace():
+            fixed.append(' ')
+        elif c.isdigit():
+            fixed.append(c)
+        elif c == '-':
+            fixed.append(' ' + c)
+        elif c == '/':
+            fixed.append(' ' + c)
+    s = ''.join(fixed).strip()
+    return ' '.join(s.split())
 
 
 #-----------------------------------------------------------------
@@ -552,12 +572,14 @@ def _read_datafile(spg, spacegroup, setting, f):
     if isinstance(spacegroup, int):
         pass
     elif isinstance(spacegroup, basestring):
-        spacegroup = ' '.join(spacegroup.strip().split())
+        #spacegroup = ' '.join(spacegroup.strip().split())
+        spacegroup = format_symbol(spacegroup)
     else:
         raise SpacegroupValueError('`spacegroup` must be of type int or str')
     while True:
         line1, line2 = _skip_to_nonblank(f, spacegroup, setting)
         _no,_symbol = line1.strip().split(None, 1)
+        _symbol = format_symbol(_symbol)
         _setting = int(line2.strip().split()[1])
         _no = int(_no)
         if ((isinstance(spacegroup, int) and _no == spacegroup) or
@@ -604,22 +626,32 @@ def parse_sitesym(symlist, sep=','):
     trans = np.zeros((nsym, 3))
     for i, sym in enumerate(symlist):
         for j, s in enumerate (sym.split(sep)):
-            for p in s.lower().strip().split('+'):
-                n = 0
-                if p[n] == '-':
-                    sign = -1
-                    n += 1
-                else:
-                    sign = 1
-                if p[n] in 'xyz':
-                    k = ord(p[n]) - ord('x')
-                    rot[i,j,k] = sign
-                elif p[n].isdigit():
-                    q, sp, r = p[n:].partition('/')
-                    trans[i,j] = float(q)/float(r)
+            s = s.lower().strip()
+            while s:
+                sign = 1
+                if s[0] in '+-':
+                    if s[0] == '-':
+                        sign = -1
+                    s = s[1:]
+                if s[0] in 'xyz':
+                    k = ord(s[0]) - ord('x')
+                    rot[i, j, k] = sign
+                    s = s[1:]
+                elif s[0].isdigit() or s[0] == '.':
+                    n = 0
+                    while n < len(s) and (s[n].isdigit() or s[n] in '/.'):
+                        n += 1
+                    t = s[:n]
+                    s = s[n:]
+                    if '/' in t:
+                        q, r = t.split('/')
+                        trans[i,j] = float(q)/float(r)
+                    else:
+                        trans[i,j] = float(t)
                 else:
                     raise SpacegroupValueError(
-                        'invalid site symmetry: %s' % sym)
+                        'Error parsing %r. Invalid site symmetry: %s' % 
+                        (s, sym))
     return rot, trans
                 
 

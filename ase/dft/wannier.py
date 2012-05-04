@@ -4,13 +4,15 @@
     using the spread functional of Marzari and Vanderbilt
     (PRB 56, 1997 page 12847). 
 """
-import numpy as np
 from time import time
 from math import sqrt, pi
 from pickle import dump, load
+
+import numpy as np
+
 from ase.parallel import paropen
 from ase.calculators.dacapo import Dacapo
-from ase.dft.kpoints import get_monkhorst_shape
+from ase.dft.kpoints import get_monkhorst_pack_size_and_offset
 from ase.transport.tools import dagger, normalize
 
 dag = dagger
@@ -282,10 +284,11 @@ class Wannier:
         self.calc = calc
         self.spin = spin
         self.verbose = verbose
-        self.kpt_kc = sign * calc.get_ibz_k_points()
+        self.kpt_kc = calc.get_ibz_k_points()
         assert len(calc.get_bz_k_points()) == len(self.kpt_kc)
-        
-        self.kptgrid = get_monkhorst_shape(self.kpt_kc)
+        self.kptgrid = get_monkhorst_pack_size_and_offset(self.kpt_kc)[0]
+        self.kpt_kc *= sign
+
         self.Nk = len(self.kpt_kc)
         self.unitcell_cc = calc.get_atoms().get_cell()
         self.largeunitcell_cc = (self.unitcell_cc.T * self.kptgrid).T

@@ -8,6 +8,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import read, write, string2index
 from ase.constraints import FixAtoms
 from ase.gui.defaults import read_defaults
+from ase.quaternions import Quaternion
 
 class Images:
     def __init__(self, images=None):
@@ -18,12 +19,18 @@ class Images:
     def initialize(self, images, filenames=None, init_magmom=False):
         
         self.natoms = len(images[0])
-
         self.nimages = len(images)
+        if hasattr(images[0], 'get_shapes'):
+            self.shapes = images[0].get_shapes()
+            self.Q = []
+        else:
+            self.shapes = None
+
         if filenames is None:
             filenames = [None] * self.nimages
         self.filenames = filenames
         self.P = np.empty((self.nimages, self.natoms, 3))
+        self.V = np.empty((self.nimages, self.natoms, 3))
         self.E = np.empty(self.nimages)
         self.K = np.empty(self.nimages)
         self.F = np.empty((self.nimages, self.natoms, 3))
@@ -46,6 +53,12 @@ class Images:
                                    'different numbers of atoms or different ' +
                                    'kinds of atoms!')
             self.P[i] = atoms.get_positions()
+            self.V[i] = atoms.get_velocities()
+
+            if hasattr(self, 'Q'):
+                for q in atoms.get_quaternions():
+                     self.Q.append(Quaternion(q))
+
             self.A[i] = atoms.get_cell()
             if (atoms.get_pbc() != self.pbc).any():
                 warning = True
@@ -96,7 +109,7 @@ class Images:
             i = 0
         else:
             i = self.nimages
-        for name in ('P', 'E', 'K', 'F', 'M', 'A', 'T'):
+        for name in ('P', 'V', 'E', 'K', 'F', 'M', 'A', 'T'):
             a = getattr(self, name)
             newa = np.empty( (i+1,) + a.shape[1:], a.dtype )
             if not self.next_append_clears:
@@ -104,6 +117,7 @@ class Images:
             setattr(self, name, newa)
         self.next_append_clears = False
         self.P[i] = atoms.get_positions()
+        self.V[i] = atoms.get_velocities()
         self.A[i] = atoms.get_cell()
         try:
             self.E[i] = atoms.get_potential_energy()
@@ -131,13 +145,16 @@ class Images:
         return self.nimages
         
     def set_radii(self, scale):
-        self.r = self.covalent_radii[self.Z] * scale
+        if self.shapes == None:
+            self.r = self.covalent_radii[self.Z] * scale
+        else:
+            self.r = np.sqrt(np.sum(self.shapes**2, axis=1)) * scale
                 
-    def read(self, filenames, index=-1):
+    def read(self, filenames, index=-1, filetype=None):
         images = []
         names = []
         for filename in filenames:
-            i = read(filename, index)
+            i = read(filename, index,filetype)
             
             if not isinstance(i, list):
                 i = [i]
@@ -161,6 +178,7 @@ class Images:
         N = repeat.prod()
         natoms = self.natoms // n
         P = np.empty((self.nimages, natoms * N, 3))
+        V = np.empty((self.nimages, natoms * N, 3))
         M = np.empty((self.nimages, natoms * N))
         T = np.empty((self.nimages, natoms * N), int)
         F = np.empty((self.nimages, natoms * N, 3))
@@ -175,6 +193,7 @@ class Images:
                     for i in range(self.nimages):
                         P[i, a0:a1] = (self.P[i, :natoms] +
                                        np.dot((i0, i1, i2), self.A[i]))
+                    V[:, a0:a1] = self.V[:, :natoms]
                     F[:, a0:a1] = self.F[:, :natoms]
                     M[:, a0:a1] = self.M[:, :natoms]
                     T[:, a0:a1] = self.T[:, :natoms]
@@ -183,6 +202,7 @@ class Images:
                     dynamic[a0:a1] = self.dynamic[:natoms]
                     a0 = a1
         self.P = P
+        self.V = V
         self.F = F
         self.Z = Z
         self.T = T
@@ -242,6 +262,7 @@ class Images:
         data = []
         for i in range(n):
             R = self.P[i]
+            V = self.V[i]
             F = self.F[i]
             A = self.A[i]
             M = self.M[i]
@@ -262,19 +283,13 @@ class Images:
         return xy
 
     def set_dynamic(self, constraints = None):
-        if self.nimages == 1:
-            self.dynamic = np.ones(self.natoms, bool)
-        else:
-            self.dynamic = np.zeros(self.natoms, bool)
-            R0 = self.P[0]
-            for R in self.P[1:]:
-                self.dynamic |= (np.abs(R - R0) > 1.0e-10).any(1)
+        self.dynamic = np.ones(self.natoms, bool)
         if constraints is not None:
             for con in constraints: 
                 if isinstance(con,FixAtoms):
                     self.dynamic[con.index] = False
 
-    def write(self, filename, rotations='', show_unit_cell=False, bbox=None):
+    def write(self, filename, rotations='', show_unit_cell=False, bbox=None, **kwargs):
         indices = range(self.nimages)
         p = filename.rfind('@')
         if p != -1:
@@ -292,9 +307,9 @@ class Images:
         if len(filename) > 4 and filename[-4:] in ['.eps', '.png', '.pov']:
             write(filename, images, 
                   rotation=rotations, show_unit_cell=show_unit_cell,
-                  bbox=bbox)
+                  bbox=bbox, **kwargs)
         else:
-            write(filename, images)
+            write(filename, images, **kwargs)
 
     def get_atoms(self, frame):
         atoms = Atoms(positions=self.P[frame],
@@ -303,6 +318,9 @@ class Images:
                       tags=self.T[frame],
                       cell=self.A[frame],
                       pbc=self.pbc)
+
+        if not np.isnan(self.V).any():
+            atoms.set_velocities(self.V[frame])
         
         # check for constrained atoms and add them accordingly:
         if not self.dynamic.all():
@@ -316,12 +334,16 @@ class Images:
     def delete(self, i):
         self.nimages -= 1
         P = np.empty((self.nimages, self.natoms, 3))
+        V = np.empty((self.nimages, self.natoms, 3))
         F = np.empty((self.nimages, self.natoms, 3))
         A = np.empty((self.nimages, 3, 3))
         E = np.empty(self.nimages)
         P[:i] = self.P[:i]
         P[i:] = self.P[i + 1:]
         self.P = P
+        V[:i] = self.V[:i]
+        V[i:] = self.V[i + 1:]
+        self.V = V
         F[:i] = self.F[:i]
         F[i:] = self.F[i + 1:]
         self.F = F
@@ -339,20 +361,25 @@ class Images:
         levels = n // 5
         n = self.nimages = 2 * levels + 3
         P = np.empty((self.nimages, self.natoms, 3))
+        V = np.empty((self.nimages, self.natoms, 3))
         F = np.empty((self.nimages, self.natoms, 3))
         E = np.empty(self.nimages)
         for L in range(levels):
             P[L] = self.P[L * 5]
             P[n - L - 1] = self.P[L * 5 + 4]
+            V[L] = self.V[L * 5]
+            V[n - L - 1] = self.V[L * 5 + 4]
             F[L] = self.F[L * 5]
             F[n - L - 1] = self.F[L * 5 + 4]
             E[L] = self.E[L * 5]
             E[n - L - 1] = self.E[L * 5 + 4]
         for i in range(3):
             P[levels + i] = self.P[levels * 5 - 4 + i]
+            V[levels + i] = self.V[levels * 5 - 4 + i]
             F[levels + i] = self.F[levels * 5 - 4 + i]
             E[levels + i] = self.E[levels * 5 - 4 + i]
         self.P = P
+        self.V = V
         self.F = F
         self.E = E
 
@@ -360,10 +387,12 @@ class Images:
         assert self.nimages == 2
         self.nimages = 2 + m
         P = np.empty((self.nimages, self.natoms, 3))
+        V = np.empty((self.nimages, self.natoms, 3))
         F = np.empty((self.nimages, self.natoms, 3))
         A = np.empty((self.nimages, 3, 3))
         E = np.empty(self.nimages)
         P[0] = self.P[0]
+        V[0] = self.V[0]
         F[0] = self.F[0]
         A[0] = self.A[0]
         E[0] = self.E[0]
@@ -371,14 +400,17 @@ class Images:
             x = i / (m + 1.0)
             y = 1 - x
             P[i] = y * self.P[0] + x * self.P[1]
+            V[i] = y * self.V[0] + x * self.V[1]
             F[i] = y * self.F[0] + x * self.F[1]
             A[i] = y * self.A[0] + x * self.A[1]
             E[i] = y * self.E[0] + x * self.E[1]
         P[-1] = self.P[1]
+        V[-1] = self.V[1]
         F[-1] = self.F[1]
         A[-1] = self.A[1]
         E[-1] = self.E[1]
         self.P = P
+        self.V = V
         self.F = F
         self.A = A
         self.E = E
