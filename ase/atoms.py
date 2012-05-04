@@ -69,8 +69,21 @@ class Atoms(object):
         Used for applying one or more constraints during structure
         optimization.
     calculator: calculator object
-        Used to attach a calculator for calulating energies and atomic
+        Used to attach a calculator for calculating energies and atomic
         forces.
+    info: dict of key-value pairs
+        Dictionary of key-value pairs with additional information
+        about the system.  The following keys may be used by ase:
+
+          - spacegroup: Spacegroup instance
+          - unit_cell: 'conventional' | 'primitive' | int | 3 ints
+          - adsorbate_info:
+
+        Items in the info attribute survives copy and slicing and can
+        be store to and retrieved from trajectory files given that the
+        key is a string, the value is picklable and, if the value is a
+        user-defined object, its base class is importable.  One should
+        not make any assumptions about the existence of keys.
 
     Examples:
 
@@ -105,7 +118,8 @@ class Atoms(object):
                  scaled_positions=None,
                  cell=None, pbc=None,
                  constraint=None,
-                 calculator=None):
+                 calculator=None, 
+                 info=None):
 
         atoms = None
 
@@ -119,7 +133,10 @@ class Atoms(object):
         elif (isinstance(symbols, (list, tuple)) and
               len(symbols) > 0 and isinstance(symbols[0], Atom)):
             # Get data from a list or tuple of Atom objects:
-            data = zip(*[atom.get_data() for atom in symbols])
+            data = [[atom.get_raw(name) for atom in symbols]
+                    for name in
+                    ['position', 'number', 'tag', 'momentum',
+                     'mass', 'magmom', 'charge']]
             atoms = self.__class__(None, *data)
             symbols = None
 
@@ -192,6 +209,11 @@ class Atoms(object):
         if pbc is None:
             pbc = False
         self.set_pbc(pbc)
+
+        if info is None:
+            self.info = {}
+        else:
+            self.info = dict(info)
 
         self.adsorbate_info = {}
 
@@ -355,7 +377,7 @@ class Atoms(object):
                 b[:] = a
 
     def has(self, name):
-        """Check for existance of array.
+        """Check for existence of array.
 
         name must be one of: 'tags', 'momenta', 'masses', 'magmoms',
         'charges'."""
@@ -425,7 +447,7 @@ class Atoms(object):
     def set_masses(self, masses='defaults'):
         """Set atomic masses.
 
-        The array masses should contain the a list masses.  In case
+        The array masses should contain a list of masses.  In case
         the masses argument is not given or for those elements of the
         masses list that are None, standard values are set."""
         
@@ -629,7 +651,7 @@ class Atoms(object):
     def copy(self):
         """Return a copy."""
         import copy
-        atoms = self.__class__(cell=self._cell, pbc=self._pbc)
+        atoms = self.__class__(cell=self._cell, pbc=self._pbc, info=self.info)
 
         atoms.arrays = {}
         for name, a in self.arrays.items():
@@ -699,8 +721,13 @@ class Atoms(object):
         for name, a2 in other.arrays.items():
             if name in self.arrays:
                 continue
-            a = np.zeros((n1 + n2,) + a2.shape[1:], a2.dtype)
+            a = np.empty((n1 + n2,) + a2.shape[1:], a2.dtype)
             a[n1:] = a2
+            if name == 'masses':
+                a[:n1] = self.get_masses()
+            else:
+                a[:n1] = 0
+
             self.set_array(name, a)
 
         return self
@@ -734,7 +761,7 @@ class Atoms(object):
         import copy
         from ase.constraints import FixConstraint
         
-        atoms = self.__class__(cell=self._cell, pbc=self._pbc)
+        atoms = self.__class__(cell=self._cell, pbc=self._pbc, info=self.info)
         # TODO: Do we need to shuffle indices in adsorbate_info too?
         atoms.adsorbate_info = self.adsorbate_info
         
@@ -894,15 +921,14 @@ class Atoms(object):
         else:
             return com
 
-    def get_moments_of_inertia(self):
-        '''Get the moments of inertia
+    def get_moments_of_inertia(self, vectors=False):
+        """Get the moments of inertia along the principal axes.
 
         The three principal moments of inertia are computed from the
-        eigenvalues of the inertial tensor. periodic boundary
+        eigenvalues of the symmetric inertial tensor. Periodic boundary
         conditions are ignored. Units of the moments of inertia are
         amu*angstrom**2.
-        '''
-        
+        """
         com = self.get_center_of_mass()
         positions = self.get_positions()
         positions -= com  # translate center of mass to origin
@@ -925,8 +951,18 @@ class Atoms(object):
                       [I12, I22, I23],
                       [I13, I23, I33]])
 
-        evals, evecs = np.linalg.eig(I)
-        return evals
+        evals, evecs = np.linalg.eigh(I)
+        if vectors:
+            return evals, evecs.transpose()
+        else:
+            return evals
+
+    def get_angular_momentum(self):
+        """Get total angular momentum with respect to the center of mass."""
+        com = self.get_center_of_mass()
+        positions = self.get_positions()
+        positions -= com  # translate center of mass to origin
+        return np.cross(positions, self.get_momenta()).sum(0)
 
     def rotate(self, v, a=None, center=(0, 0, 0), rotate_cell=False):
         """Rotate atoms.
@@ -1050,9 +1086,9 @@ class Atoms(object):
         b = self.positions[list[2]] - self.positions[list[1]]
         c = self.positions[list[3]] - self.positions[list[2]]
         bxa = np.cross(b, a)
-        bxa /= np.sqrt(np.vdot(bxa, bxa))
+        bxa /= np.linalg.norm(bxa)
         cxb = np.cross(c, b)
-        cxb /= np.sqrt(np.vdot(cxb, cxb))
+        cxb /= np.linalg.norm(cxb)
         angle = np.vdot(bxa, cxb)
         # check for numerical trouble due to finite precision:
         if angle < -1:
@@ -1063,6 +1099,26 @@ class Atoms(object):
         if np.vdot(bxa, c) > 0:
             angle = 2 * np.pi - angle
         return angle
+
+    def _masked_rotate(self, center, axis, diff, mask):
+        # do rotation of subgroup by copying it to temporary atoms object
+        # and then rotating that
+        #
+        # recursive object definition might not be the most elegant thing,
+        # more generally useful might be a rotation function with a mask?
+        group = self.__class__()
+        for i in range(len(self)):
+            if mask[i]:
+                group += self[i]
+        group.translate(-center)
+        group.rotate(axis, diff)
+        group.translate(center)
+        # set positions in original atoms object
+        j = 0
+        for i in range(len(self)):
+            if mask[i]:
+                self.positions[i] = group[j].get_position()
+                j += 1
 
     def set_dihedral(self, list, angle, mask=None):
         """
@@ -1086,25 +1142,9 @@ class Atoms(object):
         # compute necessary in dihedral change, from current value
         current = self.get_dihedral(list)
         diff = angle - current
-        # do rotation of subgroup by copying it to temporary atoms object
-        # and then rotating that
         axis = self.positions[list[2]] - self.positions[list[1]]
         center = self.positions[list[2]]
-        # recursive object definition might not be the most elegant thing,
-        # more generally useful might be a rotation function with a mask?
-        group = self.__class__()
-        for i in range(len(self)):
-            if mask[i]:
-                group += self[i]
-        group.translate(-center)
-        group.rotate(axis, diff)
-        group.translate(center)
-        # set positions in original atoms object
-        j = 0
-        for i in range(len(self)):
-            if mask[i]:
-                self.positions[i] = group[j].get_position()
-                j += 1
+        self._masked_rotate(center, axis, diff, mask)
         
     def rotate_dihedral(self, list, angle, mask=None):
         """Rotate dihedral angle.
@@ -1115,7 +1155,46 @@ class Atoms(object):
         """
         start = self.get_dihedral(list)
         self.set_dihedral(list, angle + start, mask)
+    
+    def get_angle(self, list):
+        """Get angle formed by three atoms.
+        
+        calculate angle between the vectors list[0]->list[1] and
+        list[1]->list[2], where list contains the atomic indexes in
+        question."""
+        # normalized vector 1->0, 1->2:
+        v10 = self.positions[list[0]] - self.positions[list[1]]
+        v12 = self.positions[list[2]] - self.positions[list[1]]
+        v10 /= np.linalg.norm(v10)
+        v12 /= np.linalg.norm(v12)
+        angle = np.vdot(v10, v12)
+        angle = np.arccos(angle)
+        return angle
 
+    def set_angle(self, list, angle, mask=None):
+        """Set angle formed by three atoms.
+        
+        Sets the angle between vectors list[1]->list[0] and 
+        list[1]->list[2].
+
+        Same usage as in set_dihedral."""
+        # If not provided, set mask to the last atom in the angle description
+        if mask is None:
+            mask = np.zeros(len(self))
+            mask[list[2]] = 1
+        # Compute necessary in angle change, from current value
+        current = self.get_angle(list)
+        diff = current - angle
+        # Do rotation of subgroup by copying it to temporary atoms object and
+        # then rotating that
+        v10 = self.positions[list[0]] - self.positions[list[1]]
+        v12 = self.positions[list[2]] - self.positions[list[1]]
+        v10 /= np.linalg.norm(v10)
+        v12 /= np.linalg.norm(v12)
+        axis = np.cross(v10, v12)
+        center = self.positions[list[1]]
+        self._masked_rotate(center, axis, diff, mask)
+    
     def rattle(self, stdev=0.001, seed=42):
         """Randomly displace atoms.
 
@@ -1163,7 +1242,7 @@ class Atoms(object):
 
         Atoms outside the unit cell will be wrapped into the cell in
         those directions with periodic boundary conditions so that the
-        scaled coordinates are beween zero and one."""
+        scaled coordinates are between zero and one."""
 
         scaled = np.linalg.solve(self._cell.T, self.arrays['positions'].T).T
         for i in range(3):
@@ -1184,7 +1263,7 @@ class Atoms(object):
         return ekin / (1.5 * units.kB)
 
     def get_isotropic_pressure(self, stress):
-        """ get the current calculated pressure, assume isotropic medium.
+        """Get the current calculated pressure, assume isotropic medium.
             in Bar
         """
         if type(stress) == type(1.0) or type(stress) == type(1):
@@ -1228,7 +1307,7 @@ class Atoms(object):
         return abs(np.linalg.det(self._cell))
     
     def _get_positions(self):
-        """Return reference to positions-array for inplace manipulations."""
+        """Return reference to positions-array for in-place manipulations."""
         return self.arrays['positions']
 
     def _set_positions(self, pos):
@@ -1240,7 +1319,8 @@ class Atoms(object):
                          'manipulation of the positions.')
 
     def _get_atomic_numbers(self):
-        """Return reference to atomic numbers for inplace manipulations."""
+        """Return reference to atomic numbers for in-place 
+        manipulations."""
         return self.arrays['numbers']
 
     numbers = property(_get_atomic_numbers, set_atomic_numbers,
@@ -1248,14 +1328,14 @@ class Atoms(object):
                        'manipulation of the atomic numbers.')
 
     def _get_cell(self):
-        """Return reference to unit cell for inplace manipulations."""
+        """Return reference to unit cell for in-place manipulations."""
         return self._cell
     
     cell = property(_get_cell, set_cell, doc='Attribute for direct ' +
                        'manipulation of the unit cell.')
 
     def _get_pbc(self):
-        """Return reference to pbc-flags for inplace manipulations."""
+        """Return reference to pbc-flags for in-place manipulations."""
         return self._pbc
     
     pbc = property(_get_pbc, set_pbc,
@@ -1277,15 +1357,15 @@ class Atoms(object):
                 name += str(elements[element])
         return name
 
-    def write(self, filename, format=None):
+    def write(self, filename, format=None, **kwargs):
         """Write yourself to a file."""
         from ase.io import write
-        write(filename, self, format)
+        write(filename, self, format, **kwargs)
 
     def edit(self):
         """Modify atoms interactively through ag viewer. 
 
-        Conflicts leading to undesirable behviour might arise
+        Conflicts leading to undesirable behaviour might arise
         when matplotlib has been pre-imported with certain
         incompatible backends and while trying to use the
         plot feature inside the interactive ag. To circumvent,

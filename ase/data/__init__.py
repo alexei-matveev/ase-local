@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import os.path
+from ase.data.vdw import vdw_radii
 
 chemical_symbols = ['X',  'H',  'He', 'Li', 'Be',
                     'B',  'C',  'N',  'O',  'F',
@@ -157,180 +159,186 @@ atomic_masses = np.array([
     np.nan, # No
     np.nan])# Lw
 
-covalent_radius_default = 0.20 # for anything we don't know better
-
+# Covalent radii from:
+#
+#  Covalent radii revisited,
+#  Beatriz Cordero, Verónica Gómez, Ana E. Platero-Prats, Marc Revés,
+#  Jorge Echeverría, Eduard Cremades, Flavia Barragán and Santiago Alvarez,
+#  Dalton Trans., 2008, 2832-2838 DOI:10.1039/B801115J 
+missing = 0.2
 covalent_radii = np.array([
- covalent_radius_default, # X
- 0.32, # H
- 0.93, # He
- 1.23, # Li
- 0.90, # Be
- 0.82, # B
- 0.77, # C
- 0.75, # N
- 0.73, # O
- 0.72, # F
- 0.71, # Ne
- 1.54, # Na
- 1.36, # Mg
- 1.18, # Al
- 1.11, # Si
- 1.06, # P
- 1.02, # S
- 0.99, # Cl
- 0.98, # Ar
- 2.03, # K
- 1.74, # Ca
- 1.44, # Sc
- 1.32, # Ti
- 1.22, # V
- 1.18, # Cr
- 1.17, # Mn
- 1.17, # Fe
- 1.16, # Co
- 1.15, # Ni
- 1.17, # Cu
- 1.25, # Zn
- 1.26, # Ga
- 1.22, # Ge
- 1.20, # As
- 1.16, # Se
- 1.14, # Br
- 1.89, # Kr
- 2.16, # Rb
- 1.91, # Sr
- 1.62, # Y
- 1.45, # Zr
- 1.34, # Nb
- 1.30, # Mo
- 1.27, # Tc
- 1.25, # Ru
- 1.25, # Rh
- 1.28, # Pd
- 1.34, # Ag
- 1.41, # Cd
- 1.44, # In
- 1.41, # Sn
- 1.40, # Sb
- 1.36, # Te
- 1.33, # I
- 1.31, # Xe
- 2.35, # Cs
- 1.98, # Ba
- 1.25, # La
- 1.65, # Ce
- 1.65, # Pr
- 1.64, # Nd
- 1.63, # Pm
- 1.62, # Sm
- 1.85, # Eu
- 1.61, # Gd
- 1.59, # Tb
- 1.59, # Dy
- 1.58, # Ho
- 1.57, # Er
- 1.56, # Tm
- 1.70, # Yb
- 1.56, # Lu
- 1.44, # Hf
- 1.34, # Ta
- 1.30, # W
- 1.28, # Re
- 1.26, # Os
- 1.27, # Ir
- 1.30, # Pt
- 1.34, # Au
- 1.49, # Hg
- 1.48, # Tl
- 1.47, # Pb
- 1.46, # Bi
- 1.53, # Po
- 1.47, # At
- covalent_radius_default, # Rn
- covalent_radius_default, # Fr
- covalent_radius_default, # Ra
- covalent_radius_default, # Ac
- 1.65, # Th
- covalent_radius_default, # Pa
- 1.42, # U
- covalent_radius_default, # Np
- covalent_radius_default, # Pu
- covalent_radius_default, # Am
- covalent_radius_default, # Cm
- covalent_radius_default, # Bk
- covalent_radius_default, # Cf
- covalent_radius_default, # Es
- covalent_radius_default, # Fm
- covalent_radius_default, # Md
- covalent_radius_default, # No
- covalent_radius_default]) # Lw
+    missing,  # X
+    0.31,  # H
+    0.28,  # He
+    1.28,  # Li
+    0.96,  # Be
+    0.84,  # B
+    0.76,  # C
+    0.71,  # N
+    0.66,  # O
+    0.57,  # F
+    0.58,  # Ne
+    1.66,  # Na
+    1.41,  # Mg
+    1.21,  # Al
+    1.11,  # Si
+    1.07,  # P
+    1.05,  # S
+    1.02,  # Cl
+    1.06,  # Ar
+    2.03,  # K
+    1.76,  # Ca
+    1.70,  # Sc
+    1.60,  # Ti
+    1.53,  # V
+    1.39,  # Cr
+    1.39,  # Mn
+    1.32,  # Fe
+    1.26,  # Co
+    1.24,  # Ni
+    1.32,  # Cu
+    1.22,  # Zn
+    1.22,  # Ga
+    1.20,  # Ge
+    1.19,  # As
+    1.20,  # Se
+    1.20,  # Br
+    1.16,  # Kr
+    2.20,  # Rb
+    1.95,  # Sr
+    1.90,  # Y
+    1.75,  # Zr
+    1.64,  # Nb
+    1.54,  # Mo
+    1.47,  # Tc
+    1.46,  # Ru
+    1.42,  # Rh
+    1.39,  # Pd
+    1.45,  # Ag
+    1.44,  # Cd
+    1.42,  # In
+    1.39,  # Sn
+    1.39,  # Sb
+    1.38,  # Te
+    1.39,  # I
+    1.40,  # Xe
+    2.44,  # Cs
+    2.15,  # Ba
+    2.07,  # La
+    2.04,  # Ce
+    2.03,  # Pr
+    2.01,  # Nd
+    1.99,  # Pm
+    1.98,  # Sm
+    1.98,  # Eu
+    1.96,  # Gd
+    1.94,  # Tb
+    1.92,  # Dy
+    1.92,  # Ho
+    1.89,  # Er
+    1.90,  # Tm
+    1.87,  # Yb
+    1.87,  # Lu
+    1.75,  # Hf
+    1.70,  # Ta
+    1.62,  # W
+    1.51,  # Re
+    1.44,  # Os
+    1.41,  # Ir
+    1.36,  # Pt
+    1.36,  # Au
+    1.32,  # Hg
+    1.45,  # Tl
+    1.46,  # Pb
+    1.48,  # Bi
+    1.40,  # Po
+    1.50,  # At
+    1.50,  # Rn
+    2.60,  # Fr
+    2.21,  # Ra
+    2.15,  # Ac
+    2.06,  # Th
+    2.00,  # Pa
+    1.96,  # U
+    1.90,  # Np
+    1.87,  # Pu
+    1.80,  # Am
+    1.69,  # Cm
+    missing,  # Bk
+    missing,  # Cf
+    missing,  # Es
+    missing,  # Fm
+    missing,  # Md
+    missing,  # No
+    missing,  # Lr
+    ])
 
 # This data is from Ashcroft and Mermin.
 reference_states = [\
     None, #X
     {'symmetry': 'diatom', 'd': 0.74}, #H
     {'symmetry': 'atom'}, #He
-    {'symmetry': 'BCC', 'a': 3.49}, #Li
+    {'symmetry': 'bcc', 'a': 3.49}, #Li
     {'symmetry': 'hcp', 'c/a': 1.567, 'a': 2.29}, #Be
-    {'symmetry': 'Tetragonal', 'c/a': 0.576, 'a': 8.73}, #B
-    {'symmetry': 'Diamond', 'a': 3.57},#C
+    {'symmetry': 'tetragonal', 'c/a': 0.576, 'a': 8.73}, #B
+    {'symmetry': 'diamond', 'a': 3.57},#C
     {'symmetry': 'diatom', 'd': 1.10},#N
     {'symmetry': 'diatom', 'd': 1.21},#O
     {'symmetry': 'diatom', 'd': 1.42},#F
     {'symmetry': 'fcc', 'a': 4.43},#Ne
-    {'symmetry': 'BCC', 'a': 4.23},#Na
+    {'symmetry': 'bcc', 'a': 4.23},#Na
     {'symmetry': 'hcp', 'c/a': 1.624, 'a': 3.21},#Mg
     {'symmetry': 'fcc', 'a': 4.05},#Al
-    {'symmetry': 'Diamond', 'a': 5.43},#Si
-    {'symmetry': 'Cubic', 'a': 7.17},#P
-    {'symmetry': 'Orthorhombic', 'c/a': 2.339, 'a': 10.47,'b/a': 1.229},#S
-    {'symmetry': 'Orthorhombic', 'c/a': 1.324, 'a': 6.24, 'b/a': 0.718},#Cl
+    {'symmetry': 'diamond', 'a': 5.43},#Si
+    {'symmetry': 'cubic', 'a': 7.17},#P
+    {'symmetry': 'orthorhombic', 'c/a': 2.339, 'a': 10.47,'b/a': 1.229},#S
+    {'symmetry': 'orthorhombic', 'c/a': 1.324, 'a': 6.24, 'b/a': 0.718},#Cl
     {'symmetry': 'fcc', 'a': 5.26},#Ar
-    {'symmetry': 'BCC', 'a': 5.23},#K
+    {'symmetry': 'bcc', 'a': 5.23},#K
     {'symmetry': 'fcc', 'a': 5.58},#Ca
     {'symmetry': 'hcp', 'c/a': 1.594, 'a': 3.31},#Sc
     {'symmetry': 'hcp', 'c/a': 1.588, 'a': 2.95},#Ti
-    {'symmetry': 'BCC', 'a': 3.02},#V
-    {'symmetry': 'BCC', 'a': 2.88},#Cr
-    {'symmetry': 'Cubic', 'a': 8.89},#Mn
-    {'symmetry': 'BCC', 'a': 2.87},#Fe
+    {'symmetry': 'bcc', 'a': 3.02},#V
+    {'symmetry': 'bcc', 'a': 2.88},#Cr
+    {'symmetry': 'cubic', 'a': 8.89},#Mn
+    {'symmetry': 'bcc', 'a': 2.87},#Fe
     {'symmetry': 'hcp', 'c/a': 1.622, 'a': 2.51},#Co
     {'symmetry': 'fcc', 'a': 3.52},#Ni
     {'symmetry': 'fcc', 'a': 3.61},#Cu
     {'symmetry': 'hcp', 'c/a': 1.856, 'a': 2.66},#Zn
-    {'symmetry': 'Orthorhombic', 'c/a': 1.695, 'a': 4.51, 'b/a': 1.001},#Ga
-    {'symmetry': 'Diamond', 'a': 5.66},#Ge
-    {'symmetry': 'Rhombohedral', 'a': 4.13, 'alpha': 54.10},#As
+    {'symmetry': 'orthorhombic', 'c/a': 1.695, 'a': 4.51, 'b/a': 1.001},#Ga
+    {'symmetry': 'diamond', 'a': 5.66},#Ge
+    {'symmetry': 'rhombohedral', 'a': 4.13, 'alpha': 54.10},#As
     {'symmetry': 'hcp', 'c/a': 1.136, 'a': 4.36},#Se
-    {'symmetry': 'Orthorhombic', 'c/a': 1.307, 'a': 6.67, 'b/a': 0.672},#Br
+    {'symmetry': 'orthorhombic', 'c/a': 1.307, 'a': 6.67, 'b/a': 0.672},#Br
     {'symmetry': 'fcc', 'a': 5.72},#Kr
-    {'symmetry': 'BCC', 'a': 5.59},#Rb
+    {'symmetry': 'bcc', 'a': 5.59},#Rb
     {'symmetry': 'fcc', 'a': 6.08},#Sr
     {'symmetry': 'hcp', 'c/a': 1.571, 'a': 3.65},#Y
     {'symmetry': 'hcp', 'c/a': 1.593, 'a': 3.23},#Zr
-    {'symmetry': 'BCC', 'a': 3.30},#Nb
-    {'symmetry': 'BCC', 'a': 3.15},#Mo
+    {'symmetry': 'bcc', 'a': 3.30},#Nb
+    {'symmetry': 'bcc', 'a': 3.15},#Mo
     {'symmetry': 'hcp', 'c/a': 1.604, 'a': 2.74},#Tc
     {'symmetry': 'hcp', 'c/a': 1.584, 'a': 2.70},#Ru
     {'symmetry': 'fcc', 'a': 3.80},#Rh
     {'symmetry': 'fcc', 'a': 3.89},#Pd
     {'symmetry': 'fcc', 'a': 4.09},#Ag
     {'symmetry': 'hcp', 'c/a': 1.886, 'a': 2.98},#Cd
-    {'symmetry': 'Tetragonal', 'c/a': 1.076, 'a': 4.59},#In
-    {'symmetry': 'Tetragonal', 'c/a': 0.546, 'a': 5.82},#Sn
-    {'symmetry': 'Rhombohedral', 'a': 4.51, 'alpha': 57.60},#Sb
+    {'symmetry': 'tetragonal', 'c/a': 1.076, 'a': 4.59},#In
+    {'symmetry': 'tetragonal', 'c/a': 0.546, 'a': 5.82},#Sn
+    {'symmetry': 'rhombohedral', 'a': 4.51, 'alpha': 57.60},#Sb
     {'symmetry': 'hcp', 'c/a': 1.330, 'a': 4.45},#Te
-    {'symmetry': 'Orthorhombic', 'c/a': 1.347, 'a': 7.27, 'b/a': 0.659},#I
+    {'symmetry': 'orthorhombic', 'c/a': 1.347, 'a': 7.27, 'b/a': 0.659},#I
     {'symmetry': 'fcc', 'a': 6.20},#Xe
-    {'symmetry': 'BCC', 'a': 6.05},#Cs
-    {'symmetry': 'BCC', 'a': 5.02},#Ba
+    {'symmetry': 'bcc', 'a': 6.05},#Cs
+    {'symmetry': 'bcc', 'a': 5.02},#Ba
     {'symmetry': 'hcp', 'c/a': 1.619, 'a': 3.75},#La
     {'symmetry': 'fcc', 'a': 5.16},#Ce
     {'symmetry': 'hcp', 'c/a': 1.614, 'a': 3.67},#Pr
     {'symmetry': 'hcp', 'c/a': 1.614, 'a': 3.66},#Nd
     None,#Pm
-    {'symmetry': 'Rhombohedral', 'a': 9.00, 'alpha': 23.13},#Sm
-    {'symmetry': 'BCC', 'a': 4.61},#Eu
+    {'symmetry': 'rhombohedral', 'a': 9.00, 'alpha': 23.13},#Sm
+    {'symmetry': 'bcc', 'a': 4.61},#Eu
     {'symmetry': 'hcp', 'c/a': 1.588, 'a': 3.64},#Gd
     {'symmetry': 'hcp', 'c/a': 1.581, 'a': 3.60},#Th
     {'symmetry': 'hcp', 'c/a': 1.573, 'a': 3.59},#Dy
@@ -340,28 +348,28 @@ reference_states = [\
     {'symmetry': 'fcc', 'a': 5.49},#Yb
     {'symmetry': 'hcp', 'c/a': 1.585, 'a': 3.51},#Lu
     {'symmetry': 'hcp', 'c/a': 1.582, 'a': 3.20},#Hf
-    {'symmetry': 'BCC', 'a': 3.31},#Ta
-    {'symmetry': 'BCC', 'a': 3.16},#W
+    {'symmetry': 'bcc', 'a': 3.31},#Ta
+    {'symmetry': 'bcc', 'a': 3.16},#W
     {'symmetry': 'hcp', 'c/a': 1.615, 'a': 2.76},#Re
     {'symmetry': 'hcp', 'c/a': 1.579, 'a': 2.74},#Os
     {'symmetry': 'fcc', 'a': 3.84},#Ir
     {'symmetry': 'fcc', 'a': 3.92},#Pt
     {'symmetry': 'fcc', 'a': 4.08},#Au
-    {'symmetry': 'Rhombohedral', 'a': 2.99, 'alpha': 70.45},#Hg
+    {'symmetry': 'rhombohedral', 'a': 2.99, 'alpha': 70.45},#Hg
     {'symmetry': 'hcp', 'c/a': 1.599, 'a': 3.46},#Tl
     {'symmetry': 'fcc', 'a': 4.95},#Pb
-    {'symmetry': 'Rhombohedral', 'a': 4.75, 'alpha': 57.14},#Bi
-    {'symmetry': 'SC', 'a': 3.35},#Po
+    {'symmetry': 'rhombohedral', 'a': 4.75, 'alpha': 57.14},#Bi
+    {'symmetry': 'sc', 'a': 3.35},#Po
     None,#At
     None,#Rn
     None,#Fr
     None,#Ra
     {'symmetry': 'fcc', 'a': 5.31},#Ac
     {'symmetry': 'fcc', 'a': 5.08},#Th
-    {'symmetry': 'Tetragonal', 'c/a': 0.825, 'a': 3.92},#Pa
-    {'symmetry': 'Orthorhombic', 'c/a': 2.056, 'a': 2.85, 'b/a': 1.736},#U
-    {'symmetry': 'Orthorhombic', 'c/a': 1.411, 'a': 4.72, 'b/a': 1.035},#Np
-    {'symmetry': 'Monoclinic'},#Pu
+    {'symmetry': 'tetragonal', 'c/a': 0.825, 'a': 3.92},#Pa
+    {'symmetry': 'orthorhombic', 'c/a': 2.056, 'a': 2.85, 'b/a': 1.736},#U
+    {'symmetry': 'orthorhombic', 'c/a': 1.411, 'a': 4.72, 'b/a': 1.035},#Np
+    {'symmetry': 'monoclinic'},#Pu
     None,#Am
     None,#Cm
     None,#Bk
@@ -371,3 +379,110 @@ reference_states = [\
     None,#Md
     None,#No
     None]#Lw
+
+# http://www.webelements.com
+ground_state_magnetic_moments = np.array([
+   0.0, # X
+   1.0, # H
+   0.0, # He
+   1.0, # Li
+   0.0, # Be
+   1.0, # B
+   2.0, # C
+   3.0, # N
+   2.0, # O
+   1.0, # F
+   0.0, # Ne
+   1.0, # Na
+   0.0, # Mg
+   1.0, # Al
+   2.0, # Si
+   3.0, # P
+   2.0, # S
+   1.0, # Cl
+   0.0, # Ar
+   1.0, # K
+   0.0, # Ca
+   1.0, # Sc
+   2.0, # Ti
+   3.0, # V
+   6.0, # Cr
+   5.0, # Mn
+   4.0, # Fe
+   3.0, # Co
+   2.0, # Ni
+   1.0, # Cu
+   0.0, # Zn
+   1.0, # Ga
+   2.0, # Ge
+   3.0, # As
+   2.0, # Se
+   1.0, # Br
+   0.0, # Kr
+   1.0, # Rb
+   0.0, # Sr
+   1.0, # Y
+   2.0, # Zr
+   5.0, # Nb
+   6.0, # Mo
+   5.0, # Tc
+   4.0, # Ru
+   3.0, # Rh
+   0.0, # Pd
+   1.0, # Ag
+   0.0, # Cd
+   1.0, # In
+   2.0, # Sn
+   3.0, # Sb
+   2.0, # Te
+   1.0, # I
+   0.0, # Xe
+   1.0, # Cs
+   0.0, # Ba
+   1.0, # La
+   1.0, # Ce
+   3.0, # Pr
+   4.0, # Nd
+   5.0, # Pm
+   6.0, # Sm
+   7.0, # Eu
+   8.0, # Gd
+   5.0, # Tb
+   4.0, # Dy
+   3.0, # Ho
+   2.0, # Er
+   1.0, # Tm
+   0.0, # Yb
+   1.0, # Lu
+   2.0, # Hf
+   3.0, # Ta
+   4.0, # W
+   5.0, # Re
+   4.0, # Os
+   3.0, # Ir
+   2.0, # Pt
+   1.0, # Au
+   0.0, # Hg
+   1.0, # Tl
+   2.0, # Pb
+   3.0, # Bi
+   2.0, # Po
+   1.0, # At
+   0.0, # Rn
+   1.0, # Fr
+   0.0, # Ra
+   1.0, # Ac
+   2.0, # Th
+   3.0, # Pa
+   4.0, # U
+   5.0, # Np
+   6.0, # Pu
+   7.0, # Am
+   8.0, # Cm
+   5.0, # Bk
+   4.0, # Cf
+   4.0, # Es
+   2.0, # Fm
+   1.0, # Md
+   0.0, # No
+np.nan])# Lw

@@ -43,6 +43,8 @@ float_keys = [
     'amix_mag',   #
     'bmix',       # tags for mixing
     'bmix_mag',   #
+    'deper',      # relative stopping criterion for optimization of eigenvalue
+    'ebreak',     # absolute stopping criterion for optimization of eigenvalues (EDIFF/N-BANDS/4)
     'emax',       # energy-range for DOSCAR file
     'emin',       #
     'enmax',      # Another energy cutoff, defaults derived from data in POTCAR
@@ -52,16 +54,40 @@ float_keys = [
     'hfscreen',   # attribute to change from PBE0 to HSE
     'potim',      # time-step for ion-motion (fs)
     'nelect',     # total number of electrons
+    'param1',     # Exchange parameter 
+    'param2',     # Exchange parameter 
     'pomass',     # mass of ions in am
     'sigma',      # broadening in eV
     'time',       # special control tag
+    'weimin',     # maximum weight for a band to be considered empty
+    'zab_vdw',    # vdW-DF parameter
     'zval',       # ionic valence
-    ]
+#The next keywords pertain to the VTST add-ons from Graeme Henkelman's group at UT Austin
+    'jacobian',   # Weight of lattice to atomic motion
+    'ddr',        # (DdR) dimer separation
+    'drotmax',    # (DRotMax) number of rotation steps per translation step
+    'dfnmin',     # (DFNMin) rotational force below which dimer is not rotated
+    'dfnmax',     # (DFNMax) rotational force below which dimer rotation stops
+    'stol',       # convergence ratio for minimum eigenvalue
+    'sdr',        # finite difference for setting up Lanczos matrix and step size when translating
+    'maxmove',    # Max step for translation for IOPT > 0
+    'invcurve',   # Initial curvature for LBFGS (IOPT = 1)
+    'timestep',   # Dynamical timestep for IOPT = 3 and IOPT = 7
+    'sdalpha',    # Ratio between force and step size for IOPT = 4
+#The next keywords pertain to IOPT = 7 (i.e. FIRE)
+    'ftimemax',   # Max time step
+    'ftimedec',   # Factor to dec. dt
+    'ftimeinc',   # Factor to inc. dt
+    'falpha',     # Parameter for velocity damping
+    'falphadec',  # Factor to dec. alpha
+]
 
 exp_keys = [
     'ediff',      # stopping-criterion for electronic upd.
     'ediffg',     # stopping-criterion for ionic upd.
     'symprec',    # precession in symmetry routines
+#The next keywords pertain to the VTST add-ons from Graeme Henkelman's group at UT Austin
+    'fdstep',     # Finite diference step for IOPT = 1 or 2
 ]
 
 string_keys = [
@@ -118,6 +144,13 @@ int_keys = [
     'vdwgr',      # extra keyword for Andris program
     'vdwrn',      # extra keyword for Andris program
     'voskown',    # use Vosko, Wilk, Nusair interpolation
+#The next keywords pertain to the VTST add-ons from Graeme Henkelman's group at UT Austin
+    'ichain',     # Flag for controlling which method is being used (0=NEB, 1=DynMat, 2=Dimer, 3=Lanczos)
+                  # if ichain > 3, then both IBRION and POTIM are automatically set in the INCAR file
+    'iopt',       # Controls which optimizer to use.  for iopt > 0, ibrion = 3 and potim = 0.0
+    'snl',        # Maximum dimentionality of the Lanczos matrix
+    'lbfgsmem',   # Steps saved for inverse Hessian for IOPT = 1 (LBFGS)
+    'fnmin',      # Max iter. before adjusting dt and alpha for IOPT = 7 (FIRE) 
 ]
 
 bool_keys = [
@@ -140,8 +173,17 @@ bool_keys = [
     'lsepb',      # write out partial charge of each band seperately?
     'lsepk',      # write out partial charge of each k-point seperately?
     'lthomas',    #
+    'luse_vdw',   # Invoke vdW-DF implementation by Klimes et. al 
+    'lvhar',      # write Hartree potential to LOCPOT (vasp 5.x)
     'lvtot',      # create WAVECAR/CHGCAR/LOCPOT
     'lwave',      #
+#The next keywords pertain to the VTST add-ons from Graeme Henkelman's group at UT Austin
+    'lclimb',     # Turn on CI-NEB
+    'ltangentold', # Old central difference tangent
+    'ldneb',      # Turn on modified double nudging
+    'lnebcell',   # Turn on SS-NEB
+    'lglobal',    # Optmizize NEB globally for LBFGS (IOPT = 1)
+    'llineopt',   # Use force based line minimizer for translation (IOPT = 1)
 ]
 
 list_keys = [
@@ -154,6 +196,11 @@ list_keys = [
     'kpuse',      # k-point to calculate partial charge for
     'ropt',       # number of grid points for non-local proj in real space
     'rwigs',      # Wigner-Seitz radii
+    'ldauu',      # ldau parameters, has potential to redundant w.r.t. dict
+    'ldaul',      # key 'ldau_luj', but 'ldau_luj' can't be read direct from
+    'ldauj',      # the INCAR (since it needs to know information about atomic
+                  # species. In case of conflict 'ldau_luj' gets written out
+                  # when a calculation is set up
 ]
 
 special_keys = [
@@ -204,14 +251,21 @@ class Vasp(Calculator):
 
         self.string_params['prec'] = 'Normal'
 
-        self.input_params = {
-            'xc':     'PW91',  # exchange correlation potential
+        if kwargs.get('xc', None):
+            if kwargs['xc'] not in ['PW91','LDA','PBE']:
+                raise ValueError(
+                    '%s not supported for xc! use one of: PW91, LDA or PBE.' %
+                    kwargs['xc'])
+            self.input_params = {'xc': kwargs['xc']} # exchange correlation functional
+        else:
+            self.input_params = {'xc': 'PW91'} # exchange correlation functional
+        self.input_params.update({
             'setups': None,    # Special setups (e.g pv, sv, ...)
             'txt':    '-',     # Where to send information
             'kpts':   (1,1,1), # k-points
             'gamma':  False,   # Option to use gamma-sampling instead
                                # of Monkhorst-Pack
-            }
+            })
 
         self.restart = restart
         self.track_output = track_output
@@ -220,10 +274,6 @@ class Vasp(Calculator):
             self.restart_load()
             return
 
-        if self.input_params['xc'] not in ['PW91','LDA','PBE']:
-            raise ValueError(
-                '%s not supported for xc! use one of: PW91, LDA or PBE.' %
-                kwargs['xc'])
         self.nbands = self.int_params['nbands']
         self.atoms = None
         self.positions = None
@@ -291,7 +341,7 @@ class Vasp(Calculator):
             #print 'special_setups' , special_setups
 
         for m,atom in enumerate(atoms):
-            symbol = atom.get_symbol()
+            symbol = atom.symbol
             if m in special_setups:
                 pass
             else:
@@ -309,7 +359,7 @@ class Vasp(Calculator):
                 if m in special_setups:
                     pass
                 else:
-                    if atom.get_symbol() == symbol:
+                    if atom.symbol == symbol:
                         self.sort.append(m)
         self.resort = range(len(self.sort))
         for n in range(len(self.resort)):
@@ -374,9 +424,11 @@ class Vasp(Calculator):
                     self.ppp_list.append(filename+'.Z')
                     break
             if not found:
+
                 raise RuntimeError('No pseudopotential for %s!' % symbol)
         self.converged = None
         self.setups_changed = None
+        
 
     def calculate(self, atoms):
         """Generate necessary files in the working directory and run VASP.
@@ -386,9 +438,11 @@ class Vasp(Calculator):
         etc. are read from the VASP output.
         """
 
+        # Initialize calculations
+        self.initialize(atoms)
+
         # Write input
         from ase.io.vasp import write_vasp
-        self.initialize(atoms)
         write_vasp('POSCAR', self.atoms_sorted, symbol_count = self.symbol_count)
         self.write_incar(atoms)
         self.write_potcar()
@@ -412,6 +466,8 @@ class Vasp(Calculator):
             self.magnetic_moment = self.read_magnetic_moment()
             if self.int_params['lorbit']>=10 or (self.int_params['lorbit']!=None and self.list_params['rwigs']):
                 self.magnetic_moments = self.read_magnetic_moments(atoms)
+            else:
+                self.magnetic_moments = None
         self.old_float_params = self.float_params.copy()
         self.old_exp_params = self.exp_params.copy()
         self.old_string_params = self.string_params.copy()
@@ -421,6 +477,7 @@ class Vasp(Calculator):
         self.old_list_params = self.list_params.copy()
         self.old_dict_params = self.dict_params.copy()
         self.atoms = atoms.copy()
+        self.name = 'vasp'
         self.version = self.read_version()
         self.niter = self.read_number_of_iterations()
         self.sigma = self.read_electronic_temperature()
@@ -513,6 +570,9 @@ class Vasp(Calculator):
         atoms.set_calculator(self)
         return atoms
 
+    def get_name(self):
+        return self.name
+
     def get_version(self):
         self.update(self.atoms)
         return self.version
@@ -589,6 +649,7 @@ class Vasp(Calculator):
         return self.stress
 
     def read_stress(self):
+        stress = None
         for line in open('OUTCAR'):
             if line.find(' in kB  ') != -1:
                 stress = -np.array([float(a) for a in line.split()[2:]]) \
@@ -677,6 +738,9 @@ class Vasp(Calculator):
         self.update(self.atoms)
         return self.read_ibz_kpoints()
 
+    def get_ibz_k_points(self):
+        return self.get_ibz_kpoints()
+
     def get_spin_polarized(self):
         if not hasattr(self, 'spinpol'):
             self.spinpol = self.atoms.get_initial_magnetic_moments().any()
@@ -719,10 +783,22 @@ class Vasp(Calculator):
         for key, val in self.int_params.items():
             if val is not None:
                 incar.write(' %s = %d\n' % (key.upper(), val))
+                if key == 'ichain' and val > 0:
+                    incar.write(' IBRION = 3\n POTIM = 0.0\n')
+                    for key, val in self.int_params.items():
+                        if key == 'iopt' and val == None:
+                            print 'WARNING: optimization is set to LFBGS (IOPT = 1)'
+                            incar.write(' IOPT = 1\n')
+                    for key, val in self.exp_params.items():
+                        if key == 'ediffg' and val == None:
+                            RuntimeError('Please set EDIFFG < 0')
         for key, val in self.list_params.items():
             if val is not None:
                 incar.write(' %s = ' % key.upper())
                 if key in ('dipol', 'eint', 'ropt', 'rwigs'):
+                    [incar.write('%.4f ' % x) for x in val]
+                elif key in ('ldauu', 'ldauj', 'ldaul') and \
+                    not self.dict_keys.has('ldau_luj'):
                     [incar.write('%.4f ' % x) for x in val]
                 elif key in ('ferwe', 'ferdo'):
                     [incar.write('%.1f ' % x) for x in val]
@@ -796,7 +872,7 @@ class Vasp(Calculator):
             else:
                 kpoints.write('Monkhorst-Pack\n')
             [kpoints.write('%i ' % kpt) for kpt in p['kpts']]
-            kpoints.write('\n0 0 0')
+            kpoints.write('\n0 0 0\n')
         elif len(shape)==2:
             kpoints.write('%i \n' % (len(p['kpts'])))
             kpoints.write('Cartesian\n')
@@ -1028,6 +1104,8 @@ class Vasp(Calculator):
         lines=file.readlines()
         for line in lines:
             try:
+                # Make multiplications easier to spot
+                line = line.replace("*", " * ")
                 data = line.split()
                 # Skip empty and commented lines.
                 if len(data) == 0:
@@ -1054,26 +1132,37 @@ class Vasp(Calculator):
                         self.bool_params[key] = False
                 elif key in list_keys:
                     list = []
-                    if key in ('dipol', 'eint', 'ferwe', 'ropt', 'rwigs'):
+                    if key in ('dipol', 'eint', 'ferwe', 'ropt', 'rwigs',
+                               'ldauu', 'ldaul', 'ldauj'):
                         for a in data[2:]:
+                            if a in ["!", "#"]:
+                               break 
                             list.append(float(a))
                     elif key in ('iband', 'kpuse'):
                         for a in data[2:]:
+                            if a in ["!", "#"]:
+                               break
                             list.append(int(a))
                     self.list_params[key] = list
                     if key == 'magmom':
-                        done = False
-                        for a in data[2:]:
-                            if '!' in a or done:
-                                done = True
-                            elif '*' in a:
-                                a = a.split('*')
-                                for b in range(int(a[0])):
-                                    list.append(float(a[1]))
+                        list = []
+                        i = 2
+                        while i < len(data):
+                            if data[i] in ["#", "!"]:
+                                break
+                            if data[i] == "*":
+                                b = list.pop()
+                                i += 1
+                                for j in range(int(b)):
+                                    list.append(float(data[i]))
                             else:
-                                list.append(float(a))
+                                list.append(float(data[i]))
+                            i += 1
+                        self.list_params['magmom'] = list
                         list = np.array(list)
-                        self.atoms.set_initial_magnetic_moments(list[self.resort])
+                        if self.atoms is not None:
+                                self.atoms.set_initial_magnetic_moments(list[self.resort])
+ 
             except KeyError:
                 raise IOError('Keyword "%s" in INCAR is not known by calculator.' % key)
             except IndexError:
@@ -1218,7 +1307,7 @@ class VaspChargeDensity(object):
         while True:
             try:
                 atoms = aiv.read_vasp(f)
-            except (IOError, ValueError):
+            except (IOError, ValueError, IndexError):
                 # Probably an empty line, or we tried to read the
                 # augmentation occupancies in CHGCAR
                 break
@@ -1527,7 +1616,9 @@ class xdat2traj:
 
     def convert(self):
         lines = open(self.xdatcar).readlines()
-        if len(lines[5].split())==0:
+        if len(lines[7].split())==0:
+            del(lines[0:8])
+        elif len(lines[5].split())==0:
             del(lines[0:6])
         elif len(lines[4].split())==0:
             del(lines[0:5])

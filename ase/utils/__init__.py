@@ -14,6 +14,9 @@ class DevNull:
     def flush(self):
         pass
 
+    def seek(self, offset, whence=0):
+        return 0
+
     def tell(self):
         return 0
 
@@ -28,7 +31,7 @@ def opencew(filename):
 
     If master cpu gets exclusive write access til filename, a file
     descriptor is returned (a dummy file descriptor is returned on the
-    slaves).  If the master cpu doet not gets write access, None is
+    slaves).  If the master cpu doet not get write access, None is
     returned on all processors."""
 
     if world.rank == 0:
@@ -58,6 +61,13 @@ def prnt(*args, **kwargs):
     if kwargs:
         raise TypeError('%r is an invalid keyword argument for this function' %
                         kwargs.keys()[0])
+
+
+def gcd(a, b):
+    """Greatest common divisor of a and b."""
+    while a != 0:
+        a, b = b % a, a
+    return b
 
 
 def rotate(rotations, rotation=np.identity(3)):

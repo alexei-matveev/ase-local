@@ -51,7 +51,7 @@ def write_cfg(f, a):
     # Distinct elements
     spos = a.get_scaled_positions()
     for i in a:
-        el  = i.get_symbol()
+        el  = i.symbol
 
         f.write('%f\n' % ase.data.atomic_masses[ase.data.chemical_symbols.index(el)])
         f.write('%s\n' % el)
@@ -102,12 +102,12 @@ def write_clr(f, atoms):
     if color is None:
         color  = np.zeros([len(atoms),3], dtype=float)
         for a in atoms:
-            color[a.index, :]  = default_color[a.get_symbol()]
+            color[a.index, :]  = default_color[a.symbol]
 
     if radius is None:
         radius  = np.zeros(len(atoms), dtype=float)
         for a in atoms:
-            radius[a.index]  = default_radius[a.get_symbol()]
+            radius[a.index]  = default_radius[a.symbol]
 
     radius.shape = (-1, 1)
 

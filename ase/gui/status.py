@@ -8,7 +8,7 @@ import numpy as np
 from ase.data import chemical_symbols as symbols
 from ase.data import atomic_names as names
 from ase.gui.widgets import pack
-from ase.gui.languages import translate as _
+from gettext import gettext as _
 
 def formula(Z):
     hist = {}
@@ -59,8 +59,8 @@ class Status:
             mom = self.images.M[self.frame][indices]
             text = (u' #%d %s (%s): %.3f Å, %.3f Å, %.3f Å ' %
                     ((indices[0], names[Z[0]], symbols[Z[0]]) + tuple(R[0])))
-        
-            text+=' tag=%s mom=%1.2f' % (tag, mom)        
+            # TRANSLATORS: mom refers to magnetic moment
+            text += _(' tag=%(tag)s mom=%(mom)1.2f') % dict(tag=tag, mom=mom)
         elif n == 2:
             D = R[0] - R[1]
             d = sqrt(np.dot(D, D))
@@ -100,7 +100,8 @@ class Status:
             angle = np.arccos(angle)
             if (np.vdot(bxa,c)) > 0: angle = 2*np.pi-angle
             angle = angle*180.0/np.pi
-            text = ( u'dihedral %s->%s->%s->%s: %.1f°' % tuple([symbols[z] for z in Z]+[angle]))
+            text = (u'%s %s->%s->%s->%s: %.1f°'
+                    % tuple([_('dihedral')] + [symbols[z] for z in Z]+[angle]))
         else:
             text = ' ' + formula(Z)
             

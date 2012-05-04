@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 import __future__
 import gtk
+from gettext import gettext as _
 import os.path
 import numpy as np
 import sys
 
-from ase.gui.languages import translate as _
 from ase.gui.widgets import pack, Help
 from ase.data.colors import jmol_colors
+from ase.atoms import Atoms
 
 class Execute(gtk.Window):
     """ The Execute class provides an expert-user window for modification
@@ -19,7 +20,7 @@ class Execute(gtk.Window):
 
     Please do not mix global and atom commands."""
     
-    terminal_help_txt="""
+    terminal_help_txt=_("""
     Global commands work on all frames or only on the current frame
     - Assignment of a global variable may not reference a local one
     - use 'Current frame' switch to switch off application to all frames
@@ -31,6 +32,7 @@ class Execute(gtk.Window):
     <c>M</c>:\tall magnetic moments
     <c>R</c>:\t\tall atomic positions
     <c>S</c>:\tall selected atoms (boolean array)
+    <c>D</c>:\tall dynamic atoms (boolean array)
     examples: <c>frame = 1</c>, <c>A[0][1] += 4</c>, <c>e-E[-1]</c>
 
     Atom commands work on each atom (or a selection) individually
@@ -38,7 +40,9 @@ class Execute(gtk.Window):
     - use 'selected atoms only' to restrict application of command
     <c>x,y,z</c>:\tatomic coordinates
     <c>r,g,b</c>:\tatom display color, range is [0..1]
+    <c>rad</c>:\tatomic radius for display
     <c>s</c>:\t\tatom is selected
+    <c>d</c>:\t\tatom is movable
     <c>f</c>:\t\tforce
     <c>Z</c>:\tatomic number
     <c>m</c>:\tmagnetic moment
@@ -49,16 +53,18 @@ class Execute(gtk.Window):
     <c>frame</c>:\tframe number
     <c>center</c>:\tcenters the system in its existing unit cell
     <c>del S</c>:\tdelete selection
+    <c>CM</c>:\tcenter of mass
+    <c>ans[-i]</c>:\tith last calculated result
     <c>exec file</c>: executes commands listed in file
     <c>cov[Z]</c>:(read only): covalent radius of atomic number Z
     <c>gui</c>:\tadvanced: ag window python object
     <c>img</c>:\tadvanced: ag images object
-    """
+    """)
     
     def __init__(self, gui):
         gtk.Window.__init__(self)
         self.gui = gui
-        self.set_title('Expert user mode')
+        self.set_title(_('Expert user mode'))
         vbox = gtk.VBox()
         vbox.set_border_width(5)
         self.sw = gtk.ScrolledWindow()
@@ -71,16 +77,16 @@ class Execute(gtk.Window):
         pack(vbox, self.sw, expand=True, padding = 5)
         self.sw.set_size_request(540, 150)
         self.textview.show()
-        self.add_text('Welcome to the ASE Expert user mode')
+        self.add_text(_('Welcome to the ASE Expert user mode'))
         self.cmd = gtk.Entry(60)
         self.cmd.connect('activate', self.execute)
         self.cmd.connect('key-press-event', self.update_command_buffer)
         pack(vbox, [gtk.Label('>>>'),self.cmd])
         self.cmd_buffer = getattr(gui,'expert_mode_buffer',[''])
         self.cmd_position = len(self.cmd_buffer)-1
-        self.selected = gtk.CheckButton('Only selected atoms (sa)   ')
+        self.selected = gtk.CheckButton(_('Only selected atoms (sa)   '))
         self.selected.connect('toggled',self.selected_changed)
-        self.images_only = gtk.CheckButton('Only current frame (cf)  ')
+        self.images_only = gtk.CheckButton(_('Only current frame (cf)  '))
         self.images_only.connect('toggled',self.images_changed)
         pack(vbox, [self.selected, self.images_only])
         save_button = gtk.Button(stock=gtk.STOCK_SAVE)
@@ -90,8 +96,8 @@ class Execute(gtk.Window):
         stop_button = gtk.Button(stock=gtk.STOCK_STOP)
         stop_button.connect('clicked',self.stop_execution)
         self.stop = False
-        pack(vbox, [gtk.Label('Global: Use A, D, E, M, N, R, S, n, frame;'
-                              +' Atoms: Use a, f, m, s, x, y, z, Z     '),
+        pack(vbox, [gtk.Label(_('Global: Use A, D, E, M, N, R, S, n, frame;'
+                                ' Atoms: Use a, f, m, s, x, y, z, Z     ')),
                     stop_button, help_button, save_button], end = True)
         self.add(vbox)
         vbox.show()
@@ -141,6 +147,8 @@ class Execute(gtk.Window):
         else:
             indices = range(n)
 
+        ans = getattr(gui,'expert_mode_answers',[])
+
         loop_images = range(N)
         if self.images_only.get_active():
             loop_images = [self.gui.frame]
@@ -160,34 +168,39 @@ class Execute(gtk.Window):
             if c == first_command:
                 index_based = True
 
+        name = os.path.expanduser('~/.ase/'+cmd)
         # check various special commands: 
-        if cmd == 'del S':
+        if os.path.exists(name):   # run script from default directory
+            self.run_script(name)
+        elif cmd == 'del S':       # delete selection
             gui.delete_selected_atoms()
-        elif cmd == 'sa':
+        elif cmd == 'sa':          # selected atoms only
             self.selected.set_active(not self.selected.get_active())
-        elif cmd == 'cf':
+        elif cmd == 'cf':          # current frame only
             self.images_only.set_active(not self.images_only.get_active())
-        elif cmd == 'center':
+        elif cmd == 'center':      # center system
             img.center()
-        elif first_command == 'exec':
+        elif cmd == 'CM':          # calculate center of mass
+            for i in loop_images:
+                if self.stop:
+                    break
+                atoms = Atoms(positions=img.P[i][indices],
+                              numbers=img.Z[indices])
+                self.add_text(repr(atoms.get_center_of_mass()))
+                ans += [atoms.get_center_of_mass()]
+        elif first_command == 'exec': # execute script
             name = cmd.split()[1]
             if '~' in name:
                 name = os.path.expanduser(name)
             if os.path.exists(name):
-                commands = open(name,'r').readlines()
-                for c_parse in commands:
-                    c = c_parse.strip()
-                    if '#' in c:
-                        c = c[:c.find('#')].strip()
-                    if len(c) > 0:
-                        self.execute(cmd = c.strip())
+                self.run_script(name)
             else:
-                self.add_text('*** WARNING: file does not exist - '+name)
+                self.add_text(_('*** WARNING: file does not exist - %s') % name)
         else:
             code = compile(cmd + '\n', 'execute.py', 'single',
                            __future__.CO_FUTURE_DIVISION)
             if index_based and len(indices) == 0 and self.selected.get_active():
-                self.add_text("*** WARNING: No atoms selected to work with")
+                self.add_text(_("*** WARNING: No atoms selected to work with"))
             for i in loop_images:
                 if self.stop:
                     break
@@ -209,11 +222,16 @@ class Execute(gtk.Window):
                 if not index_based:
                     try:
                         self.add_text(repr(eval(cmd)))
+                        ans += [eval(cmd)]
                     except:
                         exec code
                     gui.set_frame(frame)
                     if gui.movie_window is not None:
                         gui.movie_window.frame_number.value = frame
+                    img.selected      = S
+                    img.A[i]          = A
+                    img.P[i][indices] = R
+                    img.M[i][indices] = M
                 else:
                     for n,a in enumerate(indices):
                         if self.stop:
@@ -229,6 +247,7 @@ class Execute(gtk.Window):
                         rad = img.r[a]
                         try:
                             self.add_text(repr(eval(cmd)))
+                            ans += [eval(cmd)]
                         except:
                             exec code
                         S[a] = s
@@ -243,6 +262,7 @@ class Execute(gtk.Window):
                         color = tuple([int(65535*x) for x in [r,g,b]])
                         gui.colors[a] = new(alloc(*color))
                         img.M[i][a] = m
+        setattr(self.gui,'expert_mode_answers', ans)
         gui.set_frame(frame,init=True)
 
     def add_text(self,val):
@@ -254,15 +274,15 @@ class Execute(gtk.Window):
         
     def selected_changed(self, *args):
         if self.selected.get_active():
-            self.add_text('*** Only working on selected atoms')
+            self.add_text(_('*** Only working on selected atoms'))
         else:
-            self.add_text('*** Working on all atoms')
+            self.add_text(_('*** Working on all atoms'))
 
     def images_changed(self, *args):
         if self.images_only.get_active():
-            self.add_text('*** Only working on current image')
+            self.add_text(_('*** Only working on current image'))
         else:
-            self.add_text('*** Working on all images')
+            self.add_text(_('*** Working on all images'))
 
     def update_command_buffer(self, entry, event, *args):
         arrow = {gtk.keysyms.Up: -1, gtk.keysyms.Down: 1}.get(event.keyval, None)
@@ -290,6 +310,15 @@ class Execute(gtk.Window):
             fd.write(text)
             fd.close()
             chooser.destroy()
+
+    def run_script(self, name):
+        commands = open(name,'r').readlines()
+        for c_parse in commands:
+            c = c_parse.strip()
+            if '#' in c:
+                c = c[:c.find('#')].strip()
+            if len(c) > 0:
+                self.execute(cmd = c.strip())
             
     def terminal_help(self,*args):
         Help(self.terminal_help_txt)

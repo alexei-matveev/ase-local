@@ -2,9 +2,16 @@
 
 # Copyright 2008, 2009
 # CAMd (see accompanying license files for details).
- 
+
+import os
 from optparse import OptionParser, SUPPRESS_HELP
 
+import ase.gui.i18n
+from gettext import gettext as _
+
+# Grrr, older versions (pre-python2.7) of optparse have a bug
+# which prevents non-ascii descriptions.  How do we circumvent this?
+# For now, we'll have to use English in the command line options then.
 
 def build_parser():
     parser = OptionParser(usage='%prog [options] [file[, file2, ...]]',
@@ -31,12 +38,13 @@ def build_parser():
     parser.add_option('-o', '--output', metavar='FILE',
                       help='Write configurations to FILE.')
     parser.add_option('-g', '--graph',
+                      # TRANSLATORS: EXPR abbreviates 'expression'
                       metavar='EXPR',
                       help='Plot x,y1,y2,... graph from configurations or '
                       'write data to sdtout in terminal mode.  Use the '
                       'symbols: i, s, d, fmax, e, ekin, A, R, E and F.  See '
-                      'https://wiki.fysik.dtu.dk/ase/ase/gui.html#plotting-data '
-                      'for more details.')
+                      'https://wiki.fysik.dtu.dk/ase/ase/gui.html'
+                      '#plotting-data for more details.')
     parser.add_option('-t', '--terminal',
                       action='store_true',
                       default=False,
@@ -52,9 +60,8 @@ def build_parser():
                       action='store_true',
                       default=False,
                       help='Draw bonds between atoms.')
-    #parser.add_option('--read-pickled-data-from-file',
-    #                  type='string', help=SUPPRESS_HELP)
     return parser
+
 
 def main():
     parser = build_parser()
@@ -96,7 +103,7 @@ def main():
 
         if opt.output is not None:
             images.write(opt.output, rotations=opt.rotations,
-                        show_unit_cell=opt.show_unit_cell)
+                         show_unit_cell=opt.show_unit_cell)
             opt.terminal = True
 
         if opt.terminal:
@@ -120,8 +127,8 @@ def main():
         pass
     except Exception:
         traceback.print_exc()
-        print """
+        print(_("""
 An exception occurred!  Please report the issue to
 ase-developers@listserv.fysik.dtu.dk - thanks!  Please also report this if
 it was a user error, so that a better error message can be provided
-next time."""
+next time."""))

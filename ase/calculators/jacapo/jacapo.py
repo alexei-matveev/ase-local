@@ -15,6 +15,7 @@ documentation
 
 __docformat__ = 'restructuredtext'
 
+import sys
 import exceptions, glob, os, pickle, string
 from Scientific.IO.NetCDF import NetCDFFile as netCDF
 import numpy as np
@@ -38,9 +39,13 @@ import logging
 log = logging.getLogger('Jacapo')
 
 handler = logging.StreamHandler()
-formatter = logging.Formatter('''\
-%(levelname)-10s function: %(funcName)s lineno: %(lineno)-4d \
-%(message)s''')
+if sys.version_info < (2,5): # no funcName in python 2.4
+    formatstring = ('%(levelname)-10s '
+                    'lineno: %(lineno)-4d %(message)s')
+else:
+    formatstring = ('%(levelname)-10s function: %(funcName)s '
+                    'lineno: %(lineno)-4d %(message)s')
+formatter = logging.Formatter(formatstring)
 handler.setFormatter(formatter)
 log.addHandler(handler)
 
@@ -558,9 +563,9 @@ class Jacapo:
             forces = nc.variables.get('DynamicAtomForces', None)
            
             for i, atom in enumerate(atoms):
-                sym = atom.get_symbol()
-                pos = atom.get_position()
-                tag = atom.get_tag()
+                sym = atom.symbol
+                pos = atom.position
+                tag = atom.tag
                 if forces is not None and (forces[:][-1][i] < 1E36).all():
                     f = forces[:][-1][i]
                     # Lars Grabow: this seems to work right for some
@@ -1200,7 +1205,7 @@ than density cutoff %i' % (pw, dw))
             base = os.path.split(nc)[0]
             if not os.path.isdir(base) and base is not '':
                 os.makedirs(base)
-            status = os.system('cp %s %s' % (self.nc, nc))
+            status = os.system("cp '%s' '%s'" % (self.nc, nc))
             if status != 0:
                 raise Exception, 'Copying ncfile failed.'
             self.nc = nc
@@ -1215,7 +1220,7 @@ than density cutoff %i' % (pw, dw))
         #I always want the text file set based on the ncfile
         #and I never want to set this myself.
         base = os.path.splitext(self.nc)[0]
-        self.txt = base + '.txt'
+        self.txt = "%s.txt" % base
 
     def set_pseudopotentials(self, pspdict):
         '''Set all the pseudopotentials from a dictionary.
@@ -2170,7 +2175,7 @@ than density cutoff %i' % (pw, dw))
         if 'ElectronicBands' in nc.variables:
             v = nc.variables['ElectronicBands']
             if hasattr(v, 'NumberOfBands'):
-                nbands = v.NumberOfBands[0]
+                nbands = int(v.NumberOfBands[0])
             else:
                 nbands = None
         else:
@@ -2271,6 +2276,24 @@ than density cutoff %i' % (pw, dw))
 
         nc.close()
         return xc
+
+    def get_number_of_iterations(self):
+
+        niter = None
+
+        if self.calculation_required():
+            self.calculate()
+
+        txt = self.get_txt()
+        if os.path.exists(txt):
+            f = open(txt,'r')
+            for line in f:
+                if 'Number of iterations =' in line:
+                    niter = int(line.split('=')[1])
+                    break
+            f.close()
+                    
+        return niter
 
     def get_potential_energy(self,
                              atoms=None,
@@ -2760,7 +2783,7 @@ than density cutoff %i' % (pw, dw))
             # Solution: remove the Dynamics variable if present when not running with stay_alive
             # 
             self.delete_ncattdimvar(self.nc,ncvars=['Dynamics'])
-	    cmd = 'dacapo.run  %(innc)s -out %(txt)s -scratch %(scratch)s'
+	    cmd = "dacapo.run '%(innc)s' -out '%(txt)s' -scratch %(scratch)s"
 	    cmd = cmd % {'innc':nc,
 			 'txt':txt,
 			 'scratch':scratch}
@@ -2840,10 +2863,10 @@ than density cutoff %i' % (pw, dw))
                 child.set_nbands(nbands)
 
             env['JACAPO_IMAGE'] = str(i)
-            cmd = 'dacapo.run  %(innc)s -out %(txt)s -scratch %(scratch)s'
+            cmd = "dacapo.run  '%(innc)s' -out '%(txt)s' -scratch %(scratch)s"
             cmd = cmd % {'innc':nc,
-                          'txt':txt,
-                      'scratch':scratch}
+                         'txt':txt,
+                         'scratch':scratch}
 
             log.debug(cmd)
             self._dacapo[i] = sp.Popen(cmd,stdout=sp.PIPE,stderr=sp.PIPE,shell=True,env=env)
@@ -2939,7 +2962,7 @@ than density cutoff %i' % (pw, dw))
             # remove the script???? file
             ncfile = netCDF(nc, 'r')
             vdyn = ncfile.variables['Dynamics']
-            os.system('rm -f '+vdyn.ExternalIonMotion_script)
+            os.system("rm -f '"+vdyn.ExternalIonMotion_script+"'")
             ncfile.close()
             os.system('rm -f '+stoppfile)
 
@@ -3022,8 +3045,8 @@ s.recv(14)
             os.system('mv '+nc+' '+scratch_in_nc)
             os.system('rm -f '+stoppfile)
             scratch = self.get_scratch()
-            cmd = 'dacapo.run'
-            cmd += ' %(innc)s %(outnc)s -out %(txt)s -scratch %(scratch)s'
+            cmd = "dacapo.run"
+            cmd += " '%(innc)s' '%(outnc)s' -out '%(txt)s' -scratch %(scratch)s"
             cmd = cmd % {'innc':scratch_in_nc,
                          'outnc':nc,
                          'txt':txt,
@@ -3078,8 +3101,8 @@ s.recv(14)
             new = nc
             old = self.nc
             log.debug('Copying old ncfile to new ncfile')
-            log.debug('cp %s %s' % (old, new))
-            os.system('cp %s %s' % (old, new))
+            log.debug("cp '%s' '%s'" % (old, new))
+            os.system("cp '%s' '%s'" % (old, new))
               
         if atoms is None:
             atoms = self.get_atoms()
@@ -3410,8 +3433,8 @@ s.recv(14)
         #shutil.move(tempnc,ncf)
 
         #this seems to avoid making the .nfs files 
-        os.system('cp %s %s' % (tempnc, ncf))
-        os.system('rm %s' % tempnc)
+        os.system("cp '%s' '%s'" % (tempnc, ncf))
+        os.system("rm '%s'" % tempnc)
 
         s = 'looking for .nfs files after copying: %s'
         log.debug(s %  glob.glob('.nfs*'))
@@ -3948,7 +3971,7 @@ s.recv(14)
         nc.close()
         return kw
 
-    def get_magnetic_moment(self):
+    def get_magnetic_moment(self, atoms=None):
         'calculates the magnetic moment (Bohr-magnetons) of the supercell'
 
         if not self.get_spin_polarized():
@@ -4228,7 +4251,7 @@ s.recv(14)
         for atom in atoms:
             Z = self.get_psp_nuclear_charge(psps[atom.symbol])
             total_ion_charge += Z
-            pos = atom.get_position()
+            pos = atom.position
             ion_charge_center += Z*pos
 
         ion_charge_center /= total_ion_charge
@@ -4425,4 +4448,5 @@ Jacapo.get_esp = Jacapo.get_electrostatic_potential
 Jacapo.get_occ = Jacapo.get_occupation_numbers
 Jacapo.get_ef = Jacapo.get_fermi_level
 Jacapo.get_number_of_bands = Jacapo.get_nbands
-
+Jacapo.get_electronic_temperature = Jacapo.get_ft
+Jacapo.get_number_of_electrons = Jacapo.get_valence

@@ -18,6 +18,7 @@ float_keys = [
     'charge_mix_param',
     'default_initial_moment',
     'hartree_convergence_parameter',
+    'harmonic_length_scale',
     'ini_linear_mix_param',
     'ini_spin_mix_parma',
     'initial_moment',
@@ -37,10 +38,12 @@ exp_keys = [
 
 string_keys = [
     'communication_type',
+    'density_update_method',
     'KS_method',
     'mixer',
     'output_level',
     'packed_matrix_format',
+    'relax_unit_cell',
     'restart',
     'restart_read_only',
     'restart_write_only',
@@ -69,6 +72,7 @@ bool_keys = [
     'evaluate_work_function',
     'final_forces_cleaned',
     'hessian_to_restart_geometry',
+    'load_balancing',
     'MD_clean_rotations',
     'MD_restart',
     'restart_relaxations',
@@ -394,9 +398,9 @@ class Aims(Calculator):
     def read_energy(self, all=None):
         for line in open(self.out, 'r'):
             if line.rfind('Total energy corrected') > -1:
-                E0 = float(line.split()[-2])
+                E0 = float(line.split()[5])
             elif line.rfind('Total energy uncorrected') > -1:
-                F = float(line.split()[-2])
+                F = float(line.split()[5])
         energy_free, energy_zero = F, E0
         return [energy_free, energy_zero]
 

@@ -37,9 +37,9 @@ def parprint(*args, **kwargs):
     else:
         last = ''
     if kwargs['end'] == '\n':
-        print last
+        print >> kwargs['file'], last
     else:
-        print last,
+        print >> kwargs['file'], last,
 
 
 class DummyMPI:
@@ -58,6 +58,23 @@ class DummyMPI:
         pass
 
 
+class MPI4PY:
+    def __init__(self):
+        from mpi4py import MPI
+        self.comm = MPI.COMM_WORLD
+        self.rank = self.comm.rank
+        self.size = self.comm.size
+
+    def sum(self, a):
+        return self.comm.allreduce(a)
+    
+    def barrier(self):
+        self.comm.barrier()
+
+    def broadcast(self, a, rank):
+        a[:] = self.comm.bcast(a, rank)
+
+
 # Check for special MPI-enabled Python interpreters:
 if '_gpaw' in sys.modules:
     # http://wiki.fysik.dtu.dk/gpaw
@@ -69,8 +86,9 @@ elif 'asapparallel3' in sys.modules:
     import asapparallel3
     world = asapparallel3.Communicator()
 elif 'Scientific_mpi' in sys.modules:
-    # 
     from Scientific.MPI import world
+elif 'mpi4py' in sys.modules:
+    world = MPI4PY()
 else:
     # This is a standard Python interpreter:
     world = DummyMPI()
@@ -101,3 +119,20 @@ def register_parallel_cleanup_function():
             world.abort(42)
 
     atexit.register(cleanup)
+
+def distribute_cpus(parsize_calculator, comm):
+    """Distribute cpus to tasks and calculators"""
+    
+    assert parsize_calculator <= comm.size
+    assert comm.size % parsize_calculator == 0
+
+    tasks_rank = comm.rank // parsize_calculator
+
+    r0 = tasks_rank * parsize_calculator
+    ranks = np.arange(r0, r0 + parsize_calculator)
+    calc_comm = comm.new_communicator(ranks)
+#    print 'comm.rank, ranks=', comm.rank, ranks
+
+    tasks_comm = np.arange(0, comm.size, parsize_calculator)
+
+    return calc_comm, tasks_comm, tasks_rank

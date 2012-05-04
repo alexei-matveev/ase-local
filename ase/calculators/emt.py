@@ -33,8 +33,13 @@ beta = 1.809     # (16 * pi / 3)**(1.0 / 3) / 2**0.5,
 class EMT:
     disabled = False  # Set to True to disable (asap does this).
     
-    def __init__(self):
+    def __init__(self, fakestress=False):
         self.energy = None
+        self.name = 'EMT'
+        self.version = '1.0'
+        # fakestress is needed to fake some stress value for the testsuite
+        # in order to test the filter functionality.
+        self.fakestress = fakestress
         if self.disabled:
             print >> sys.stderr, """
             ase.EMT has been disabled by Asap.  Most likely, you
@@ -57,6 +62,12 @@ class EMT:
             raise RuntimeError('ase.EMT has been disabled.  ' +
                                'See message printed above.')
         
+    def get_name(self):
+        return self.name
+
+    def get_version(self):
+        return self.version
+
     def get_spin_polarized(self):
         return False
     
@@ -64,14 +75,7 @@ class EMT:
         self.par = {}
         self.rc = 0.0
         self.numbers = atoms.get_atomic_numbers()
-        maxseq = 0.0
-        seen = {}
-        for Z in self.numbers:
-            if Z not in seen:
-                seen[Z] = True
-                ss = parameters[chemical_symbols[Z]][1] * Bohr
-                if maxseq < ss:
-                    maxseq = ss
+        maxseq = max(par[1] for par in parameters.values()) * Bohr
         rc = self.rc = beta * maxseq * 0.5 * (sqrt(3) + sqrt(4))
         rr = rc * 2 * sqrt(4) / (sqrt(3) + sqrt(4))
         self.acut = np.log(9999.0) / (rr - rc)
@@ -140,6 +144,9 @@ class EMT:
                 (self.pbc != atoms.get_pbc()).any() or
                 (self.cell != atoms.get_cell()).any())
                 
+    def get_number_of_iterations(self):
+        return 0
+
     def get_potential_energy(self, atoms):
         self.update(atoms)
         return self.energy
@@ -168,7 +175,10 @@ class EMT:
         return self.forces.copy()
     
     def get_stress(self, atoms):
-        raise NotImplementedError
+        if self.fakestress:
+            return np.zeros((6))
+        else:
+            raise NotImplementedError
     
     def calculate(self, atoms):
         self.positions = atoms.get_positions().copy()

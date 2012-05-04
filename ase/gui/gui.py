@@ -31,15 +31,21 @@
 import os
 import sys
 import weakref
+from gettext import gettext as _
+from gettext import ngettext
 import numpy as np
+
+import pygtk
+pygtk.require("2.0")
 
 import gtk
 from ase.gui.view import View
 from ase.gui.status import Status
 from ase.gui.widgets import pack, help, Help, oops
-from ase.gui.languages import translate as _
+#from ase.gui.languages import translate as _
 
 from ase.gui.settings import Settings
+from ase.gui.crystal import SetupBulkCrystal
 from ase.gui.surfaceslab import SetupSurfaceSlab
 from ase.gui.nanoparticle import SetupNanoparticle
 from ase.gui.nanotube import SetupNanotube
@@ -65,6 +71,10 @@ ui_info = """\
       <menuitem action='SelectAll'/>
       <menuitem action='Invert'/>
       <menuitem action='SelectConstrained'/>
+      <menuitem action='SelectImmobile'/>
+      <separator/>
+      <menuitem action='Copy'/>
+      <menuitem action='Paste'/>
       <separator/>
       <menuitem action='Modify'/>
       <menuitem action='AddAtoms'/>
@@ -108,6 +118,7 @@ ui_info = """\
       <menuitem action='BulkModulus'/>
     </menu>
     <menu action='SetupMenu'>
+      <menuitem action='Bulk'/>
       <menuitem action='Surface'/>
       <menuitem action='Nanoparticle'/>
       <menuitem action='Graphene'/>
@@ -131,6 +142,12 @@ ui_info = """\
 class GUI(View, Status):
     def __init__(self, images, rotations='', show_unit_cell=True,
                  show_bonds=False):
+        # Try to change into directory of file you are viewing
+        try:
+            os.chdir(os.path.split(sys.argv[1])[0])
+        # This will fail sometimes (e.g. for starting a new session)
+        except:
+            pass
         self.images = images
         self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
         #self.window.set_icon(gtk.gdk.pixbuf_new_from_file('guiase.png'))
@@ -144,171 +161,182 @@ class GUI(View, Status):
 
         actions = gtk.ActionGroup("Actions")
         actions.add_actions([
-            ('FileMenu', None, '_File'),
-            ('EditMenu', None, '_Edit'),
-            ('ViewMenu', None, '_View'  ),
-            ('ToolsMenu', None, '_Tools'),
-            ('SetupMenu', None, '_Setup'),
-            ('CalculateMenu', None, '_Calculate'),
-            ('HelpMenu', None, '_Help'),
-            ('Open', gtk.STOCK_OPEN, '_Open', '<control>O',
-             'Create a new file',
+            ('FileMenu', None, _('_File')),
+            ('EditMenu', None, _('_Edit')),
+            ('ViewMenu', None, _('_View')),
+            ('ToolsMenu', None, _('_Tools')),
+            # TRANSLATORS: Set up (i.e. build) surfaces, nanoparticles, ...
+            ('SetupMenu', None, _('_Setup')),
+            ('CalculateMenu', None, _('_Calculate')),
+            ('HelpMenu', None, _('_Help')),
+            ('Open', gtk.STOCK_OPEN, _('_Open'), '<control>O',
+             _('Create a new file'),
              self.open),
-             ('New', gtk.STOCK_NEW, '_New', '<control>N',
-             'New ase.gui window',
+             ('New', gtk.STOCK_NEW, _('_New'), '<control>N',
+             _('New ase.gui window'),
              lambda widget: os.system('ag &')),
-            ('Save', gtk.STOCK_SAVE, '_Save', '<control>S',
-             'Save current file',
+            ('Save', gtk.STOCK_SAVE, _('_Save'), '<control>S',
+             _('Save current file'),
              self.save),
-            ('Quit', gtk.STOCK_QUIT, '_Quit', '<control>Q',
-             'Quit',
+            ('Quit', gtk.STOCK_QUIT, _('_Quit'), '<control>Q',
+             _('Quit'),
              self.exit),
-            ('SelectAll', None, 'Select _all', None,
+            ('SelectAll', None, _('Select _all'), None,
              '',
              self.select_all),
-            ('Invert', None, '_Invert selection', None,
+            ('Invert', None, _('_Invert selection'), None,
              '',
              self.invert_selection),
-            ('SelectConstrained', None, 'Select _constrained atoms', None,
+            ('SelectConstrained', None, _('Select _constrained atoms'), None,
              '',
              self.select_constrained_atoms),
-             ('Modify', None, '_Modify', '<control>Y',
-              'Change tags, moments and atom types of the selected atoms',
+            ('SelectImmobile', None, _('Select _immobile atoms'), '<control>I',
+             '',
+             self.select_immobile_atoms),
+             ('Copy', None, _('_Copy'), '<control>C',
+              _('Copy current selection and its orientation to clipboard'),
+              self.copy_atoms),
+             ('Paste', None, _('_Paste'), '<control>V',
+              _('Insert current clipboard selection'),
+              self.paste_atoms),
+             ('Modify', None, _('_Modify'), '<control>Y',
+              _('Change tags, moments and atom types of the selected atoms'),
               self.modify_atoms),
-             ('AddAtoms', None, '_Add atoms', '<control>A',
-              'Insert or import atoms and molecules',
+             ('AddAtoms', None, _('_Add atoms'), '<control>A',
+              _('Insert or import atoms and molecules'),
               self.add_atoms),
-             ('DeleteAtoms', None, '_Delete selected atoms', 'BackSpace',
-              'Deletes the selected atoms',
+             ('DeleteAtoms', None, _('_Delete selected atoms'), 'BackSpace',
+              _('Delete the selected atoms'),
               self.delete_selected_atoms),             
-            ('First', gtk.STOCK_GOTO_FIRST, '_First image', 'Home',
+            ('First', gtk.STOCK_GOTO_FIRST, _('_First image'), 'Home',
              '',
              self.step),
-            ('Previous', gtk.STOCK_GO_BACK, '_Previous image', 'Page_Up',
+            ('Previous', gtk.STOCK_GO_BACK, _('_Previous image'), 'Page_Up',
              '',
              self.step),
-            ('Next', gtk.STOCK_GO_FORWARD, '_Next image', 'Page_Down',
+            ('Next', gtk.STOCK_GO_FORWARD, _('_Next image'), 'Page_Down',
              '',
              self.step),
-            ('Last', gtk.STOCK_GOTO_LAST, '_Last image', 'End',
+            ('Last', gtk.STOCK_GOTO_LAST, _('_Last image'), 'End',
              '',
              self.step),
-            ('QuickInfo', None, 'Quick Info ...', None,
+            ('QuickInfo', None, _('Quick Info ...'), None,
              '',
              self.quick_info_window),
-            ('Repeat', None, 'Repeat ...', None,
+            ('Repeat', None, _('Repeat ...'), None,
              '',
              self.repeat_window),
-            ('Rotate', None, 'Rotate ...', None,
+            ('Rotate', None, _('Rotate ...'), None,
              '',
              self.rotate_window),
-            ('Colors', None, 'Colors ...', None, '',
+            ('Colors', None, _('Colors ...'), None, '',
              self.colors_window),
-            ('Focus', gtk.STOCK_ZOOM_FIT, 'Focus', 'F',
+            # TRANSLATORS: verb
+            ('Focus', gtk.STOCK_ZOOM_FIT, _('Focus'), 'F',
              '',
              self.focus),
-            ('ZoomIn', gtk.STOCK_ZOOM_IN, 'Zoom in', 'plus',
+            ('ZoomIn', gtk.STOCK_ZOOM_IN, _('Zoom in'), 'plus',
              '',
              self.zoom),
-            ('ZoomOut', gtk.STOCK_ZOOM_OUT, 'Zoom out', 'minus',
+            ('ZoomOut', gtk.STOCK_ZOOM_OUT, _('Zoom out'), 'minus',
              '',
              self.zoom),
-            ('ResetView', None, 'Reset View', 'equal',
+            ('ResetView', None, _('Reset View'), 'equal',
              '',
              self.reset_view),
-            ('Settings', gtk.STOCK_PREFERENCES, 'Settings ...', None,
+            ('Settings', gtk.STOCK_PREFERENCES, _('Settings ...'), None,
              '',
              self.settings),
-            ('VMD', None, 'VMD', None,
+            ('VMD', None, _('VMD'), None,
              '',
              self.external_viewer),
-            ('RasMol', None, 'RasMol', None,
+            ('RasMol', None, _('RasMol'), None,
              '',
              self.external_viewer),
-            ('XMakeMol', None, 'xmakemol', None,
+            ('XMakeMol', None, _('xmakemol'), None,
              '',
              self.external_viewer),
-            ('Avogadro', None, 'avogadro', None,
+            ('Avogadro', None, _('avogadro'), None,
              '',
              self.external_viewer),
-            ('Graphs', None, 'Graphs ...', None,
+            ('Graphs', None, _('Graphs ...'), None,
              '',
              self.plot_graphs),
-            ('Movie', None, 'Movie ...', None,
+            ('Movie', None, _('Movie ...'), None,
              '',
              self.movie),
-            ('EModify', None, 'Expert mode ...', '<control>E',
+            ('EModify', None, _('Expert mode ...'), '<control>E',
              '',
              self.execute),
-            ('Constraints', None, 'Constraints ...', None,
+            ('Constraints', None, _('Constraints ...'), None,
              '',
              self.constraints_window),
-            ('RenderScene', None, 'Render scene ...', None,
+            ('RenderScene', None, _('Render scene ...'), None,
              '',
              self.render_window),
-            ('DFT', None, 'DFT ...', None,
+            ('DFT', None, _('DFT ...'), None,
              '',
              self.dft_window),
-            ('NEB', None, 'NE_B', None,
+            ('NEB', None, _('NE_B'), None,
              '',
              self.NEB),
-            ('BulkModulus', None, 'B_ulk Modulus', None,
+            ('BulkModulus', None, _('B_ulk Modulus'), None,
              '',
              self.bulk_modulus),
-            ('Bulk', None, '_Bulk Crystal', None,
-             "Create a bulk crystal with arbitrary orientation",
+            ('Bulk', None, _('_Bulk Crystal'), None,
+             _("Create a bulk crystal with arbitrary orientation"),
              self.bulk_window),
-            ('Surface', None, '_Surface slab', None,
-             "Create the most common surfaces",
+            ('Surface', None, _('_Surface slab'), None,
+             _("Create the most common surfaces"),
              self.surface_window),
-            ('Nanoparticle', None, '_Nanoparticle', None,
-             "Create a crystalline nanoparticle",
+            ('Nanoparticle', None, _('_Nanoparticle'), None,
+             _("Create a crystalline nanoparticle"),
              self.nanoparticle_window),
-            ('Nanotube', None, 'Nano_tube', None,
-             "Create a nanotube",
+            ('Nanotube', None, _('Nano_tube'), None,
+             _("Create a nanotube"),
              self.nanotube_window),
-            ('Graphene', None, 'Graphene', None,
-             "Create a graphene sheet or nanoribbon",
+            ('Graphene', None, _('Graphene'), None,
+             _("Create a graphene sheet or nanoribbon"),
              self.graphene_window),
-            ('SetCalculator', None, 'Set _Calculator', None,
-             "Set a calculator used in all calculation modules",
+            ('SetCalculator', None, _('Set _Calculator'), None,
+             _("Set a calculator used in all calculation modules"),
              self.calculator_window),
-            ('EnergyForces', None, '_Energy and Forces', None,
-             "Calculate energy and forces",
+            ('EnergyForces', None, _('_Energy and Forces'), None,
+             _("Calculate energy and forces"),
              self.energy_window),
-            ('Minimize', None, 'Energy _Minimization', None,
-             "Minimize the energy",
+            ('Minimize', None, _('Energy _Minimization'), None,
+             _("Minimize the energy"),
              self.energy_minimize_window),
-            ('Scaling', None, 'Scale system', None,
-             "Deform system by scaling it",
+            ('Scaling', None, _('Scale system'), None,
+             _("Deform system by scaling it"),
              self.scaling_window),
-            ('About', None, '_About', None,
+            ('About', None, _('_About'), None,
              None,
              self.about),
-            ('Webpage', gtk.STOCK_HELP, 'Webpage ...', None, None, webpage),
-            ('Debug', None, 'Debug ...', None, None, self.debug)])
+            ('Webpage', gtk.STOCK_HELP, _('Webpage ...'), None, None, webpage),
+            ('Debug', None, _('Debug ...'), None, None, self.debug)])
         actions.add_toggle_actions([
-            ('ShowUnitCell', None, 'Show _unit cell', '<control>U',
+            ('ShowUnitCell', None, _('Show _unit cell'), '<control>U',
              'Bold',
              self.toggle_show_unit_cell,
              show_unit_cell > 0),
-            ('ShowAxes', None, 'Show _axes', None,
+            ('ShowAxes', None, _('Show _axes'), None,
              'Bold',
              self.toggle_show_axes,
              True),
-            ('ShowBonds', None, 'Show _bonds', '<control>B',
+            ('ShowBonds', None, _('Show _bonds'), '<control>B',
              'Bold',
              self.toggle_show_bonds,
              show_bonds),
-            ('MoveAtoms', None, '_Move atoms', '<control>M',
+            ('MoveAtoms', None, _('_Move atoms'), '<control>M',
              'Bold',
              self.toggle_move_mode,
              False),
-            ('RotateAtoms', None, '_Rotate atoms', '<control>R',
+            ('RotateAtoms', None, _('_Rotate atoms'), '<control>R',
              'Bold',
              self.toggle_rotate_mode,
              False),
-            ('OrientAtoms', None, 'Orien_t atoms', '<control>T',
+            ('OrientAtoms', None, _('Orien_t atoms'), '<control>T',
              'Bold',
              self.toggle_orient_mode,
              False)             
@@ -320,7 +348,7 @@ class GUI(View, Status):
         try:
             mergeid = ui.add_ui_from_string(ui_info)
         except gobject.GError, msg:
-            print 'building menus failed: %s' % msg
+            print _('building menus failed: %s') % msg
 
         vbox.pack_start(ui.get_widget('/MenuBar'), False, False, 0)
         
@@ -334,6 +362,7 @@ class GUI(View, Status):
         self.graphs = []       # List of open pylab windows
         self.graph_wref = []   # List of weakrefs to Graph objects
         self.movie_window = None
+        self.clipboard = None  # initialize copy/paste functions
         self.vulnerable_windows = []
         self.simulation = {}   # Used by modules on Calculate menu.
         self.module_state = {} # Used by modules to store their state.
@@ -542,11 +571,36 @@ class GUI(View, Status):
             self.center -= (dx * 0.1 * self.axes[:, 0] -
                             dy * 0.1 * self.axes[:, 1])
         self.draw()
-    
         
-    def add_atoms(self, widget, data=None):
+    def copy_atoms(self, widget):
+        "Copies selected atoms to a clipboard, if no atoms are selected then the clipboard is cleared."
+        if self.images.selected.any():
+            atoms = self.images.get_atoms(self.frame)
+            lena = len(atoms)
+            for i in range(len(atoms)):
+                li = lena-1-i
+                if not self.images.selected[li]:
+                    del(atoms[li])
+            for i in atoms:
+                i.position = np.dot(self.axes.T,i.position)       
+            ref = atoms[0].position
+            for i in atoms:
+                if i.position[2] < ref[2]:
+                    ref = i.position
+            self.clipboard = atoms.copy()
+            self.clipboard.reference_position = ref
+        else:
+            self.clipboard = None
+
+    def paste_atoms(self, widget):
+        "Inserts clipboard selection into the current frame using the add_atoms window."
+        if self.clipboard is not None:
+            self.add_atoms(widget, data='Paste', paste=self.clipboard)
+        
+    def add_atoms(self, widget, data=None, paste=None):
         """
-        Presents a dialogbox to the user, that allows him to add atoms/molecule to the current slab.
+        Presents a dialogbox to the user, that allows him to add atoms/molecule to the current slab
+        or to paste the clipboard.
         
         The molecule/atom is rotated using the current rotation of the coordinate system.
         
@@ -560,30 +614,38 @@ class GUI(View, Status):
         
         Note: If this option is used, all frames except the active one are deleted.
         """
-        if data:
-            if data == 'load':
-                chooser = gtk.FileChooserDialog(
-                            _('Open ...'), None, gtk.FILE_CHOOSER_ACTION_OPEN,
-                            (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                             gtk.STOCK_OPEN, gtk.RESPONSE_OK))
-                ok = chooser.run()
-                if ok == gtk.RESPONSE_OK:
-                    filename = chooser.get_filename()
+        
+        if data == 'load':
+            chooser = gtk.FileChooserDialog(
+                        _('Open ...'), None, gtk.FILE_CHOOSER_ACTION_OPEN,
+                        (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                         gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+
+            chooser.set_filename(_("<<filename>>"))
+            ok = chooser.run()
+            if ok == gtk.RESPONSE_OK:
+                filename = chooser.get_filename()
                 chooser.destroy()
-                if not ok:
-                    return
+            else:
+                chooser.destroy()
+                return
 
-            if data == 'OK' or data == 'load':
-                import ase
-                if data == 'load':
-                    molecule = filename
-                else:
-                    molecule = self.add_entries[1].get_text()
-                tag = self.add_entries[2].get_text()
-                mom = self.add_entries[3].get_text()
-                pos = self.add_entries[4].get_text().lower()
+        if data == 'OK' or data == 'load':
+            import ase
+            if data == 'load':
+                molecule = filename
+            else:
+                molecule = self.add_entries[1].get_text()
+            tag = self.add_entries[2].get_text()
+            mom = self.add_entries[3].get_text()
+            pos = self.add_entries[4].get_text().lower()
 
+            if paste is not None: 
+                a = paste.copy()
+            else:
                 a = None
+                
+            if a is None:
                 try:
                     a = ase.Atoms([ase.Atom(molecule)])
                 except:      
@@ -595,85 +657,95 @@ class GUI(View, Status):
                         except:
                             self.add_entries[1].set_text('?' + molecule) 
                             return ()
-                        
-                directions = np.transpose(self.axes)
-                if a != None:
-                    for i in a:
-                        try: 
-                            i.set_tag(int(tag))
-                        except: 
-                            self.add_entries[2].set_text('?' + tag) 
-                            return ()
-                        try: 
-                            i.magmom = float(mom)
-                        except: 
-                            self.add_entries[3].set_text('?' + mom) 
-                            return ()
-                  # apply the current rotation matrix to A
-                    for i in a:
-                        i.position = np.dot(self.axes, i.position)       
-                  # find the extent of the molecule in the local coordinate system
+
+            directions = np.transpose(self.axes)
+            if a != None:
+                for i in a:
+                    try: 
+                        i.set('tag',int(tag))
+                    except:
+                        self.add_entries[2].set_text('?' + tag) 
+                        return ()
+                    try: 
+                        i.magmom = float(mom)
+                    except: 
+                        self.add_entries[3].set_text('?' + mom) 
+                        return ()
+                if self.origin_radio.get_active() and paste:
+                    a.translate(-paste.reference_position)
+                # apply the current rotation matrix to A
+                for i in a:
+                    i.position = np.dot(self.axes, i.position)       
+                # find the extent of the molecule in the local coordinate system
+                if self.centre_radio.get_active():
                     a_cen_pos = np.array([0.0, 0.0, 0.0])
                     m_cen_pos = 0.0
                     for i in a.positions:
                         a_cen_pos[0] += np.dot(directions[0], i)
                         a_cen_pos[1] += np.dot(directions[1], i)
                         a_cen_pos[2] += np.dot(directions[2], i)
-
                         m_cen_pos = max(np.dot(-directions[2], i), m_cen_pos)
+                        
                     a_cen_pos[0] /= len(a.positions)      
                     a_cen_pos[1] /= len(a.positions)      
                     a_cen_pos[2] /= len(a.positions)
                     a_cen_pos[2] -= m_cen_pos
-          
-                  # now find the position
-                    cen_pos = np.array([0.0, 0.0, 0.0])
-                    if sum(self.images.selected) > 0:
-                        for i in range(len(self.R)):
-                            if self.images.selected[i]:
-                                cen_pos += self.R[i]
-                        cen_pos /= sum(self.images.selected)   
-                    elif len(self.R) > 0:
-                        px = 0.0
-                        py = 0.0
-                        pz = -1e6
+                else:
+                    a_cen_pos = np.array([0.0, 0.0, 0.0])
 
-                        for i in range(len(self.R)):
-                            px += np.dot(directions[0], self.R[i])
-                            py += np.dot(directions[1], self.R[i])
-                            pz = max(np.dot(directions[2], self.R[i]), pz)
-                        px = (px/float(len(self.R)))
-                        py = (py/float(len(self.R)))
-                        cen_pos = directions[0] * px + \
-                                  directions[1] * py + \
-                                  directions[2] * pz
-              
-                    if 'auto' in pos:
-                        pos = pos.replace('auto', '')
-                        import re
-                        pos = re.sub('\s', '', pos)
-                        if '(' in pos:
-                            sign = eval('%s1' % pos[0])
-                            a_cen_pos -= sign * np.array(eval(pos[1:]), float)
-                        else:
-                            a_cen_pos -= float(pos) * directions[2]
-                    else:
-                        cen_pos = np.array(eval(pos))
-                    for i in a:
-                        i.position += cen_pos - a_cen_pos      
-  
-                  # and them to the molecule
-                    atoms = self.images.get_atoms(self.frame)
-                    atoms = atoms + a
-                    self.new_atoms(atoms, init_magmom=True)
+                # now find the position
+                cen_pos = np.array([0.0, 0.0, 0.0])
+                if sum(self.images.selected) > 0:
+                    for i in range(len(self.R)):
+                        if self.images.selected[i]:
+                            cen_pos += self.R[i]
+                    cen_pos /= sum(self.images.selected)   
+                elif len(self.R) > 0:
+                    px = 0.0
+                    py = 0.0
+                    pz = -1e6
+
+                    for i in range(len(self.R)):
+                        px += np.dot(directions[0], self.R[i])
+                        py += np.dot(directions[1], self.R[i])
+                        pz = max(np.dot(directions[2], self.R[i]), pz)
+                    px = (px/float(len(self.R)))
+                    py = (py/float(len(self.R)))
+                    cen_pos = directions[0] * px + \
+                              directions[1] * py + \
+                              directions[2] * pz
                     
-                  # and finally select the new molecule for easy moving and rotation
-                    for i in range(len(a)):
-                        self.images.selected[len(atoms) - i - 1] = True
+                if 'auto' in pos:
+                    pos = pos.replace('auto', '')
+                    import re
+                    pos = re.sub('\s', '', pos)
+                    if '(' in pos:
+                        sign = eval('%s1' % pos[0])
+                        a_cen_pos -= sign * np.array(eval(pos[1:]), float)
+                    else:
+                        a_cen_pos -= float(pos) * directions[2]
+                else:
+                    cen_pos = np.array(eval(pos))
+                for i in a:
+                    i.position += cen_pos - a_cen_pos      
 
-                    self.draw()    
+              # and them to the molecule
+                atoms = self.images.get_atoms(self.frame)
+                atoms = atoms + a
+                self.new_atoms(atoms, init_magmom=True)
+
+              # and finally select the new molecule for easy moving and rotation
+                for i in range(len(a)):
+                    self.images.selected[len(atoms) - i - 1] = True
+
+                self.draw()    
             self.add_entries[0].destroy()
-        if data == None:
+
+        if data == 'Cancel':
+            self.add_entries[0].destroy()
+            
+        if data == None or data == 'Paste':
+            from ase.gui.widgets import pack
             molecule = ''
             tag = '0'
             mom = '0'
@@ -681,22 +753,25 @@ class GUI(View, Status):
             self.add_entries = []
             window = gtk.Window(gtk.WINDOW_TOPLEVEL)
             self.add_entries.append(window)
-            window.set_title('Add atoms')
-
+            window.set_title(_('Add atoms'))
+            if data == 'Paste':
+                molecule = paste.get_chemical_symbols(True)
+                window.set_title(_('Paste'))
+                
             vbox = gtk.VBox(False, 0)
             window.add(vbox)
             vbox.show()
-            pack = False
-            for i, j in [['Insert atom or molecule', molecule],
-                         ['Tag', tag],
-                         ['Moment', mom],
-                         ['Position', pos]]:
+            packed = False
+            for i, j in [[_('Insert atom or molecule'), molecule],
+                         [_('Tag'), tag],
+                         [_('Moment'), mom],
+                         [_('Position'), pos]]:
 
                 label = gtk.Label(i)
-                if not pack:
+                if not packed:
                     vbox.pack_start(label, True, True, 0)
                 else: 
-                    pack = True
+                    packed = True
                     vbox.add(label)    
                 label.show()
   
@@ -705,22 +780,28 @@ class GUI(View, Status):
                 self.add_entries.append(entry)
                 entry.set_max_length(50)
                 entry.show()
-    
                 vbox.add(entry)
 
-            button = gtk.Button('_Load molecule')
-            button.connect('clicked', self.add_atoms, 'load')
+            pack(vbox,[gtk.Label('atom/molecule reference:')])
+            self.centre_radio = gtk.RadioButton(None, "centre ")
+            self.origin_radio = gtk.RadioButton(self.centre_radio, "origin")
+            pack(vbox,[self.centre_radio, self.origin_radio])
+            if data == 'Paste':
+                self.origin_radio.set_active(True)
+                self.add_entries[1].set_sensitive(False)
+            if data == None:
+                button = gtk.Button(_('_Load molecule'))
+                button.connect('clicked', self.add_atoms, 'load')
+                button.show()
+                vbox.add(button)
+            button = gtk.Button(_('_OK'))
+            button.connect('clicked', self.add_atoms, 'OK', paste)
             button.show()
             vbox.add(button)
-            button = gtk.Button('_OK')
-            button.connect('clicked', self.add_atoms, 'OK')
-            button.show()
-            vbox.add(button)
-            button = gtk.Button('_Cancel')
+            button = gtk.Button(_('_Cancel'))
             button.connect('clicked', self.add_atoms, 'Cancel')
             button.show()
             vbox.add(button)
- 
             window.show()
         
     def modify_atoms(self, widget, data=None):
@@ -792,15 +873,15 @@ class GUI(View, Status):
             self.add_entries = []
             window = gtk.Window(gtk.WINDOW_TOPLEVEL)
             self.add_entries.append(window)
-            window.set_title('Modify')
+            window.set_title(_('Modify'))
 
             vbox = gtk.VBox(False, 0)
             window.add(vbox)
             vbox.show()
             pack = False
-            for i, j in [['Atom', s_symbol],
-                        ['Tag', s_tag],
-                        ['Moment', s_mom]]:
+            for i, j in [[_('Atom'), s_symbol],
+                        [_('Tag'), s_tag],
+                        [_('Moment'), s_mom]]:
                 label = gtk.Label(i)
                 if not pack:
                     vbox.pack_start(label, True, True, 0)
@@ -815,11 +896,11 @@ class GUI(View, Status):
                 entry.set_max_length(50)
                 entry.show()
                 vbox.add(entry)
-            button = gtk.Button('_OK')
+            button = gtk.Button(_('_OK'))
             button.connect('clicked', self.modify_atoms, 'OK')
             button.show()
             vbox.add(button)
-            button = gtk.Button('_Cancel')
+            button = gtk.Button(_('_Cancel'))
             button.connect('clicked', self.modify_atoms, 'Cancel')
             button.show()
             vbox.add(button)
@@ -841,18 +922,20 @@ class GUI(View, Status):
             self.delete_window.destroy()
              
         if not(data) and sum(self.images.selected):
-            more = '' + (sum(self.images.selected) > 1) * 's'
+            nselected = sum(self.images.selected)
             self.delete_window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-            self.delete_window.set_title('Confirmation')
+            self.delete_window.set_title(_('Confirmation'))
             self.delete_window.set_border_width(10)
             self.box1 = gtk.HBox(False, 0)
             self.delete_window.add(self.box1)
-            self.button1 = gtk.Button('Delete selected atom%s?' % more)
+            self.button1 = gtk.Button(ngettext('Delete selected atom?',
+                                               'Delete selected atoms?',
+                                               nselected))
             self.button1.connect("clicked", self.delete_selected_atoms, "OK")
             self.box1.pack_start(self.button1, True, True, 0)
             self.button1.show()
 
-            self.button2 = gtk.Button("Cancel")
+            self.button2 = gtk.Button(_("Cancel"))
             self.button2.connect("clicked", self.delete_selected_atoms, "Cancel")
             self.box1.pack_start(self.button2, True, True, 0)
             self.button2.show()
@@ -888,6 +971,13 @@ class GUI(View, Status):
         self.images.selected[:] = ~self.images.dynamic
         self.draw()
         
+    def select_immobile_atoms(self, widget):
+        if self.images.nimages > 1:
+            R0 = self.images.P[0]
+            for R in self.images.P[1:]:
+                self.images.selected[:] =~ (np.abs(R - R0) > 1.0e-10).any(1)
+        self.draw()
+
     def movie(self, widget=None):
         from ase.gui.movie import Movie
         self.movie_window = Movie(self)
@@ -926,9 +1016,49 @@ class GUI(View, Status):
                 _('Open ...'), None, gtk.FILE_CHOOSER_ACTION_OPEN,
                 (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
                  gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+            chooser.set_filename(_("<<filename>>"))
+
+            # Add a file type filter
+            name_to_suffix = {}
+            types = gtk.combo_box_new_text()
+            for name, suffix in [(_('Automatic'), None),
+                                 (_('Dacapo netCDF output file'),'dacapo'),
+                                 (_('Virtual Nano Lab file'),'vnl'),
+                                 (_('ASE pickle trajectory'),'traj'),
+                                 (_('ASE bundle trajectory'),'bundle'),
+                                 (_('GPAW text output'),'gpaw-text'),
+                                 (_('CUBE file'),'cube'),
+                                 (_('XCrySDen Structure File'),'xsf'),
+                                 (_('Dacapo text output'),'dacapo-text'),
+                                 (_('XYZ-file'),'xyz'),
+                                 (_('VASP POSCAR/CONTCAR file'),'vasp'),
+                                 (_('VASP OUTCAR file'),'vasp_out'),
+                                 (_('Protein Data Bank'),'pdb'),
+                                 (_('CIF-file'),'cif'),
+                                 (_('FHI-aims geometry file'),'aims'),
+                                 (_('FHI-aims output file'),'aims_out'),
+                                 (_('TURBOMOLE coord file'),'tmol'),
+                                 (_('exciting input'),'exi'),
+                                 (_('WIEN2k structure file'),'struct'),
+                                 (_('DftbPlus input file'),'dftb'),
+                                 (_('ETSF format'),'etsf.nc'),
+                                 (_('CASTEP geom file'),'cell'),
+                                 (_('CASTEP output file'),'castep'),
+                                 (_('CASTEP trajectory file'),'geom'),
+                                 (_('DFTBPlus GEN format'),'gen')
+                                ]:
+                types.append_text(name)
+                name_to_suffix[name] = suffix
+            types.set_active(0)
+            img_vbox = gtk.VBox()
+            pack(img_vbox, [gtk.Label(_('File type:')), types])
+            img_vbox.show()
+            chooser.set_extra_widget(img_vbox)
+
             ok = chooser.run() == gtk.RESPONSE_OK
             if ok:
                 filenames = [chooser.get_filename()]
+                filetype = types.get_active_text()
             chooser.destroy()
 
             if not ok:
@@ -936,7 +1066,7 @@ class GUI(View, Status):
 
         n_current = self.images.nimages
         self.reset_tools_modes()     
-        self.images.read(filenames, slice(None))
+        self.images.read(filenames, slice(None), name_to_suffix[filetype])
         self.set_colors()
         self.set_coordinates(self.images.nimages - 1, focus=True)
 
@@ -964,23 +1094,30 @@ class GUI(View, Status):
             _('Save ...'), None, gtk.FILE_CHOOSER_ACTION_SAVE,
             (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
              gtk.STOCK_SAVE, gtk.RESPONSE_OK))
+        try:
+            fname = sys.argv[1]
+        except IndexError:
+            fname = "<<filename>>"
+        chooser.set_filename(fname)
 
         # Add a file type filter
         types = []
         name_to_suffix = {}
-        for name, suffix in [('Automatic', None),
-                             ('XYZ file', 'xyz'),
-                             ('ASE trajectory', 'traj'),
-                             ('PDB file', 'pdb'),
-                             ('Gaussian cube file', 'cube'),
-                             ('Python script', 'py'),
-                             ('VNL file', 'vnl'),
-                             ('Portable Network Graphics', 'png'),
-                             ('Persistance of Vision', 'pov'),
-                             ('Encapsulated PostScript', 'eps'),
-                             ('FHI-aims geometry input', 'in'),
-                             ('VASP geometry input', 'POSCAR'),
-                             ('ASE bundle trajectory', 'bundle'),
+        for name, suffix in [(_('Automatic'), None),
+                             (_('XYZ file'), 'xyz'),
+                             (_('ASE trajectory'), 'traj'),
+                             (_('PDB file'), 'pdb'),
+                             (_('Gaussian cube file'), 'cube'),
+                             (_('Python script'), 'py'),
+                             (_('VNL file'), 'vnl'),
+                             (_('Portable Network Graphics'), 'png'),
+                             (_('Persistence of Vision'), 'pov'),
+                             (_('Encapsulated PostScript'), 'eps'),
+                             (_('FHI-aims geometry input'), 'in'),
+                             (_('CASTEP geom file'),'cell'),
+                             (_('VASP geometry input'), 'POSCAR'),
+                             (_('ASE bundle trajectory'), 'bundle'),
+                             (_('cif file'), 'cif'),
                              ]:
             if suffix is None:
                 name = _(name)
@@ -1002,12 +1139,12 @@ class GUI(View, Status):
 
         if self.images.nimages > 1:
             img_vbox = gtk.VBox()
-            button = gtk.CheckButton('Save current image only (#%d)' %
+            button = gtk.CheckButton(_('Save current image only (#%d)') %
                                      self.frame)
             pack(img_vbox, button)
             entry = gtk.Entry(10)
             pack(img_vbox, [gtk.Label(_('Slice: ')), entry,
-                                        help('Help for slice ...')])
+                                        help(_('Help for slice ...'))])
             entry.set_text('0:%d' % self.images.nimages)
             img_vbox.show()
             chooser.set_extra_widget(img_vbox)
@@ -1019,7 +1156,7 @@ class GUI(View, Status):
                 chooser.destroy()
                 return
             elif response != gtk.RESPONSE_OK:
-                print >>sys.stderr, "AG INTERNAL ERROR: strange response in Save,", response
+                print >>sys.stderr, _("AG INTERNAL ERROR: strange response in Save,"), response
                 chooser.destroy()
                 return
                 
@@ -1035,9 +1172,11 @@ class GUI(View, Status):
                 suffix = name_to_suffix[filt]
                 filename = filename + '.' + suffix
                 
+            # XXX FIXME the window saying unknown output format
+            # cannot be closed
             if suffix not in types:
-                oops(message='Unknown output format!',
-                     message2='Use one of: ' + ', '.join(types[1:]))
+                oops(message=_('Unknown output format!'),
+                     message2=_('Use one of: %s') % ', '.join(types[1:]))
                 continue
                 
             if self.images.nimages > 1:
@@ -1055,7 +1194,10 @@ class GUI(View, Status):
         bbox[0:2] = np.dot(self.center, self.axes[:, :2]) - size / 2
         bbox[2:] = bbox[:2] + size
         suc = self.ui.get_widget('/MenuBar/ViewMenu/ShowUnitCell').get_active()
-        self.images.write(filename, self.axes, show_unit_cell=suc, bbox=bbox)
+        extra_args = {}
+        if suffix in ['eps', 'png', 'pov', 'png']:
+            extra_args['colors'] = self.get_colors(rgb=True)
+        self.images.write(filename, self.axes, show_unit_cell=suc, bbox=bbox, **extra_args)
         
     def quick_info_window(self, menuitem):
         QuickInfo(self)
@@ -1139,8 +1281,8 @@ class GUI(View, Status):
         return True
 
     def xxx(self, x=None,
-            message1='Not implemented!',
-            message2='do you really need it?'):
+            message1=_('Not implemented!'),
+            message2=_('do you really need it?')):
         oops(message1, message2)
         
     def about(self, action):

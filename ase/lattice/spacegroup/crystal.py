@@ -28,12 +28,16 @@ def crystal(symbols=None, basis=None, spacegroup=1, setting=1,
 
     Parameters:
 
-    symbols : string | sequence of strings
-        Either a string formula or a sequence of element
-        symbols. E.g. ('Na', 'Cl') and 'NaCl' are equivalent.
-    basis : list of scaled coordinates | atoms instance
-        Positions of the non-equivalent sites given either as
-        scaled positions or through an atoms instance.
+    symbols : str | sequence of str | sequence of Atom | Atoms
+        Element symbols of the unique sites.  Can either be a string
+        formula or a sequence of element symbols. E.g. ('Na', 'Cl')
+        and 'NaCl' are equivalent.  Can also be given as a sequence of
+        Atom objects or an Atoms object.
+    basis : list of scaled coordinates 
+        Positions of the unique sites corresponding to symbols given
+        either as scaled positions or through an atoms instance.  Not
+        needed if *symbols* is a sequence of Atom objects or an Atoms
+        object.
     spacegroup : int | string | Spacegroup instance
         Space group given either as its number in International Tables
         or as its Hermann-Mauguin symbol.
@@ -57,7 +61,7 @@ def crystal(symbols=None, basis=None, spacegroup=1, setting=1,
     ondublicates : 'keep' | 'replace' | 'warn' | 'error'
         Action if `basis` contain symmetry-equivalent positions:
             'keep'    - ignore additional symmetry-equivalent positions
-            'replace' - reolace
+            'replace' - replace
             'warn'    - like 'keep', but issue an UserWarning
             'error'   - raises a SpacegroupValueError
     symprec : float
@@ -73,9 +77,9 @@ def crystal(symbols=None, basis=None, spacegroup=1, setting=1,
 
     Keyword arguments:
 
-    All additional keyword arguments are passed on to the Atoms constructor. 
-    Currently, probably the most useful additional keyword arguments are
-    `constraint` and `calculator`.
+    All additional keyword arguments are passed on to the Atoms
+    constructor.  Currently, probably the most useful additional
+    keyword arguments are `info`, `constraint` and `calculator`.
 
     Examples:
 
@@ -94,6 +98,11 @@ def crystal(symbols=None, basis=None, spacegroup=1, setting=1,
     32
     """
     sg = Spacegroup(spacegroup, setting)
+    if (not isinstance(symbols, str) and 
+        hasattr(symbols, '__getitem__') and
+        len(symbols) > 0 and 
+        isinstance(symbols[0], ase.Atom)):
+        symbols = ase.Atoms(symbols)
     if isinstance(symbols, ase.Atoms):
         basis = symbols
         symbols = basis.get_chemical_symbols()
@@ -112,6 +121,16 @@ def crystal(symbols=None, basis=None, spacegroup=1, setting=1,
     symbols = [symbols[i] for i in kinds]
     if cell is None:
         cell = cellpar_to_cell(cellpar, ab_normal, a_direction)
+
+    info = dict(spacegroup=sg)
+    if primitive_cell:
+        info['unit_cell'] = 'primitive'
+    else:
+        info['unit_cell'] = 'conventional'
+
+    if 'info' in kwargs:
+        info.update(kwargs['info'])
+    kwargs['info'] = info
 
     atoms = ase.Atoms(symbols, 
                       scaled_positions=sites, 

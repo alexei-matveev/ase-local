@@ -56,12 +56,20 @@ class SinglePointCalculator:
     def get_spin_polarized(self):
         return self.magmoms is not None and self.magmoms.any()
 
-    def get_magnetic_moments(self, atoms):
-        self.update(atoms)
+    def get_magnetic_moments(self, atoms=None):
+        if atoms is not None:
+            self.update(atoms)
         if self.magmoms is not None:
             return self.magmoms
         else:
             return np.zeros(len(self.positions))
+
+class SinglePointKPoint:
+    def __init__(self, kpt, spin):
+        self.k = kpt
+        self.s = spin
+        self.eps_n = []
+        self.f_n = []
 
 class SinglePointDFTCalculator(SinglePointCalculator):
     def __init__(self, energy, forces, stress, magmoms, atoms,
@@ -70,7 +78,55 @@ class SinglePointDFTCalculator(SinglePointCalculator):
                                        magmoms, atoms)
         if eFermi is not None:
             self.eFermi = eFermi
+        self.kpts = None
 
     def get_fermi_level(self):
         """Return the Fermi-level(s)."""
         return self.eFermi
+
+    def get_bz_k_points(self):
+        """Return the k-points."""
+        if self.kpts is not None:
+            # we assume that only the gamma point is defined
+            return np.zeros((1, 3))
+        return None
+
+    def get_number_of_spins(self):
+        """Return the number of spins in the calculation.
+
+        Spin-paired calculations: 1, spin-polarized calculation: 2."""
+        if self.kpts is not None:
+            # we assume that only the gamma point is defined
+            return len(self.kpts)
+        return None
+
+    def get_spin_polarized(self):
+        """Is it a spin-polarized calculation?"""
+        nos = self.get_number_of_spins()
+        if nos is not None:
+            return nos == 2
+        return None
+    
+    def get_ibz_k_points(self):
+        """Return k-points in the irreducible part of the Brillouin zone."""
+        return self.get_bz_k_points()
+
+    def get_occupation_numbers(self, kpt=0, spin=0):
+        """Return occupation number array."""
+        # we assume that only the gamma point is defined
+        assert(kpt == 0)
+        if self.kpts is not None:
+            for kpt in self.kpts:
+                if kpt.s == spin:
+                    return kpt.f_n
+        return None
+
+    def get_eigenvalues(self, kpt=0, spin=0):
+        """Return eigenvalue array."""
+        # we assume that only the gamma point is defined
+        assert(kpt == 0)
+        if self.kpts is not None:
+            for kpt in self.kpts:
+                if kpt.s == spin:
+                    return kpt.eps_n
+        return None
