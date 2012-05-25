@@ -420,6 +420,8 @@ class PG(Calculator):
       if self.list_keys.has_key( key ):
         self.list_keys[key] = val
     #
+    self.folder = 'o.input/'
+    #
     self.atoms = None
     self.scale_crit = 1.0
     #
@@ -477,21 +479,26 @@ class PG(Calculator):
       self.__write_input__( self.atoms )
       self.calculate()
       # We should have an output at this point
-      if path.exists('o.input/output'):
+      if path.exists(self.folder+'output'):
         self.__got_output = True
       else:
-        self.__pg_error__( 'No output under o.input/output. Something went terribly wrong' )
+        self.__pg_error__( 'No output in file output or o.input/output. Something went terribly wrong' )
     #
   def calculate( self ):
-    os.system('rm -rf o.input')
+    from os import path
+    os.system('rm -rf')
     cmd = self.__cmd__ + ' ' + 'input'
     cmd +=  ' > ParaGauss.out'
     tty = os.system(cmd)
-    os.system('cat o.input/trace_output >> trace.log')
+    if path.exists( 'o.input' ):
+      self.folder = 'o.input/'
+    else:
+      self.folder = ''
+    os.system('cat '+self.folder+'trace_output >> trace.log')
     #
   def read( self, arg ):
     resultlines = []
-    for line in open('o.input/output'):
+    for line in open(self.folder+'output'):
       if arg in line:
 	resultlines += [line.split()]
     return resultlines
