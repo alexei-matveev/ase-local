@@ -412,14 +412,16 @@ class PG(Calculator):
     for key, val in kwargs.iteritems():
       if self.flag_keys.has_key( key ):
         self.flag_keys[key] = val
-      if self.int_keys.has_key( key ):
+      elif self.int_keys.has_key( key ):
         self.int_keys[key] = val
-      if self.real_keys.has_key( key ):
+      elif self.real_keys.has_key( key ):
         self.real_keys[key] = val
-      if self.str_keys.has_key( key ):
+      elif self.str_keys.has_key( key ):
         self.str_keys[key] = '"' + val + '"'
-      if self.list_keys.has_key( key ):
+      elif self.list_keys.has_key( key ):
         self.list_keys[key] = val
+      else:
+        self.__pg_error__( 'Illegal keyword '+key )
     #
     self.folder = 'o.input/'
     #
