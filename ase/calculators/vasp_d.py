@@ -12,7 +12,7 @@ from ase.dftd.dftd_interface import xc_name as xc_name
 
 class Vasp_d2(vasp.Vasp):
     #
-    def get_potential_energy(self, atoms, force_consistent=False, dft_d_cutoff_radius=25.0):
+    def get_potential_energy(self, atoms, force_consistent=False, dft_d_cutoff_radius=30.0):
 	"""
 	Altered version of the original get_potential_energy function
         in the class Vasp. The function obtains the DFT energy by using
@@ -46,7 +46,7 @@ class Vasp_d2(vasp.Vasp):
 	# Adding correction contribution to energy
 	return self.energy_free_or_zero + self.dispersion_correction
 
-    def get_forces(self, atoms, dft_d_cutoff_radius=25.0):
+    def get_forces(self, atoms, dft_d_cutoff_radius=30.0):
 	"""
 	Altered version of the original get_forces function in the Vasp-class.
 	The function obtains the DFT forces by using the original call for the
@@ -85,7 +85,7 @@ class Vasp_d2(vasp.Vasp):
 #
 class Vasp_d3(vasp.Vasp):
     #
-    def get_potential_energy(self, atoms, force_consistent=False, dft_d_cutoff_radius=25.0):
+    def get_potential_energy(self, atoms, force_consistent=False, dft_d_cutoff_radius=30.0):
 	"""
 	Altered version of the original get_potential_energy function
 	in the class Vasp. The function obtains the DFT energy by using
@@ -119,7 +119,7 @@ class Vasp_d3(vasp.Vasp):
 	# Adding correction contribution to energy
 	return self.energy_free_or_zero + self.dispersion_correction
 
-    def get_forces(self, atoms, dft_d_cutoff_radius=25.0):
+    def get_forces(self, atoms, dft_d_cutoff_radius=30.0):
         """
 	Altered version of the original get_forces function in the Vasp-class.
 	The function obtains the DFT forces by using the original call for the
