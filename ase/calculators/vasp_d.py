@@ -4,6 +4,7 @@ correction can be added to the potential energy and the forces.
 """
 import numpy as np
 import vasp
+import sys
 from ase.dftd.dftd_interface import d2_pbc as d2_pbc
 from ase.dftd.dftd_interface import d3_pbc as d3_pbc
 from ase.dftd.dftd_interface import xc_name as xc_name
@@ -35,12 +36,12 @@ class Vasp_d2(vasp.Vasp):
 	self.dispersion_correction       = self.dispersion_correction       * Eh__2__eV
 	#
 	# Print out components (Useful?)
-	print
-	print 'DFT total energy  : ', self.energy_free_or_zero
-	print 'DFT-D2 correction : ', self.dispersion_correction
-	print
-	print 'DFT-D2 final corrected energy: ', self.energy_free_or_zero + self.dispersion_correction
-	print
+	print >> sys.stdout,  ' '
+	print >> sys.stdout,  'DFT total energy  : ', self.energy_free_or_zero
+	print >> sys.stdout,  'DFT-D2 correction : ', self.dispersion_correction
+	print >> sys.stdout,  ' '
+	print >> sys.stdout,  'DFT-D2 final corrected energy: ', self.energy_free_or_zero + self.dispersion_correction
+	print >> sys.stdout,  ' '
 	#
 	# Adding correction contribution to energy
 	return self.energy_free_or_zero + self.dispersion_correction
@@ -108,12 +109,12 @@ class Vasp_d3(vasp.Vasp):
 	self.dispersion_correction       = self.dispersion_correction       * Eh__2__eV
 	#
 	# Print out components (Useful?)
-        print
-        print 'DFT total energy  : ', self.energy_free_or_zero
-        print 'DFT-D3 correction : ', self.dispersion_correction
-        print
-	print 'DFT-D3 final corrected energy: ', self.energy_free_or_zero + self.dispersion_correction
-	print
+        print >> sys.stdout, ' '
+        print >> sys.stdout, 'DFT total energy  : ', self.energy_free_or_zero
+        print >> sys.stdout, 'DFT-D3 correction : ', self.dispersion_correction
+        print >> sys.stdout, ' '
+	print >> sys.stdout, 'DFT-D3 final corrected energy: ', self.energy_free_or_zero + self.dispersion_correction
+        print >> sys.stdout, ' '
 	#
 	# Adding correction contribution to energy
 	return self.energy_free_or_zero + self.dispersion_correction
