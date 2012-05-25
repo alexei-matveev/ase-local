@@ -499,6 +499,8 @@ class PG(Calculator):
       self.folder = 'o.input/'
     else:
       self.folder = ''
+    if self.real_keys['scale_crit'] > 1.0:
+      os.system('echo "      Automatically setting convergency criteria to:  e_conv = '+str(self.real_keys['e_conv']*self.scale_crit)+'    d_conv = '+str(self.real_keys['d_conv']*self.scale_crit)+' " >> trace.log')
     os.system('cat '+self.folder+'trace_output >> trace.log')
     #
   def read( self, arg ):
