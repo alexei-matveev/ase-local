@@ -421,6 +421,7 @@ class PG(Calculator):
         self.list_keys[key] = val
     #
     self.atoms = None
+    self.scale_crit = 1.0
     #
     self.__e_tot = None
     self.__forces = None
