@@ -466,12 +466,16 @@ class PG(Calculator):
     if self.__got_output:
       grads = zeros( (atoms.get_number_of_atoms(), 3) )
       i_run = 0
+      print >> sys.stdout, " "
+      print >> sys.stdout, " Retrieving Gradients from output: "
       for line in self.read( 'Equal Center:' ):
         grads[i_run,0] = line[2]
         grads[i_run,1] = line[3]
         grads[i_run,2] = line[4]
+        print >> sys.stdout, grads[i_run,0:2]
         i_run += 1
       self.__forces = - grads * Hartree / Bohr
+      print >> sys.stdout, " "
     else:
       self.__pg_error__( 'Failed while trying to retrieve forces from output' )
     return self.__forces
