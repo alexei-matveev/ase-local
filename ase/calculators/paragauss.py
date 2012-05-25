@@ -659,7 +659,7 @@ class PG(Calculator):
     #
     # NAMELIST ERI4C
     eri4c = PG_nml( 'eri4c'
-                  , { 'eri4c': self.flag_keys['jexact'] } )
+                  , { 'j_exact': self.flag_keys['jexact'] } )
     #
     head2 = PG_annotation( '\n#'+('# define system #').center(80,'~')+'#' )
     #
