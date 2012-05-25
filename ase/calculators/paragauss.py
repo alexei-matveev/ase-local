@@ -342,7 +342,7 @@ class ParaGauss:
 
 
 class PG_nml():
-  def __init__( self, nml_name='namelist_name', nml_keys={'key':'value'}, nml_data=[] ):
+  def __init__( self, nml_name, nml_keys={}, nml_data=[] ):
     # A PG namelist consists of
     # 1) a title (string)
     # 2) some key-value pairs (dictionary)
