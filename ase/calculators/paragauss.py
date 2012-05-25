@@ -389,20 +389,21 @@ class PG(Calculator):
 		       ,'saveread_ks': True
 		       }
     self.int_keys    = {'max_scf'    : 20
+		       ,'mix_beg'    : 5
 		       ,'ndiis'      : 5
-		       ,'sdiis'      : 5
 		       ,'nrad'       : 150
 		       ,'nang'       : 291
 		       }
     self.real_keys   = {'e_conv'     : 1.0e-8
 		       ,'d_conv'     : 1.0e-6
 		       ,'scale_crit' : 1.0
-		       ,'fmix'       : 0.25
+		       ,'mix_fix'    : 0.25
 		       }
     self.str_keys    = {'task'       : '"Gradients"'
                        ,'sym'        : '"C1"'
                        ,'rel'        : '"FALSE"'
                        ,'xc'         : '"PBE"'
+                       ,'mix_scf'    : '"diis"'
 		       }
     self.list_keys   = {'ea'         : [1]
 		       ,'basis'      : {}
@@ -423,6 +424,7 @@ class PG(Calculator):
     self.folder = 'o.input/'
     #
     self.atoms = None
+    self.mixing = self.__check__( self.str_keys['mix_scf'].lower(), ['"diis"', '"chargefit"'], 'mix_scf' )
     self.scale_crit = 1.0
     #
     self.__e_tot = None
@@ -623,18 +625,18 @@ class PG(Calculator):
     #
     # namelist MAIN_OPTIONS
     maino = PG_nml( 'main_options'
-                  , { 'spin_restricted' : not self.flag_keys['uks']
-                    , 'relativistic'    : self.__check__( self.str_keys['rel'].lower(), ['"true"','"false"','"adkh"'] )
+                  , { 'spin_restricted'     : not self.flag_keys['uks']
+                    , 'relativistic'        : self.__check__( self.str_keys['rel'].lower(), ['"true"','"false"','"adkh"'], 'rel' )
+                    , 'perturbation_theory' : self.__check__( self.str_keys['mix_scf'].lower(), ['"diis"', '"chargefit"'], 'mix_scf' ) == '"chargefit"'
                     # override internal ParaGauss defaults !!
-                    , 'integrals_on_file'   : 'False # override PG-default'
-                    , 'perturbation_theory' : 'False # override PG-default' } )
+                    , 'integrals_on_file'   : 'False # predefined by PG-calculator' } )
     #
     # NAMELIST RECOVER_OPTIONS
     recoo = PG_nml( 'recover_options'
                   , { 'save_ksmatrix' : self.flag_keys['saveread_ks']
                     , 'read_ksmatrix' : self.flag_keys['saveread_ks'] and path.exists('saved_ksmatrix.dat') } )
     #
-    if self.int_keys['ndiis'] > 0:
+    if self.mixing == '"diis"':
       # NAMELIST MIXING
       mixin = PG_nml( 'mixing'
                     , { 'chmix' : 1.0
@@ -646,11 +648,15 @@ class PG(Calculator):
       diis  = PG_nml( 'diis'
                     , { 'diis_on'    : self.int_keys['ndiis'] > 0
                       , 'mmax'       : self.int_keys['ndiis']
-                      , 'loop_start' : self.int_keys['sdiis']
+                      , 'loop_start' : self.int_keys['mix_beg']
                       , 'threshold'  : 0.15
-                      , 'cfix'       : self.real_keys['fmix'] } )
+                      , 'cfix'       : self.real_keys['mix_fix'] } )
     else:
-      mixin = PG_nml( 'mixing' , { } )
+      mixin = PG_nml( 'mixing'
+                    , { 'chmix' : self.real_keys['mix_fix']
+                      , 'spmix' : 1.0
+                      , 'xcmix' : 1.0
+                      , 'start_after_cycle' : self.int_keys['mix_beg'] } )
       diis  = PG_nml( 'diis'   , { } )
     #
     # NAMELIST CONVERGENCE_LIST
