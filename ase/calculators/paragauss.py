@@ -585,7 +585,7 @@ class PG(Calculator):
     i_run         = 0
     for i_ua in range(len(p_ua)):
       p_ua[i_ua] = i_run
-      i_run           += self.list_keys['ea'][i_run]
+      i_run     += self.list_keys['ea'][i_ua]
     self.__check__( i_run, [atoms.get_number_of_atoms()], entryname='p_ua' )
     n_ua     = len( self.list_keys['ea'] )
     return p_ua, n_ua
