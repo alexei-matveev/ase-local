@@ -566,7 +566,7 @@ class PG(Calculator):
                                          , allowed=self.__point_groups__()
                                          , entryname='sym' )
     #
-    if self.str_keys['sym'] == 'C1' or atoms.get_number_of_atoms() == 1 and sum(abs(atoms.get_positions())) == 0.0:
+    if self.str_keys['sym'] == '"C1"' or atoms.get_number_of_atoms() == 1 and sum(abs(atoms.get_positions())) == 0.0:
       self.list_keys['ea'] = [1]*atoms.get_number_of_atoms()
     #
     p_ua     = [None]*len( self.list_keys['ea'] )
@@ -599,7 +599,7 @@ class PG(Calculator):
           self.__pg_error__( 'Basis set file '+basisfilename+' missing' )
       else:
         self.__pg_error__( 'Need basis set for element '+symbol )
-    return len( el ), basisfilename
+    return len( el ), bl
     #
   def define_nmls( self, atoms ):
     from time import clock
@@ -697,7 +697,7 @@ class PG(Calculator):
     blist = []
     for i_ua in range(self.n_ua):
       # GIVE BASIS SET FILE # no explicit namelists for now
-      blist +=[ PG_annotation( '\n~'+self.b_ua ) ]
+      blist +=[ PG_annotation( '\n~'+self.b_ua[i_ua] ) ]
     #
     # FINAL LINE
     final = PG_annotation( '\n#'+('# compiled at '+str(clock())+' #').center(80,'~')+'#\n' )
