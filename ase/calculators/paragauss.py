@@ -387,6 +387,7 @@ class PG(Calculator):
     self.flag_keys   = {'uks'        : False
 		       ,'jexact'     : False
 		       ,'saveread_ks': True
+		       ,'timers'     : False
 		       }
     self.int_keys    = {'max_scf'    : 20
 		       ,'mix_beg'    : 5
@@ -633,6 +634,20 @@ class PG(Calculator):
                     # override internal ParaGauss defaults !!
                     , 'integrals_on_file'   : 'False # predefined by PG-calculator' } )
     #
+    # NAMELIST OUTPUT TIMING
+    timers = PG_nml( 'output_timing'
+                   , { 'output_timing_summary'           : self.flag_keys['timers']
+                     , 'output_timing_detailedsummary'   : self.flag_keys['timers']
+                     , 'output_timing_integrals'         : self.flag_keys['timers']
+                     , 'output_timing_detailedintegrals' : self.flag_keys['timers']
+                     , 'output_timing_scfloops'          : self.flag_keys['timers']
+                     , 'output_timing_scf'               : self.flag_keys['timers']
+                     , 'output_timing_detailedscf'       : self.flag_keys['timers']
+                     , 'output_timing_post_scf'          : self.flag_keys['timers']
+                     , 'output_timing_detailedpostscf'   : self.flag_keys['timers']
+                     , 'output_timing_slaves'            : self.flag_keys['timers']
+                     , 'output_timing_interrupts'        : self.flag_keys['timers'] } )
+    #
     # NAMELIST RECOVER_OPTIONS
     recoo = PG_nml( 'recover_options'
                   , { 'save_ksmatrix' : self.flag_keys['saveread_ks']
@@ -717,7 +732,7 @@ class PG(Calculator):
     # FINAL LINE
     final = PG_annotation( '\n#'+('# compiled at '+str(clock())+' #').center(80,'~')+'#\n' )
     #
-    return [ head1, tasks, maino, recoo, mixin, diis, convl, xccnt, eri4c
+    return [ head1, tasks, maino, timers, recoo, mixin, diis, convl, xccnt, eri4c
            , head2, symgr, uanum ]+uanml+[
              head3, grid]+ganml+blist+[ final ]
 
