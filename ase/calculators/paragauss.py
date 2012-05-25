@@ -399,12 +399,14 @@ class PG(Calculator):
 		       ,'d_conv'     : 1.0e-6
 		       ,'scale_crit' : 1.0
 		       ,'mix_fix'    : 0.25
+		       ,'smear_val'  : 0.0
 		       }
     self.str_keys    = {'task'       : '"Gradients"'
                        ,'sym'        : '"C1"'
                        ,'rel'        : '"FALSE"'
                        ,'xc'         : '"PBE"'
                        ,'mix_scf'    : '"diis"'
+                       ,'smear'      : '"FALSE"'
 		       }
     self.list_keys   = {'ea'         : [1]
 		       ,'basis'      : {}
@@ -428,6 +430,7 @@ class PG(Calculator):
     #
     self.atoms = None
     self.mixing = self.__check__( self.str_keys['mix_scf'].lower(), ['"diis"', '"chargefit"'], 'mix_scf' )
+    self.smear = self.__check__( self.str_keys['smear'].lower(), ['"false"', '"gauss"', '"fermi"', '"sinus"'], 'smear' ).replace('"','')
     self.scale_crit = 1.0
     #
     self.__e_tot = None
@@ -689,6 +692,13 @@ class PG(Calculator):
     xccnt = PG_nml( 'xc_control'
                   , { 'xc': self.str_keys['xc'] } )
     #
+    # NAMELIST FERMI
+
+    if self.real_keys['smear_val'] > 0.0 or self.smear != 'FALSE':
+      smear = PG_nml( 'fermi'
+                    , { 'fermi_'+self.smear: 'true'
+                      , 'fermi_sigma': self.real_keys['smear_val'] } )
+    #
     # NAMELIST ERI4C
     eri4c = PG_nml( 'eri4c'
                   , { 'j_exact': self.flag_keys['jexact'] } )
@@ -734,7 +744,7 @@ class PG(Calculator):
     # FINAL LINE
     final = PG_annotation( '\n#'+('# compiled at '+str(clock())+' #').center(80,'~')+'#\n' )
     #
-    return [ head1, tasks, maino, timers, recoo, mixin, diis, convl, xccnt, eri4c
+    return [ head1, tasks, maino, timers, recoo, mixin, diis, convl, smear, xccnt, eri4c
            , head2, symgr, uanum ]+uanml+[
              head3, grid]+ganml+blist+[ final ]
 
