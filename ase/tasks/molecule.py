@@ -32,10 +32,8 @@ class MoleculeTask(OptimizeTask):
 
         OptimizeTask.__init__(self, **kwargs)
 
-        self.summary_header += [('d0', 'Ang'),
-                                ('hnu', 'meV'),
-                                ('Ea', 'eV'),
-                                ('Ea0', 'eV')]
+        self.summary_keys = ['energy', 'relaxed energy', 'distance', 'frequency',
+                             'atomic energy']
 
     def run(self, names1):
         names = []
@@ -47,7 +45,7 @@ class MoleculeTask(OptimizeTask):
                 from ase.data.g2 import atom_names
                 if self.atomize:
                     atoms.update(atom_names)
-            elif name.lower() == 'g2-1':
+            elif name.lower() == 'g2_1':
                 from ase.data.g2_1 import molecule_names
                 names.extend(molecule_names)
                 from ase.data.g2_1 import atom_names
@@ -71,7 +69,8 @@ class MoleculeTask(OptimizeTask):
         except NotImplementedError:
             symbols = string2symbols(name)
             if len(symbols) == 1:
-                magmom = ground_state_magnetic_moments[atomic_numbers[symbols[0]]]
+                Z = atomic_numbers[symbols[0]]
+                magmom = ground_state_magnetic_moments[Z]
                 atoms = Atoms(name, magmoms=[magmom])
             elif len(symbols) == 2:
                 # Dimer
@@ -93,13 +92,12 @@ class MoleculeTask(OptimizeTask):
 
         return atoms
 
-    def fit_bond_length(self, name, atoms):
+    def fit_bond_length(self, name, atoms, data=None):
         N, x = self.fit
-        assert N % 2 == 1
         d0 = atoms.get_distance(0, 1)
         distances = np.linspace(d0 * (1 - x), d0 * (1 + x), N)
         energies = []
-        traj = PickleTrajectory(self.get_filename(name, '-fit.traj'), 'w')
+        traj = PickleTrajectory(self.get_filename(name, 'fit.traj'), 'w')
         for d in distances:
             atoms.set_distance(0, 1, d)
             energies.append(atoms.get_potential_energy())
@@ -108,23 +106,38 @@ class MoleculeTask(OptimizeTask):
 
         traj.close()
 
-        data = {'energy': energies[N // 2],
-                'distances': distances,
-                'energies': energies}
+        if data is not None:
+            data['distances'] = distances
+            data['energies'] = energies
+        else:
+            assert N % 2 == 1
+            data = {'energy': energies[N // 2],
+                    'distances': distances,
+                    'energies': energies}
 
         return data
 
     def calculate(self, name, atoms):
-        if self.fit and len(atoms) == 2:
-            return self.fit_bond_length(name, atoms)
-        else:
+        if self.fmax is not None:
+            # this performs relaxation of internal degrees of freedom
             data = OptimizeTask.calculate(self, name, atoms)
-            self.check_occupation_numbers(atoms)
-            return data
+            data['distance'] = atoms.get_distance(0, -1)
+        else:
+            # no optimization
+            if self.fit is None or len(atoms) != 2:
+                # for dimers: only calculate single-point energy if no fit follows
+                data = OptimizeTask.calculate(self, name, atoms)
+        if self.fit is not None and len(atoms) == 2:
+            if self.fmax is not None:
+                # fit after optimization
+                self.fit_bond_length(name, atoms, data)
+            else:
+                # fit is the only task performed
+                data = self.fit_bond_length(name, atoms)
+        self.check_occupation_numbers(atoms)
+        return data
 
     def analyse(self):
-        OptimizeTask.analyse(self)
-
         for name, data in self.data.items():
             if 'distances' in data:
                 distances = data['distances']
@@ -143,9 +156,9 @@ class MoleculeTask(OptimizeTask):
                     raise ValueError('No minimum!')
 
                 if abs(dmin) < min(distances) or abs(dmin) > max(distances):
-                    raise ValueError('Fit outside of range! ' + \
-                                      str(abs(dmin)) + ' not in ' + \
-                                      str(distances))
+                    raise ValueError(name + ': fit outside of range! ' + \
+                                     str(abs(dmin)) + ' not in ' + \
+                                     str(distances))
 
                 emin = fit0(t)
                 k = fit2(t) * t**4
@@ -153,15 +166,13 @@ class MoleculeTask(OptimizeTask):
                 m = m1 * m2 / (m1 + m2)
                 hnu = units._hbar * 1e10 * sqrt(k / units._e / units._amu / m)
 
-                data['minimum energy'] = emin
-                self.results[name][1:] = [energies[2] - emin, dmin, 1000 * hnu]
-            else:
-                self.results[name].extend([None, None])
+                data['relaxed energy'] = emin
+                data['distance'] = dmin
+                data['frequency'] = hnu
 
         for name, data in self.data.items():
             atoms = self.create_system(name)
             if len(atoms) == 1:
-                self.results[name].extend([None, None])
                 continue
 
             eatoms = 0.0
@@ -174,10 +185,7 @@ class MoleculeTask(OptimizeTask):
             ea = None
             ea0 = None
             if eatoms is not None:
-                ea = eatoms - data['energy']
-                if 'minimum energy' in data:
-                    ea0 = eatoms - data['minimum energy']
-            self.results[name].extend([ea, ea0])
+                data['atomic energy'] = eatoms
 
     def add_options(self, parser):
         OptimizeTask.add_options(self, parser)

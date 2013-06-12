@@ -12,6 +12,9 @@ def get_calculator():
 
 run_test(get_atoms, get_calculator, 'Hydrogen')
 """
+
+import time
+
 import matplotlib
 matplotlib.rcParams['backend']="Agg"
 
@@ -22,6 +25,7 @@ from ase.optimize.mdmin import MDMin
 from ase.optimize.sciopt import SciPyFminCG
 from ase.optimize.sciopt import SciPyFminBFGS
 from ase.optimize.bfgslinesearch import BFGSLineSearch
+from ase.optimize.oldqn import GoodOldQuasiNewton
 
 from ase.parallel import rank, paropen
 
@@ -38,7 +42,8 @@ optimizers = [
     'MDMin',
     'SciPyFminCG',
     'SciPyFminBFGS',
-    'BFGSLineSearch'
+    'BFGSLineSearch',
+    'GoodOldQuasiNewton'
 ]
 
 def get_optimizer(optimizer):
@@ -50,12 +55,18 @@ def get_optimizer(optimizer):
     elif optimizer == 'SciPyFminCG': return SciPyFminCG
     elif optimizer == 'SciPyFminBFGS': return SciPyFminBFGS
     elif optimizer == 'BFGSLineSearch': return BFGSLineSearch
+    elif optimizer == 'GoodOldQuasiNewton': return GoodOldQuasiNewton
 
 def run_test(get_atoms, get_calculator, name,
              fmax=0.05, steps=100, plot=True):
 
     plotter = Plotter(name, fmax)
     csvwriter = CSVWriter(name)
+    # write header
+    row = ['Optimizer', 'Optimizer Steps', 'Force evaluations', 'Energy']
+    row.extend(['Time [sec]', 'Note'])
+    format = '%s,%s,%s,%s,%s,%s\n'
+    csvwriter.write(row, format)
     for optimizer in optimizers:
         note = ''
         logname = name + '-' + optimizer
@@ -69,6 +80,7 @@ def run_test(get_atoms, get_calculator, name,
 
         obs = DataObserver(atoms)
         relax.attach(obs)
+        t = time.time()
         try:
             relax.run(fmax = fmax, steps = steps)
             E = atoms.get_potential_energy()
@@ -79,6 +91,7 @@ def run_test(get_atoms, get_calculator, name,
             traceback.print_exc()
             note = 'An exception occurred'
             E = np.nan
+        t = time.time() - t
 
         nsteps = relax.get_number_of_steps()
         if hasattr(relax, 'force_calls'):
@@ -91,7 +104,10 @@ def run_test(get_atoms, get_calculator, name,
                 print '%-15s %-15s %3i %8.3f       %s' % (name, optimizer, nsteps, E, note)
 
         plotter.plot(optimizer, obs.get_E(), obs.get_fmax())
-        csvwriter.write(optimizer, nsteps, E, fc, note)
+        format = '%s,%i,%i,%.5f,%i,%s\n'
+        row = [optimizer, nsteps, fc, E]
+        row.extend([int(t), note])
+        csvwriter.write(row, format)
 
     plotter.save()
     csvwriter.finalize()
@@ -100,7 +116,7 @@ class Plotter:
     def __init__(self, name, fmax):
         self.name = name
         self.fmax = fmax
-        if rank == 0: 
+        if rank == 0:
             self.fig = pl.figure(figsize=[12.0, 9.0])
             self.axes0 = self.fig.add_subplot(2, 1, 1)
             self.axes1 = self.fig.add_subplot(2, 1, 2)
@@ -127,10 +143,8 @@ class CSVWriter:
     def __init__(self, name):
         self.f = paropen(name + '.csv', 'w')
 
-    def write(self, optimizer, nsteps, E, fc, note=''):
-        self.f.write(
-            '%s,%i,%i,%f,%s\n' % (optimizer, nsteps, fc, E, note)
-        )
+    def write(self, row, format):
+        self.f.write(format % tuple(row))
 
     def finalize(self):
         self.f.close()

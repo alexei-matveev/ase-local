@@ -26,7 +26,7 @@ class Turbomole(Calculator):
         self.calculate_forces = calculate_forces
 
         # turbomole has no stress
-        self.stress = np.empty((3, 3))
+        self.stress = np.empty(6)
         
         # storage for energy and forces
         self.e_total = None
@@ -143,12 +143,10 @@ class Turbomole(Calculator):
         return self.stress
         
     def set_atoms(self, atoms):
-        if not self.atoms == atoms:
-            # energy and forces must be re-calculated
-            self.update_energy = True
-            self.update_forces = True
-            # performs an update of the atoms 
-            super(Turbomole, self).set_atoms(atoms)
+        if self.atoms == atoms:
+            return
+        # performs an update of the atoms 
+        Calculator.set_atoms(self, atoms)
 
         #
         # We may reside in a clean directory,
@@ -157,6 +155,9 @@ class Turbomole(Calculator):
         self.store2files(TURBOMOLE_INPUT_FILES)
 
         write_turbomole('coord', atoms)
+        # energy and forces must be re-calculated
+        self.update_energy = True
+        self.update_forces = True
         
     def read_energy(self):
         """Read Energy from Turbomole energy file."""

@@ -64,12 +64,21 @@ class SinglePointCalculator:
         else:
             return np.zeros(len(self.positions))
 
+    def get_dipole_moment(self):
+        if hasattr(self, 'dipole'):
+            return self.dipole
+        return None
+
+    def set_dipole_moment(self, dipole):
+        self.dipole = dipole
+
 class SinglePointKPoint:
-    def __init__(self, kpt, spin):
-        self.k = kpt
-        self.s = spin
-        self.eps_n = []
-        self.f_n = []
+    def __init__(self, weight, s, k, eps_n=[], f_n=[]):
+        self.weight = weight
+        self.s = s  # spin index
+        self.k = k  # k-point index
+        self.eps_n = eps_n
+        self.f_n = f_n
 
 class SinglePointDFTCalculator(SinglePointCalculator):
     def __init__(self, energy, forces, stress, magmoms, atoms,

@@ -31,19 +31,18 @@
 import os
 import sys
 import weakref
+import pickle
 from gettext import gettext as _
 from gettext import ngettext
-import numpy as np
 
+import numpy as np
 import pygtk
 pygtk.require("2.0")
-
 import gtk
+
 from ase.gui.view import View
 from ase.gui.status import Status
 from ase.gui.widgets import pack, help, Help, oops
-#from ase.gui.languages import translate as _
-
 from ase.gui.settings import Settings
 from ase.gui.crystal import SetupBulkCrystal
 from ase.gui.surfaceslab import SetupSurfaceSlab
@@ -55,7 +54,8 @@ from ase.gui.energyforces import EnergyForces
 from ase.gui.minimize import Minimize
 from ase.gui.scaling import HomogeneousDeformation
 from ase.gui.quickinfo import QuickInfo
-from ase.gui.defaults import read_defaults
+from ase.version import version
+
 
 ui_info = """\
 <ui>
@@ -76,6 +76,9 @@ ui_info = """\
       <menuitem action='Copy'/>
       <menuitem action='Paste'/>
       <separator/>
+      <menuitem action='HideAtoms'/>
+      <menuitem action='ShowAtoms'/>
+      <separator/>
       <menuitem action='Modify'/>
       <menuitem action='AddAtoms'/>
       <menuitem action='DeleteAtoms'/>
@@ -89,6 +92,14 @@ ui_info = """\
       <menuitem action='ShowUnitCell'/>
       <menuitem action='ShowAxes'/>
       <menuitem action='ShowBonds'/>
+      <menuitem action='ShowVelocities'/>
+      <menuitem action='ShowForces'/>
+      <menu action='ShowLabels'>
+        <menuitem action='NoLabel'/>
+        <menuitem action='AtomIndex'/>
+        <menuitem action='MagMom'/>
+        <menuitem action='Element'/>
+      </menu>
       <separator/>
       <menuitem action='QuickInfo'/>
       <menuitem action='Repeat'/>
@@ -97,7 +108,21 @@ ui_info = """\
       <menuitem action='Focus'/>
       <menuitem action='ZoomIn'/>
       <menuitem action='ZoomOut'/>
-      <menuitem action='ResetView'/>
+      <menu action='ChangeView'>
+        <menuitem action='ResetView'/>
+        <menuitem action='xyPlane'/>
+        <menuitem action='yzPlane'/>
+        <menuitem action='zxPlane'/>
+        <menuitem action='yxPlane'/>
+        <menuitem action='zyPlane'/>
+        <menuitem action='xzPlane'/>
+        <menuitem action='a2a3Plane'/>
+        <menuitem action='a3a1Plane'/>
+        <menuitem action='a1a2Plane'/>
+        <menuitem action='a3a2Plane'/>
+        <menuitem action='a2a1Plane'/>
+        <menuitem action='a1a3Plane'/>
+      </menu>
       <menuitem action='Settings'/>
       <menuitem action='VMD'/>
       <menuitem action='RasMol'/>
@@ -220,6 +245,13 @@ class GUI(View, Status):
             ('Last', gtk.STOCK_GOTO_LAST, _('_Last image'), 'End',
              '',
              self.step),
+            ('ShowLabels', None, _('Show _Labels')),
+            ('HideAtoms', None, _('Hide selected atoms'), None,
+             '',
+             self.hide_selected),
+            ('ShowAtoms', None, _('Show selected atoms'), None,
+             '',
+             self.show_selected),
             ('QuickInfo', None, _('Quick Info ...'), None,
              '',
              self.quick_info_window),
@@ -241,9 +273,22 @@ class GUI(View, Status):
             ('ZoomOut', gtk.STOCK_ZOOM_OUT, _('Zoom out'), 'minus',
              '',
              self.zoom),
+            ('ChangeView', None, _('Change View')),
             ('ResetView', None, _('Reset View'), 'equal',
              '',
              self.reset_view),
+            ('xyPlane', None, _('\'xy\' Plane'), 'z', '', self.set_view),
+            ('yzPlane', None, _('\'yz\' Plane'), 'x', '', self.set_view),
+            ('zxPlane', None, _('\'zx\' Plane'), 'y', '', self.set_view),
+            ('yxPlane', None, _('\'yx\' Plane'), '<alt>z', '', self.set_view),
+            ('zyPlane', None, _('\'zy\' Plane'), '<alt>x', '', self.set_view),
+            ('xzPlane', None, _('\'xz\' Plane'), '<alt>y', '', self.set_view),
+            ('a2a3Plane', None, _('\'a2 a3\' Plane'), '1', '', self.set_view),
+            ('a3a1Plane', None, _('\'a3 a1\' Plane'), '2', '', self.set_view),
+            ('a1a2Plane', None, _('\'a1 a2\' Plane'), '3', '', self.set_view),
+            ('a3a2Plane', None, _('\'a3 a2\' Plane'), '<alt>1', '', self.set_view),
+            ('a1a3Plane', None, _('\'a1 a3\' Plane'), '<alt>2', '', self.set_view),
+            ('a2a1Plane', None, _('\'a2 a1\' Plane'), '<alt>3', '', self.set_view),
             ('Settings', gtk.STOCK_PREFERENCES, _('Settings ...'), None,
              '',
              self.settings),
@@ -328,6 +373,14 @@ class GUI(View, Status):
              'Bold',
              self.toggle_show_bonds,
              show_bonds),
+            ('ShowVelocities', None, _('Show _velocities'), 
+             '<control>G', 'Bold',
+             self.toggle_show_velocities,
+             False),
+            ('ShowForces', None, _('Show _forces'), '<control>F',
+             'Bold',
+             self.toggle_show_forces,
+             False),
             ('MoveAtoms', None, _('_Move atoms'), '<control>M',
              'Bold',
              self.toggle_move_mode,
@@ -341,6 +394,12 @@ class GUI(View, Status):
              self.toggle_orient_mode,
              False)             
             ])
+        actions.add_radio_actions((
+            ('NoLabel', None, _('_None'), None, None, 0),
+            ('AtomIndex', None, _('Atom _Index'), None, None, 1),
+            ('MagMom', None, _('_Magnetic Moments'), None, None, 2),
+            ('Element', None, _('_Element Symbol'), None, None, 3)),
+            0, self.show_labels)
         self.ui = ui = gtk.UIManager()
         ui.insert_action_group(actions, 0)
         self.window.add_accel_group(ui.get_accel_group())
@@ -362,11 +421,9 @@ class GUI(View, Status):
         self.graphs = []       # List of open pylab windows
         self.graph_wref = []   # List of weakrefs to Graph objects
         self.movie_window = None
-        self.clipboard = None  # initialize copy/paste functions
         self.vulnerable_windows = []
         self.simulation = {}   # Used by modules on Calculate menu.
         self.module_state = {} # Used by modules to store their state.
-        self.config = read_defaults()
 
     def run(self, expr=None):
         self.set_colors()
@@ -573,7 +630,10 @@ class GUI(View, Status):
         self.draw()
         
     def copy_atoms(self, widget):
-        "Copies selected atoms to a clipboard, if no atoms are selected then the clipboard is cleared."
+        "Copies selected atoms to a clipboard."
+
+        clip = gtk.clipboard_get(gtk.gdk.SELECTION_CLIPBOARD)
+
         if self.images.selected.any():
             atoms = self.images.get_atoms(self.frame)
             lena = len(atoms)
@@ -587,15 +647,20 @@ class GUI(View, Status):
             for i in atoms:
                 if i.position[2] < ref[2]:
                     ref = i.position
-            self.clipboard = atoms.copy()
-            self.clipboard.reference_position = ref
-        else:
-            self.clipboard = None
+            atoms.reference_position = ref
+            clip.set_text(pickle.dumps(atoms, 0))
+            
 
     def paste_atoms(self, widget):
         "Inserts clipboard selection into the current frame using the add_atoms window."
-        if self.clipboard is not None:
-            self.add_atoms(widget, data='Paste', paste=self.clipboard)
+        clip = gtk.clipboard_get(gtk.gdk.SELECTION_CLIPBOARD)
+        try:
+            atoms = pickle.loads(clip.wait_for_text())
+            self.add_atoms(widget, data='Paste', paste=atoms)
+        except:
+            pass
+            
+            
         
     def add_atoms(self, widget, data=None, paste=None):
         """
@@ -650,6 +715,7 @@ class GUI(View, Status):
                     a = ase.Atoms([ase.Atom(molecule)])
                 except:      
                     try:
+                        import ase.data.molecules
                         a = ase.data.molecules.molecule(molecule)
                     except:
                         try:
@@ -843,6 +909,15 @@ class GUI(View, Status):
                             self.add_entries[3].set_text('?' + mom)
                             return ()
                 self.new_atoms(atoms, init_magmom=True)
+
+                # Updates atomic labels
+                cv = self.ui.get_action_groups()[0].\
+                        get_action("NoLabel").get_current_value()
+                self.ui.get_action_groups()[0].\
+                        get_action("NoLabel").set_current_value(0)
+                self.ui.get_action_groups()[0].\
+                        get_action("NoLabel").set_current_value(cv)
+
 
                 # and finally select the new molecule for easy moving and rotation
                 self.images.selected = y
@@ -1288,12 +1363,16 @@ class GUI(View, Status):
     def about(self, action):
         try:
             dialog = gtk.AboutDialog()
+            dialog.set_version(version)
+            dialog.set_website(
+                'https://wiki.fysik.dtu.dk/ase/ase/gui/gui.html')
         except AttributeError:
             self.xxx()
         else:
             dialog.run()
+            dialog.destroy()
 
 def webpage(widget):
     import webbrowser
-    webbrowser.open('https://wiki.fysik.dtu.dk/ase/ase/gui.html')
+    webbrowser.open('https://wiki.fysik.dtu.dk/ase/ase/gui/gui.html')
 

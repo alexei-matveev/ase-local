@@ -122,7 +122,7 @@ class LAMMPS:
                 os.mkdir(self.tmp_dir, 0755)
         
         for f in files:
-            shutil.copy(f, os.path.join(self.tmp_dir, f))
+            shutil.copy(f, os.path.join(self.tmp_dir, os.path.basename(f)))
 
     def clean(self, force=False):
 
@@ -194,7 +194,7 @@ class LAMMPS:
             lammps_cmd_line[0] = os.path.abspath(lammps_cmd_line[0])
 
         else:
-	    self.clean()
+            self.clean()
             raise RuntimeError('Please set LAMMPS_COMMAND environment variable')
         if 'LAMMPS_OPTIONS' in os.environ:
             lammps_options = shlex.split(os.environ['LAMMPS_OPTIONS'])
@@ -705,7 +705,7 @@ class prism:
         return (axy >= acc) or (axz >= acc) or (ayz >= acc)
         
 
-def write_lammps_data(fileobj, atoms, specorder=[], force_skew=False, prismobj=None):
+def write_lammps_data(fileobj, atoms, specorder=None, force_skew=False, prismobj=None):
     """Method which writes atomic structure data to a LAMMPS data file."""
     if isinstance(fileobj, str):
         f = paropen(fileobj, 'w')

@@ -15,18 +15,22 @@ if json is None:
         if isinstance(obj, (int, float)):
             return repr(obj)
         if isinstance(obj, dict):
-            return '{' + ','.join(dumps(key) + ':' + dumps(value)
-                                  for key, value in obj.items()) + '}'
+            return '{' + ', '.join(dumps(key) + ': ' + dumps(value)
+                                   for key, value in obj.items()) + '}'
         return '[' + ','.join(dumps(value) for value in obj) + ']'
 
     loads = eval
 else:
     class NDArrayEncoder(json.JSONEncoder):
+        def __init__(self):
+            json.JSONEncoder.__init__(self, sort_keys=True, indent=4)
+
         def default(self, obj):
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
             return json.JSONEncoder.default(self, obj)
     
+
     dumps = NDArrayEncoder().encode
     loads = json.loads
 
@@ -42,15 +46,16 @@ def numpyfy(obj):
     return obj
 
 
-def write_json(name, atoms, results):
+def write_json(name, results):
     if world.rank == 0:
-        fd = open(name + '.json', 'w')
+        fd = open(name, 'w')
         fd.write(dumps(results))
         fd.close()
 
 
 def read_json(name):
-    fd = open(name + '.json', 'r')
+    fd = open(name, 'r')
     results = loads(fd.read())
     fd.close()
+    world.barrier()
     return numpyfy(results)

@@ -7,6 +7,7 @@ This module defines the central object in the ASE package: the Atoms
 object.
 """
 
+import warnings
 from math import cos, sin
 
 import numpy as np
@@ -61,6 +62,9 @@ class Atoms(object):
     cell: 3x3 matrix
         Unit cell vectors.  Can also be given as just three
         numbers for orthorhombic cells.  Default value: [1, 1, 1].
+    celldisp: Vector
+        Unit cell displacement vector. To visualize a displaced cell
+        around the center of mass of a Systems of atoms. Default value = (0,0,0)
     pbc: one or three bool
         Periodic boundary conditions flags.  Examples: True,
         False, 0, 1, (1, 1, 0), (True, False, False).  Default
@@ -116,7 +120,7 @@ class Atoms(object):
                  tags=None, momenta=None, masses=None,
                  magmoms=None, charges=None,
                  scaled_positions=None,
-                 cell=None, pbc=None,
+                 cell=None, pbc=None, celldisp=None,
                  constraint=None,
                  calculator=None, 
                  info=None):
@@ -157,9 +161,11 @@ class Atoms(object):
             if masses is None and atoms.has('masses'):
                 masses = atoms.get_masses()
             if charges is None and atoms.has('charges'):
-                charges = atoms.get_charges()
+                charges = atoms.get_initial_charges()
             if cell is None:
                 cell = atoms.get_cell()
+            if celldisp is None:
+                celldisp = atoms.get_celldisp()
             if pbc is None:
                 pbc = atoms.get_pbc()
             if constraint is None:
@@ -190,6 +196,10 @@ class Atoms(object):
             cell = np.eye(3)
         self.set_cell(cell)
 
+        if celldisp is None:
+            celldisp = np.zeros(shape=(3,1))
+        self.set_celldisp(celldisp)
+
         if positions is None:
             if scaled_positions is None:
                 positions = np.zeros((len(self.arrays['numbers']), 3))
@@ -205,7 +215,7 @@ class Atoms(object):
         self.set_momenta(default(momenta, (0.0, 0.0, 0.0)))
         self.set_masses(default(masses, None))
         self.set_initial_magnetic_moments(default(magmoms, 0.0))
-        self.set_charges(default(charges, 0.0))
+        self.set_initial_charges(default(charges, 0.0))
         if pbc is None:
             pbc = False
         self.set_pbc(pbc)
@@ -298,9 +308,19 @@ class Atoms(object):
             self.arrays['positions'][:] = np.dot(self.arrays['positions'], M)
         self._cell = cell
 
+    def set_celldisp(self, celldisp):
+        celldisp = np.array(celldisp, float)
+        self._celldisp = celldisp
+  
+    def get_celldisp(self):
+        """Get the unit cell displacement vectors ."""
+        return self._celldisp.copy()
+
     def get_cell(self):
         """Get the three unit cell vectors as a 3x3 ndarray."""
         return self._cell.copy()
+
+
 
     def get_reciprocal_cell(self):
         """Get the three reciprocal lattice vectors as a 3x3 ndarray.
@@ -396,23 +416,76 @@ class Atoms(object):
         self.set_array('numbers', symbols2numbers(symbols), int, ())
 
     def get_chemical_symbols(self, reduce=False):
-        """Get list of chemical symbol strings.
+        """Get list of chemical symbol strings."""
+        if reduce:
+            warnings.warn('ase.atoms.get_chemical_symbols(reduce=True) is ' +
+                          'deprecated. Please use ase.atoms.get_chemical' +
+                          '_formula(mode="reduce") instead.',
+                          DeprecationWarning, stacklevel=2)
+            return self.get_chemical_formula(mode='reduce')
+        return [chemical_symbols[Z] for Z in self.arrays['numbers']]
 
-        If reduce is True, a single string is returned, where repeated
-        elements have been contracted to a single symbol and a number.
-        E.g. instead of ['C', 'O', 'O', 'H'], the string 'CO2H' is returned.
+    def get_chemical_formula(self, mode='hill'):
+        """Get the chemial formula as a string based on the chemical symbols.
+
+        Parameters:
+        
+        mode:
+            There are three different modes available:
+
+            'all': The list of chemical symbols are contracted to at string,
+            e.g. ['C', 'H', 'H', 'H', 'O', 'H'] becomes 'CHHHOH'.
+
+            'reduce': The same as 'all' where repeated elements are contracted
+            to a single symbol and a number, e.g. 'CHHHOCHHH' is reduced to
+            'CH3OCH3'.
+
+            'hill': The list of chemical symbols are contracted to a string
+            following the Hill notation (alphabetical order with C and H
+            first), e.g. 'CHHHOCHHH' is reduced to 'C2H6O' and 'SOOHOHO' to
+            'H2O4S'. This is default.
         """
-        if not reduce:
-            # XXX
-            return [chemical_symbols[Z] for Z in self.arrays['numbers']]
+        if len(self) == 0:
+            return ''
+
+        if mode == 'reduce':
+            numbers = self.get_atomic_numbers()
+            n = len(numbers)
+            changes = np.concatenate(([0], np.arange(1, n)[numbers[1:] !=
+                                                           numbers[:-1]]))
+            symbols = [chemical_symbols[e] for e in numbers[changes]]
+            counts = np.append(changes[1:], n) - changes
+        elif mode == 'hill':
+            numbers = self.get_atomic_numbers()
+            elements = np.unique(numbers)
+            symbols = np.array([chemical_symbols[e] for e in elements])
+            counts = np.array([(numbers == e).sum() for e in elements])
+
+            ind = symbols.argsort()
+            symbols = symbols[ind]
+            counts = counts[ind]
+
+            if 'H' in symbols:
+                i = np.arange(len(symbols))[symbols == 'H']
+                symbols = np.insert(np.delete(symbols, i), 0, symbols[i])
+                counts = np.insert(np.delete(counts, i), 0, counts[i])
+            if 'C' in symbols:
+                i = np.arange(len(symbols))[symbols == 'C']
+                symbols = np.insert(np.delete(symbols, i), 0, symbols[i])
+                counts = np.insert(np.delete(counts, i), 0, counts[i])
+        elif mode == 'all':
+            numbers = self.get_atomic_numbers()
+            symbols = [chemical_symbols[n] for n in numbers]
+            counts = [1] * len(numbers)
         else:
-            num = self.get_atomic_numbers()
-            N = len(num)
-            dis = np.concatenate(([0], np.arange(1, N)[num[1:] != num[:-1]]))
-            repeat = np.append(dis[1:], N) - dis
-            symbols = ''.join([chemical_symbols[num[d]] + str(r) * (r != 1)
-                               for r, d in zip(repeat, dis)])
-            return symbols
+            raise ValueError("Use mode = 'all', 'reduce' or 'hill'.")
+
+        formula = ''
+        for s, c in zip(symbols, counts):
+            formula += s
+            if c > 1:
+                formula += str(c)
+        return formula
 
     def set_tags(self, tags):
         """Set tags for all atoms."""
@@ -507,30 +580,49 @@ class Atoms(object):
         else:
             return 0.0
 
-    def set_charges(self, charges):
-        """Set charges."""
-        self.set_array('charges', charges, float, ())
+    def set_initial_charges(self, charges=None):
+        """Set the initial charges."""
+        
+        if charges is None:
+            self.set_array('charges', None)
+        else:
+            self.set_array('charges', charges, float, ())
 
-    def get_charges(self):
-        """Get array of charges."""
+    def get_initial_charges(self):
+        """Get array of initial charges."""
         if 'charges' in self.arrays:
             return self.arrays['charges'].copy()
         else:
             return np.zeros(len(self))
 
+    def get_charges(self):
+        """Get calculated charges."""
+        if self._calc is None:
+            raise RuntimeError('Atoms object has no calculator.')
+        try:
+            charges = self._calc.get_charges(self)
+        except AttributeError:
+            raise NotImplementedError
+        
     def set_positions(self, newpositions):
-        """Set positions."""
+        """Set positions, honoring any constraints."""
         positions = self.arrays['positions']
         if self.constraints:
-            newpositions = np.asarray(newpositions, float)
+            newpositions = np.array(newpositions, float)
             for constraint in self.constraints:
                 constraint.adjust_positions(positions, newpositions)
                 
         self.set_array('positions', newpositions, shape=(3,))
 
-    def get_positions(self):
-        """Get array of positions."""
-        return self.arrays['positions'].copy()
+    def get_positions(self, wrap=False):
+        """Get array of positions. If wrap==True, wraps atoms back
+        into unit cell.
+        """
+        if wrap:
+            scaled = self.get_scaled_positions()
+            return np.dot(scaled, self._cell)
+        else:
+            return self.arrays['positions'].copy()
 
     def get_calculation_done(self):
         """Let the calculator calculate its thing,
@@ -603,25 +695,38 @@ class Atoms(object):
                 constraint.adjust_forces(self.arrays['positions'], forces)
         return forces
 
-    def get_stress(self):
+    def get_stress(self, voigt=True):
         """Calculate stress tensor.
 
         Returns an array of the six independent components of the
-        symmetric stress tensor, in the traditional order
-        (s_xx, s_yy, s_zz, s_yz, s_xz, s_xy).
+        symmetric stress tensor, in the traditional Voigt order
+        (xx, yy, zz, yz, xz, xy) or as a 3x3 matrix.  Default is Voigt
+        order.
         """
+
         if self._calc is None:
             raise RuntimeError('Atoms object has no calculator.')
+
         stress = self._calc.get_stress(self)
-        shape = getattr(stress, 'shape', None)
+        shape = stress.shape
+
         if shape == (3, 3):
-            return np.array([stress[0, 0], stress[1, 1], stress[2, 2],
-                             stress[1, 2], stress[0, 2], stress[0, 1]])
+            warnings.warn('Converting 3x3 stress tensor from %s ' %
+                          self._calc.__class__.__name__ +
+                          'calculator to the required Voigt form.')
+            stress = np.array([stress[0, 0], stress[1, 1], stress[2, 2],
+                               stress[1, 2], stress[0, 2], stress[0, 1]])
         else:
-            # Hopefully a 6-vector, but don't check in case some weird
-            # calculator does something else.
+            assert shape == (6,)
+
+        if voigt:
             return stress
-    
+        else:
+            xx, yy, zz, yz, xz, xy = stress
+            return np.array([(xx, xy, xz),
+                             (xy, yy, yz),
+                             (xz, yz, zz)])
+        
     def get_stresses(self):
         """Calculate the stress-tensor of all the atoms.
 
@@ -641,12 +746,7 @@ class Atoms(object):
         
         if self._calc is None:
             raise RuntimeError('Atoms object has no calculator.')
-        try:
-            dipole = self._calc.get_dipole_moment(self)
-        except AttributeError:
-            raise AttributeError(
-                'Calculator object has no get_dipole_moment method.')
-        return dipole
+        return self._calc.get_dipole_moment(self)
     
     def copy(self):
         """Return a copy."""
@@ -676,9 +776,9 @@ class Atoms(object):
         if N == 0:
             symbols = ''
         elif N <= 60:
-            symbols = self.get_chemical_symbols(reduce=True)
+            symbols = self.get_chemical_formula('reduce')
         else:
-            symbols = ''.join([chemical_symbols[Z] for Z in num[:15]]) + '...'
+            symbols = self.get_chemical_formula('hill')
         s = "%s(symbols='%s', " % (self.__class__.__name__, symbols)
         for name in self.arrays:
             if name == 'numbers':
@@ -713,7 +813,10 @@ class Atoms(object):
         for name, a1 in self.arrays.items():
             a = np.zeros((n1 + n2,) + a1.shape[1:], a1.dtype)
             a[:n1] = a1
-            a2 = other.arrays.get(name)
+            if name == 'masses':
+                a2 = other.get_masses()
+            else:
+                a2 = other.arrays.get(name)
             if a2 is not None:
                 a[n1:] = a2
             self.arrays[name] = a
@@ -724,7 +827,7 @@ class Atoms(object):
             a = np.empty((n1 + n2,) + a2.shape[1:], a2.dtype)
             a[n1:] = a2
             if name == 'masses':
-                a[:n1] = self.get_masses()
+                a[:n1] = self.get_masses()[:n1]
             else:
                 a[:n1] = 0
 
@@ -912,9 +1015,7 @@ class Atoms(object):
 
         If scaled=True the center of mass in scaled coordinates
         is returned."""
-        m = self.arrays.get('masses')
-        if m is None:
-            m = atomic_masses[self.arrays['numbers']]
+        m = self.get_masses()
         com = np.dot(m, self.arrays['positions']) / m.sum()
         if scaled:
             return np.linalg.solve(self._cell.T, com)
@@ -965,13 +1066,27 @@ class Atoms(object):
         return np.cross(positions, self.get_momenta()).sum(0)
 
     def rotate(self, v, a=None, center=(0, 0, 0), rotate_cell=False):
-        """Rotate atoms.
+        """Rotate atoms based on a vector and an angle, or two vectors.
 
-        Rotate the angle *a* around the vector *v*.  If *a* is not
-        given, the length of *v* is used as the angle.  If *a* is a
-        vector, then *v* is rotated into *a*.  The point at *center*
-        is fixed.  Use *center='COM'* to fix the center of mass.
-        Vectors can also be strings: 'x', '-x', 'y', ... .
+        Parameters:
+        
+        v:
+            Vector to rotate the atoms around. Vectors can be given as
+            strings: 'x', '-x', 'y', ... .
+
+        a = None:
+            Angle that the atoms is rotated around the vecor 'v'. If an angle
+            is not specified, the length of 'v' is used as the angle
+            (default). The angle can also be a vector and then 'v' is rotated
+            into 'a'.
+
+        center = (0, 0, 0):
+            The center is kept fixed under the rotation. Use 'COM' to fix
+            the center of mass, 'COP' to fix the center of positions or
+            'COU' to fix the center of cell.
+
+        rotate_cell = False:
+            If true the cell is also rotated.
 
         Examples:
 
@@ -1007,14 +1122,23 @@ class Atoms(object):
             eps = 1e-7
             if s < eps:
                 v = np.cross((0, 0, 1), v2)
-            if norm(v) < eps:
-                v = np.cross((1, 0, 0), v2)
-            assert norm(v) >= eps
-            if s > 0:
+                if norm(v) < eps:
+                    v = np.cross((1, 0, 0), v2)
+                assert norm(v) >= eps
+            elif s > 0:
                 v /= s
-        
-        if isinstance(center, str) and center.lower() == 'com':
-            center = self.get_center_of_mass()
+
+        if isinstance(center, str):
+            if center.lower() == 'com':
+                center = self.get_center_of_mass()
+            elif center.lower() == 'cop':
+                center = self.get_positions().mean(axis=0)
+            elif center.lower() == 'cou':
+                center = self.get_cell().sum(axis=0) / 2
+            else:
+                raise ValueError('Cannot interpret center')
+        else:
+            center = np.array(center)
 
         p = self.arrays['positions'] - center
         self.arrays['positions'][:] = (c * p - 
@@ -1037,7 +1161,8 @@ class Atoms(object):
         
         center :
             The point to rotate about. A sequence of length 3 with the
-            coordinates, or 'COM' to select the center of mass.
+            coordinates, or 'COM' to select the center of mass, 'COP' to
+            select center of positions or 'COU' to select center of cell.
         phi :
             The 1st rotation angle around the z axis.
         theta :
@@ -1046,10 +1171,18 @@ class Atoms(object):
             2nd rotation around the z axis.
         
         """
-        if isinstance(center, str) and center.lower() == 'com':
-            center = self.get_center_of_mass()
+        if isinstance(center, str):
+            if center.lower() == 'com':
+                center = self.get_center_of_mass()
+            elif center.lower() == 'cop':
+                center = self.get_positions().mean(axis=0)
+            elif center.lower() == 'cou':
+                center = self.get_cell().sum(axis=0) / 2
+            else:
+                raise ValueError('Cannot interpret center')
         else:
             center = np.array(center)
+
         # First move the molecule to the origin In contrast to MATLAB,
         # numpy broadcasts the smaller array to the larger row-wise,
         # so there is no need to play with the Kronecker product.
@@ -1117,7 +1250,7 @@ class Atoms(object):
         j = 0
         for i in range(len(self)):
             if mask[i]:
-                self.positions[i] = group[j].get_position()
+                self.positions[i] = group[j].position
                 j += 1
 
     def set_dihedral(self, list, angle, mask=None):
@@ -1159,7 +1292,7 @@ class Atoms(object):
     def get_angle(self, list):
         """Get angle formed by three atoms.
         
-        calculate angle between the vectors list[0]->list[1] and
+        calculate angle between the vectors list[1]->list[0] and
         list[1]->list[2], where list contains the atomic indexes in
         question."""
         # normalized vector 1->0, 1->2:
@@ -1184,7 +1317,7 @@ class Atoms(object):
             mask[list[2]] = 1
         # Compute necessary in angle change, from current value
         current = self.get_angle(list)
-        diff = current - angle
+        diff = angle - current
         # Do rotation of subgroup by copying it to temporary atoms object and
         # then rotating that
         v10 = self.positions[list[0]] - self.positions[list[1]]
@@ -1343,19 +1476,11 @@ class Atoms(object):
                    'of the periodic boundary condition flags.')
 
     def get_name(self):
-        """Return a name extracted from the elements."""
-        elements = {}
-        for a in self:
-            try:
-                elements[a.symbol] += 1
-            except:
-                elements[a.symbol] = 1
-        name = ''
-        for element in elements:
-            name += element
-            if elements[element] > 1:
-                name += str(elements[element])
-        return name
+        import warnings
+        warnings.warn('ase.atoms.get_name is deprecated. Please use ase.' +
+                      'atoms.get_chemical_formula(mode="hill") instead.',
+                      DeprecationWarning, stacklevel=2)
+        return self.get_chemical_formula(mode='hill')
 
     def write(self, filename, format=None, **kwargs):
         """Write yourself to a file."""

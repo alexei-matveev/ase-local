@@ -36,7 +36,7 @@ kB = _k / _e                 # Boltzmann constant, eV/K
 Pascal = (1 / _e) / 1e30  # J/m^3
 GPa = 1e9 * Pascal
 
-Debye = 1e11 *_e * _c
+Debye = 1.0 / 1e11 / _e / _c
 alpha = _e**2 / (4 * pi * _eps0) / _hbar / _c # fine structure constant
 
 # Derived atomic units that have no assigned name:
@@ -46,5 +46,14 @@ _auf = alpha**3 * _me**2 * _c**3 / _hbar     # atomic unit of force, N
 _aup = alpha**5 * _me**4 * _c**5 / _hbar**3  # atomic unit of pressure, Pa
 
 AUT = second * _aut
+
+# SI units
+m = 1e10 * Ang    # metre
+kg = 1. / _amu    # kilogram
+s = second        # second
+A = 1.0 / _e / s  # ampere
+# derived
+J = kJ / 1000  # Joule   = kg * m**2 / s**2
+C = 1.0 / _e   # Coulomb = A * s
 
 del pi, sqrt

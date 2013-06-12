@@ -1,10 +1,16 @@
 import os
+import warnings
+# cmr calls all available methods in ase.atoms detected by the module inspect.
+# Therefore also deprecated methods are called - and we choose to silence those warnings.
+warnings.filterwarnings('ignore', 'ase.atoms.*deprecated',)
 
 from ase.test import NotAvailable
 
+# if CMR_SETTINGS_FILE is missing, cmr raises simply
+# Exception("CMR is not configured properly. Please create the settings file with cmr --create-settings.")
 try:
     import cmr
-except ImportError:
+except (Exception, ImportError):
     raise NotAvailable('CMR is required')
 
 from ase.calculators.emt import EMT
@@ -29,7 +35,7 @@ for (formula, coef) in reaction:
         # add project_id also as a field to support search across projects
         "project_id": project_id,
         "formula": formula,
-        "calculator": calculator.get_name(),
+        "calculator": calculator.name,
         }
     write(filename=('reactions_xsimple.%s.db' % formula),
           images=m, format='db', cmr_params=cmr_params)
@@ -50,7 +56,7 @@ group = cmr.create_group()
 group_vars = {"reaction":reaction, "output":"group.db"}
 sum = 0.0
 for (formula, coef) in reaction:
-	data = all.get("formula", formula)
+        data = all.get("formula", formula)
         if data is None:
            print "%s is missing"%formula
            sum = None

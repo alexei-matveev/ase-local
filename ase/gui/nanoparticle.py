@@ -9,6 +9,7 @@ from ase.gui.widgets import pack, cancel_apply_ok, oops, help
 from ase.gui.setupwindow import SetupWindow
 from ase.gui.pybutton import PyButton
 import ase
+import ase.data
 import numpy as np
 # Delayed imports:
 # ase.cluster.data
@@ -235,7 +236,7 @@ class SetupNanoparticle(SetupWindow):
         self.size_dia_spin = gtk.SpinButton(self.size_dia_adj, 10.0, 2)
         pack(self.wulffbox, [label, self.size_n_radio, self.size_n_spin,
                     gtk.Label("   "), self.size_dia_radio, self.size_dia_spin,
-                    gtk.Label(_("Å³"))])
+                    gtk.Label(_(u"Å³"))])
         self.size_n_radio.connect("toggled", self.update_gui_size)
         self.size_dia_radio.connect("toggled", self.update_gui_size)
         self.size_n_adj.connect("value-changed", self.update_size_n)
@@ -475,7 +476,7 @@ class SetupNanoparticle(SetupWindow):
         if not self.update_element():
             oops(_("Invalid element."))
             return
-        z = ase.atomic_numbers[self.legal_element]
+        z = ase.data.atomic_numbers[self.legal_element]
         ref = ase.data.reference_states[z]
         if ref is None:
             structure = None
@@ -600,7 +601,7 @@ class SetupNanoparticle(SetupWindow):
             self.natoms_label.set_label(str(len(self.atoms)))
             at_vol = self.get_atomic_volume()
             dia = 2 * (3 * len(self.atoms) * at_vol / (4 * np.pi))**(1.0/3.0)
-            self.dia1_label.set_label(_("%.1f Å") % (dia,))
+            self.dia1_label.set_label(_(u"%.1f Å") % (dia,))
             self.smaller_button.set_sensitive(True)
             self.larger_button.set_sensitive(True)
             

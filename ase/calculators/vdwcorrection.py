@@ -2,10 +2,10 @@
 
 import numpy as np
 from ase.units import Bohr, Hartree
-from gpaw.mpi import rank
+
 
 # dipole polarizabilities and C6 values from 
-# X. Chu and A. Dalgarno, J. Chem. Phys. 129 (2004) 4083
+# X. Chu and A. Dalgarno, J. Chem. Phys. 121 (2004) 4083
 # atomic units, a_0^3
 vdWDB_Chu04jcp = {
     # Element: [alpha, C6]; units [Bohr^3, Hartree * Bohr^6]
@@ -23,13 +23,18 @@ vdWDB_Chu04jcp = {
     'Mg' : [71, 626],
     'Al' : [60, 528],
     'Si' : [37, 305],
+    'P'  : [25, 185],
+    'S'  : [19.6, 134],
     'Cl' : [15, 94.6],
     'Ar' : [11.1, 64.2],
     'Ca' : [160, 2163],
     'Fe' : [56, 482],
+    'As' : [29, 246],
+    'Se' : [25, 210],
     'Br' : [20, 162],
     'Kr' : [16.7, 130],
     'Sr' : [199, 3175],
+    'Te' : [40, 445],
     'I'  : [35, 385],
 }
 
@@ -89,20 +94,20 @@ class vdWTkatchenko09prl:
 
     hirshfeld: the Hirshfeld partitioning object
     calculator: the calculator to get the PBE energy
-    missing: Missing elements do not contribute to the vdW-Energy by default
     """
     def __init__(self,                  
                  hirshfeld=None, vdwradii=None, calculator=None,
                  Rmax = 10, # maximal radius for periodic calculations
-                 missing='zero'):
+                 vdWDB_alphaC6 = vdWDB_Chu04jcp, # 
+                 ):
         self.hirshfeld = hirshfeld
         if calculator is None:
             self.calculator = self.hirshfeld.get_calculator()
         else:
             self.calculator = calculator
         self.vdwradii = vdwradii
+        self.vdWDB_alphaC6 = vdWDB_alphaC6
         self.Rmax = Rmax
-        self.missing = missing
         self.atoms = None
 
         self.sR = 0.94
@@ -132,7 +137,7 @@ class vdWTkatchenko09prl:
         elif hasattr(self.hirshfeld,'__len__'): # a list
             assert(len(atoms) == len(self.hirshfeld))
             volume_ratios = self.hirshfeld
-        else: # sould be an object
+        else: # should be an object
             self.hirshfeld.initialize()
             volume_ratios = self.hirshfeld.get_effective_volume_ratios()
 
@@ -143,7 +148,7 @@ class vdWTkatchenko09prl:
         R0eff_a = np.empty((na))
         for a, atom in enumerate(atoms):
             # free atom values
-            alpha_a[a], C6eff_a[a] = vdWDB_Chu04jcp[atom.symbol]
+            alpha_a[a], C6eff_a[a] = self.vdWDB_alphaC6[atom.symbol]
             # correction for effective C6
             C6eff_a[a] *= Hartree * volume_ratios[a]**2 * Bohr**6
             R0eff_a[a] = vdwradii[a] * volume_ratios[a]**(1./3.)
@@ -216,4 +221,4 @@ class vdWTkatchenko09prl:
         return self.forces
 
     def get_stress(self, atoms):
-        return np.zeros((3, 3))
+        return np.zeros(6)
