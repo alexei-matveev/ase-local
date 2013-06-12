@@ -482,7 +482,7 @@ class NPT(MolecularDynamics):
         including the internal data of the NPT dynamics object (automatically
         saved when attaching a BundleTrajectory to an NPT object).
         
-        Arguments::
+        Arguments:
         
         trajectory 
             The filename or an open BundleTrajectory object.
@@ -594,7 +594,7 @@ class NPT(MolecularDynamics):
             deltaeta = zeros(6, float)
         else:
             deltaeta = (-self.dt * self.pfact * linalg.det(self.h)
-                        * (self.atoms.get_stress() - self.externalstress))
+                        * (self.stresscalculator() - self.externalstress))
         if self.frac_traceless == 1:
             self.eta_past = self.eta - self.mask * self._makeuppertriangular(deltaeta)
         else:

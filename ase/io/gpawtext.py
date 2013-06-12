@@ -5,7 +5,7 @@ from ase.calculators.singlepoint import SinglePointKPoint
 
 def read_gpaw_text(fileobj, index=-1):
     if isinstance(fileobj, str):
-        fileobj = open(fileobj)
+        fileobj = open(fileobj, 'rU')
 
     def index_startswith(lines, string):
         for i, line in enumerate(lines):
@@ -55,7 +55,7 @@ def read_gpaw_text(fileobj, index=-1):
             assert line.startswith('Zero Kelvin:')
             e = float(line.split()[-1])
         try:
-            ii = index_startswith(lines, 'Fermi Level:')
+            ii = index_startswith(lines, 'Fermi Level')
         except ValueError:
             eFermi = None
         else:
@@ -91,11 +91,11 @@ def read_gpaw_text(fileobj, index=-1):
                 ii += 1
                 words = lines[ii].split()
             vals = np.array(vals).transpose()
-            kpts = [SinglePointKPoint(0, 0)]
+            kpts = [SinglePointKPoint(1, 0, 0)]
             kpts[0].eps_n = vals[1]
             kpts[0].f_n = vals[2]
             if vals.shape[0] > 3:
-                kpts.append(SinglePointKPoint(0, 1))
+                kpts.append(SinglePointKPoint(1, 0, 1))
                 kpts[1].eps_n = vals[3]
                 kpts[1].f_n = vals[4]
         # read charge
@@ -105,6 +105,15 @@ def read_gpaw_text(fileobj, index=-1):
             q = None
         else:
             q = float(lines[ii].split()[2])
+        # read dipole moment
+        try:
+            ii = index_startswith(lines, 'Dipole Moment:')
+        except ValueError:
+            dipole = None
+        else:
+            line = lines[ii].replace(']', '').replace('[', '')
+            dipole = np.array([float(c) for c in line.split()[-3:]])
+
         try:
             ii = index_startswith(lines, 'Local Magnetic Moments')
         except ValueError:
@@ -134,10 +143,12 @@ def read_gpaw_text(fileobj, index=-1):
             calc = SinglePointDFTCalculator(e, f, None, magmoms, atoms, eFermi)
             if kpts is not None:
                 calc.kpts = kpts
+            if dipole is not None:
+                calc.set_dipole_moment(dipole)
             atoms.set_calculator(calc)
         if q is not None and len(atoms) > 0:
             n = len(atoms)
-            atoms.set_charges([q / n] * n)
+            atoms.set_initial_charges([q / n] * n)
 
         images.append(atoms)
         lines = lines[i:]

@@ -2,6 +2,13 @@ import os
 import sys
 import cPickle as pickle
 import warnings
+import errno
+
+# pass for WindowsError on non-Win platforms
+try:
+    WindowsError
+except NameError:
+    class WindowsError(OSError): pass
 
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.atoms import Atoms
@@ -15,6 +22,7 @@ class PickleTrajectory:
     write_energy = True
     write_forces = True
     write_stress = True
+    write_charges = True
     write_magmoms = True
     write_momenta = True
     write_info = True
@@ -86,6 +94,8 @@ class PickleTrajectory:
             if isinstance(filename, str):
                 exists = os.path.isfile(filename)
                 if exists:
+                    exists = os.path.getsize(filename) > 0
+                if exists:
                     self.fd = open(filename, 'rb')
                     self.read_header()
                     self.fd.close()
@@ -98,7 +108,14 @@ class PickleTrajectory:
             if self.master:
                 if isinstance(filename, str):
                     if self.backup and os.path.isfile(filename):
-                        os.rename(filename, filename + '.bak')
+                        try:
+                            os.rename(filename, filename + '.bak')
+                        except WindowsError, e:
+                            # this must run on Win only! Not atomic!
+                            if e.errno != errno.EEXIST:
+                                raise
+                            os.unlink(filename + '.bak')
+                            os.rename(filename, filename + '.bak')
                     self.fd = open(filename, 'wb')
             else:
                 self.fd = devnull
@@ -151,7 +168,7 @@ class PickleTrajectory:
             for image in neb.images:
                 self.write(image)
             return
-        
+
         if len(self.offsets) == 0:
             self.write_header(atoms)
         else:
@@ -161,7 +178,7 @@ class PickleTrajectory:
                 raise ValueError('Bad number of atoms!')
             elif self.sanitycheck and (atoms.numbers != self.numbers).any():
                 raise ValueError('Bad atomic numbers!')
-            
+
         if atoms.has('momenta'):
             momenta = atoms.get_momenta()
         else:
@@ -186,7 +203,11 @@ class PickleTrajectory:
                     d['stress'] = atoms.get_stress()
                 except NotImplementedError:
                     pass
-
+            if self.write_charges:
+                try:
+                    d['charges'] = atoms.get_charges()
+                except NotImplementedError:
+                    pass
             if self.write_magmoms:
                 try:
                     if atoms.calc.get_spin_polarized():
@@ -196,10 +217,14 @@ class PickleTrajectory:
 
         if 'magmoms' not in d and atoms.has('magmoms'):
             d['magmoms'] = atoms.get_initial_magnetic_moments()
+        if 'charges' not in d and atoms.has('charges'):
+            charges = atoms.get_initial_charges()
+            if (charges != 0).any():
+                d['charges'] = charges
 
         if self.write_info:
             d['info'] = stringnify_info(atoms.info)
-            
+
         if self.master:
             pickle.dump(d, self.fd, protocol=-1)
         self.fd.flush()
@@ -233,7 +258,7 @@ class PickleTrajectory:
         # check that they are the same for all images:
         self.numbers = atoms.get_atomic_numbers()
         self.pbc = atoms.get_pbc()
-        
+
     def close(self):
         """Close the trajectory file."""
         self.fd.close()
@@ -251,20 +276,24 @@ class PickleTrajectory:
                 raise IndexError
             if i == N - 1:
                 self.offsets.append(self.fd.tell())
+            charges = d.get('charges')
+            magmoms = d.get('magmoms')
             try:
-                magmoms = d['magmoms']
-            except KeyError:
-                magmoms = None
+                constraints = [c.copy() for c in self.constraints]
+            except AttributeError:
+                constraints = []
+                warnings.warn('Constraints did not unpickle correctly.')
             atoms = Atoms(positions=d['positions'],
                           numbers=self.numbers,
                           cell=d['cell'],
                           momenta=d['momenta'],
                           magmoms=magmoms,
+                          charges=charges,
                           tags=self.tags,
                           masses=self.masses,
                           pbc=self.pbc,
                           info=unstringnify_info(d.get('info', {})),
-                          constraint=[c.copy() for c in self.constraints])
+                          constraint=constraints)
             if 'energy' in d:
                 calc = SinglePointCalculator(
                     d.get('energy', None), d.get('forces', None),
@@ -443,7 +472,7 @@ def read_trajectory(filename, index=-1):
                 stop = index.stop
                 if stop < 0:
                     stop += len(traj)
-                    
+
         return [traj[i] for i in range(start, stop, step)]
 
 
@@ -457,7 +486,7 @@ def write_trajectory(filename, images):
 
     if not isinstance(images, (list, tuple)):
         images = [images]
-        
+
     for atoms in images:
         # Avoid potentially expensive calculations:
         calc = atoms.get_calculator()
@@ -469,6 +498,8 @@ def write_trajectory(filename, images):
                     traj.write_forces = False
                 if calc.calculation_required(atoms, ['stress']):
                     traj.write_stress = False
+                if calc.calculation_required(atoms, ['charges']):
+                    traj.write_charges = False
                 if calc.calculation_required(atoms, ['magmoms']):
                     traj.write_magmoms = False
         else:
@@ -476,7 +507,7 @@ def write_trajectory(filename, images):
             traj.write_forces = False
             traj.write_stress = False
             traj.write_magmoms = False
-            
+
         traj.write(atoms)
     traj.close()
 
@@ -491,7 +522,7 @@ def dict2constraints(d):
     elif version in (2, 3):
         try:
             return pickle.loads(d['constraints_string'])
-        except (AttributeError, KeyError, EOFError):
+        except (AttributeError, KeyError, EOFError, ImportError):
             warnings.warn('Could not unpickle constraints!')
             return []
     else:
@@ -565,7 +596,7 @@ def print_trajectory_info(filename):
             print('File size: %.2f MB' % (1.0 * filesize / MB))
         else:
             print('File size: %.2f kB' % (1.0 * filesize / kB))
-        
+
         nframes = (filesize - after_header) // framesize
         offset = nframes * framesize + after_header - filesize
         if offset == 0:

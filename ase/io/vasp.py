@@ -107,15 +107,14 @@ def read_vasp(filename='CONTCAR'):
     else: # Assume it's a file-like object
         f = filename
 
-    # First line should contain the atom symbols , eg. "Ag Ge" in
-    # the same order
-    # as later in the file (and POTCAR for the full vasp run)
-    atomtypes = f.readline().split()
-
-    # Sometimes the first line in POSCAR/CONTCAR is of the form
-    # "CoP3_In-3.pos". Check for this case and extract atom types
-    if len(atomtypes) == 1 and '_' in atomtypes[0]:
-        atomtypes = get_atomtypes_from_formula(atomtypes[0])
+    # The first line is in principle a comment line, however in VASP
+    # 4.x a common convention is to have it contain the atom symbols,
+    # eg. "Ag Ge" in the same order as later in the file (and POTCAR
+    # for the full vasp run). In the VASP 5.x format this information
+    # is found on the fifth line. Thus we save the first line and use
+    # it in case we later detect that we're reading a VASP 4.x format
+    # file.
+    line1 = f.readline()
 
     lattice_constant = float(f.readline().split()[0])
 
@@ -133,11 +132,15 @@ def read_vasp(filename='CONTCAR'):
     # or in the POTCAR or OUTCAR file
     atom_symbols = []
     numofatoms = f.readline().split()
-    #vasp5.1 has an additional line which gives the atom types
-    #the following try statement skips this line
+    # Check whether we have a VASP 4.x or 5.x format file. If the
+    # format is 5.x, use the fifth line to provide information about
+    # the atomic symbols.
+    vasp5 = False
     try:
         int(numofatoms[0])
     except ValueError:
+        vasp5 = True
+        atomtypes = numofatoms
         numofatoms = f.readline().split()
 
     # check for comments in numofatoms line and get rid of them if necessary
@@ -145,18 +148,27 @@ def read_vasp(filename='CONTCAR'):
     if commentcheck.any():
         # only keep the elements up to the first including a '!':
         numofatoms = numofatoms[:np.arange(len(numofatoms))[commentcheck][0]]
-        
-    numsyms = len(numofatoms)
-    if len(atomtypes) < numsyms:
-        # First line in POSCAR/CONTCAR didn't contain enough symbols.
-        atomtypes = atomtypes_outpot(f.name, numsyms)
-    else:
-        try:
-            for atype in atomtypes[:numsyms]:
-                if not atype in chemical_symbols:
-                    raise KeyError
-        except KeyError:
-            atomtypes = atomtypes_outpot(f.name, numsyms)
+
+    if not vasp5:
+        atomtypes = line1.split()
+       
+        numsyms = len(numofatoms)
+        if len(atomtypes) < numsyms:
+            # First line in POSCAR/CONTCAR didn't contain enough symbols.
+
+            # Sometimes the first line in POSCAR/CONTCAR is of the form
+            # "CoP3_In-3.pos". Check for this case and extract atom types
+            if len(atomtypes) == 1 and '_' in atomtypes[0]:
+                atomtypes = get_atomtypes_from_formula(atomtypes[0])
+            else:
+                atomtypes = atomtypes_outpot(f.name, numsyms)
+        else:
+            try:
+                for atype in atomtypes[:numsyms]:
+                    if not atype in chemical_symbols:
+                        raise KeyError
+            except KeyError:
+                atomtypes = atomtypes_outpot(f.name, numsyms)
 
     for i, num in enumerate(numofatoms):
         numofatoms[i] = int(num)
@@ -241,6 +253,8 @@ def read_vasp_out(filename='OUTCAR',index = -1):
     symbols = []
     ecount = 0
     poscount = 0
+    magnetization = []
+
     for n,line in enumerate(data):
         if 'POTCAR:' in line:
             temp = line.split()[2]
@@ -262,11 +276,15 @@ def read_vasp_out(filename='OUTCAR',index = -1):
                 cell += [[float(temp[0]), float(temp[1]), float(temp[2])]]
             atoms.set_cell(cell)
         if 'FREE ENERGIE OF THE ION-ELECTRON SYSTEM' in line:
-            energy = float(data[n+2].split()[4])
+            energy = float(data[n+4].split()[6])
             if ecount < poscount:
                 # reset energy for LAST set of atoms, not current one - VASP 5.11? and up
                 images[-1].calc.energy = energy
             ecount += 1
+        if 'magnetization (x)' in line:
+            magnetization = []
+            for i in range(natoms):
+                magnetization += [float(data[n + 4 + i].split()[4])]
         if 'POSITION          ' in line:
             forces = []
             for iatom in range(natoms):
@@ -275,8 +293,11 @@ def read_vasp_out(filename='OUTCAR',index = -1):
                 forces += [[float(temp[3]),float(temp[4]),float(temp[5])]]
                 atoms.set_calculator(SinglePointCalculator(energy,forces,None,None,atoms))
             images += [atoms]
+            if len(magnetization) > 0:
+                images[-1].calc.magmoms = np.array(magnetization, float)
             atoms = Atoms(pbc = True, constraint = constr)
             poscount += 1
+
 
     # return requested images, code borrowed from ase/io/trajectory.py
     if isinstance(index, int):
@@ -305,7 +326,7 @@ def read_vasp_out(filename='OUTCAR',index = -1):
                     stop += len(images)
         return [images[i] for i in range(start, stop, step)]
 
-def write_vasp(filename, atoms, label='', direct=False, sort=None, symbol_count = None, long_format=True):
+def write_vasp(filename, atoms, label='', direct=False, sort=None, symbol_count = None, long_format=True, vasp5=False):
     """Method to write VASP position (POSCAR/CONTCAR) files.
 
     Writes label, scalefactor, unitcell, # of various kinds of atoms,
@@ -387,6 +408,13 @@ def write_vasp(filename, atoms, label='', direct=False, sort=None, symbol_count 
         f.write(' ')
         for el in vec:
             f.write(latt_form % el)
+        f.write('\n')
+
+    # If we're writing a VASP 5.x format POSCAR file, write out the
+    # atomic symbols
+    if vasp5:
+        for sym, c in sc:
+            f.write(' %3s' % sym)
         f.write('\n')
 
     # Numbers of each atom

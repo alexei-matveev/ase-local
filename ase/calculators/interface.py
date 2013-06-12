@@ -1,19 +1,17 @@
+"""Class for demonstrating the ASE-calculator interface."""
 import numpy as np
 
 
 class Calculator:
-    """Class for demonstrating the ASE-calculator interface.
+    """ASE calculator.
 
-    A good implementation of a calculator should store a copy of the
-    atoms object used for the last calculation.  When one of the
-    *get_potential_energy*, *get_forces*, or *get_stress* methods is
-    called, the calculator should check if anything has changed since
-    the last calculation and only do the calculation if it's really
-    needed.  The Atoms class implements the methods *__eq__* and
-    *__ne__* that can be used for checking identity (using *==* and
-    *!=*): Two sets of atoms are considered identical if they have the
-    same positions, atomic numbers, unit cell and periodic boundary
-    conditions."""
+    A calculator should store a copy of the atoms object used for the
+    last calculation.  When one of the *get_potential_energy*,
+    *get_forces*, or *get_stress* methods is called, the calculator
+    should check if anything has changed since the last calculation
+    and only do the calculation if it's really needed.  Two sets of
+    atoms are considered identical if they have the same positions,
+    atomic numbers, unit cell and periodic boundary conditions."""
 
     def get_potential_energy(self, atoms=None, force_consistent=False):
         """Return total energy.
@@ -29,7 +27,7 @@ class Calculator:
                         
     def get_stress(self, atoms):
         """Return the stress."""
-        return np.zeros((3, 3))
+        return np.zeros(6)
 
     def calculation_required(self, atoms, quantities):
         """Check if a calculation is required.
@@ -39,16 +37,6 @@ class Calculator:
         quantities can be one or more of: 'energy', 'forces', 'stress',
         and 'magmoms'."""
         return False
-
-    def set_atoms(self, atoms):
-        """Let the calculator know the atoms.
-
-        This method is optional.  If it exists, it will be called when
-        the *Atoms.set_calculator()* method is called.
-
-        *Don't* store a reference to *atoms* - that will create a
-         cyclic reference loop!  Store a copy instead."""
-        self.atoms = atoms.copy()
 
 
 class DFTCalculator(Calculator):
@@ -129,8 +117,6 @@ class DFTCalculator(Calculator):
         matrices U and C.
         """
         raise NotImplementedError
-
-        return c, U
 
     def get_wannier_localization_matrix(self, nbands, dirG, kpoint,
                                         nextkpoint, G_I, spin):

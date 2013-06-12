@@ -26,15 +26,15 @@ class DevNull:
 devnull = DevNull()
 
 
-def opencew(filename):
+def opencew(filename, my_world=world):
     """Create and open filename exclusively for writing.
 
-    If master cpu gets exclusive write access til filename, a file
+    If master cpu gets exclusive write access to filename, a file
     descriptor is returned (a dummy file descriptor is returned on the
-    slaves).  If the master cpu doet not get write access, None is
+    slaves).  If the master cpu does not get write access, None is
     returned on all processors."""
 
-    if world.rank == 0:
+    if my_world.rank == 0:
         try:
             fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except OSError:
@@ -47,10 +47,45 @@ def opencew(filename):
         fd = devnull
 
     # Syncronize:
-    if world.sum(ok) == 0:
+    if my_world.sum(ok) == 0:
         return None
     else:
         return fd
+
+
+class Lock:
+    def __init__(self, name='lock'):
+        self.name = name
+
+    def acquire(self):
+        fd = None
+        while fd is None:
+            fd = opencew(self.name)
+
+    def release(self):
+        world.barrier()
+        if world.rank == 0:
+            os.remove(self.name)
+
+    def __enter__(self):
+        self.acquire()
+
+    def __exit__(self, type, value, tb):
+        self.release()
+
+
+class OpenLock:
+    def acquire(self):
+        pass
+
+    def release(self):
+        pass
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, type, value, tb):
+        pass
 
 
 def prnt(*args, **kwargs):
@@ -187,3 +222,16 @@ def hsv(array, s=.9, v=.9):
 ##     a = (array + array.min()) / array.ptp()
 ##     rgba = getattr(pylab.cm, name)(a)
 ##     return rgba[:-1] # return rgb only (not alpha)
+
+ON_POSIX = 'posix' in sys.builtin_module_names
+
+try:
+    from subprocess import Popen
+except ImportError:
+    from os import popen3
+else:
+    def popen3(cmd):
+        from subprocess import PIPE
+        p = Popen(cmd, shell=True, close_fds=ON_POSIX,
+                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        return p.stdin, p.stdout, p.stderr

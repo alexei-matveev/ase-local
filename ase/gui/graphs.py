@@ -3,9 +3,30 @@ from math import sqrt
 
 import gtk
 from gettext import gettext as _
-
 from ase.gui.widgets import pack, help
 
+graph_help_text = _("""\
+Help for plot ...
+
+Symbols:
+<c>e</c>:\t\t\t\ttotal energy
+<c>epot</c>:\t\t\tpotential energy
+<c>ekin</c>:\t\t\tkinetic energy
+<c>fmax</c>:\t\t\tmaximum force
+<c>fave</c>:\t\t\taverage force
+<c>R[n,0-2]</c>:\t\t\tposition of atom number <c>n</c>
+<c>d(n<sub>1</sub>,n<sub>2</sub>)</c>:\t\t\tdistance between two atoms <c>n<sub>1</sub></c> and <c>n<sub>2</sub></c>
+<c>i</c>:\t\t\t\tcurrent image number
+<c>E[i]</c>:\t\t\t\tenergy of image number <c>i</c>
+<c>F[n,0-2]</c>:\t\t\tforce on atom number <c>n</c>
+<c>V[n,0-2]</c>:\t\t\tvelocity of atom number <c>n</c>
+<c>M[n]</c>:\t\t\tmagnetic moment of atom number <c>n</c>
+<c>A[0-2,0-2]</c>:\t\tunit-cell basis vectors
+<c>s</c>:\t\t\t\tpath length
+<c>a(n1,n2,n3)</c>:\t\tangle between atoms <c>n<sub>1</sub></c>, <c>n<sub>2</sub></c> and <c>n<sub>3</sub></c>, centered on <c>n<sub>2</sub></c>
+<c>dih(n1,n2,n3,n4)</c>:\tdihedral angle between <c>n<sub>1</sub></c>, <c>n<sub>2</sub></c>, <c>n<sub>3</sub></c> and <c>n<sub>4</sub></c>
+<c>T</c>:\t\t\t\ttemperature (K)\
+""")
 
 class Graphs(gtk.Window):
     def __init__(self, gui):
@@ -16,7 +37,7 @@ class Graphs(gtk.Window):
         self.set_title('Graphs')
         vbox = gtk.VBox()
         self.expr = pack(vbox, [gtk.Entry(64),
-                                help(_('Help for plot ...'))])[0]
+                                help(graph_help_text)])[0]
         self.expr.connect('activate', self.plot)
 
         completion = gtk.EntryCompletion()
@@ -58,7 +79,7 @@ class Graphs(gtk.Window):
         
         import matplotlib
         matplotlib.interactive(True)
-        matplotlib.use('GTK')
+        matplotlib.use('GTKAgg')
         #matplotlib.use('GTK', warn=False)# Not avail. in 0.91 (it is in 0.98)
         import pylab
         pylab.ion()

@@ -24,7 +24,7 @@ class Turbomole(Calculator):
         self.calculate_forces = calculate_forces
 
         # turbomole has no stress
-        self.stress = np.empty((3, 3))
+        self.stress = np.empty(6)
         
         # storage for energy and forces
         self.e_total = None
@@ -101,7 +101,7 @@ class Turbomole(Calculator):
         if self.atoms == atoms:
             return
         # performs an update of the atoms 
-        super(Turbomole, self).set_atoms(atoms)
+        Calculator.set_atoms(self, atoms)
         write_turbomole('coord', atoms)
         # energy and forces must be re-calculated
         self.update_energy = True
