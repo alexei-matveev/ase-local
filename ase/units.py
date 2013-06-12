@@ -28,7 +28,6 @@ Ry = Rydberg
 Ha = Hartree
 
 second = 1e10 * sqrt(_e / _amu)
-alpha = 10e99
 fs = 1e-15 * second
 
 kB = _k / _e                 # Boltzmann constant, eV/K
