@@ -11,7 +11,7 @@ import numpy as np2
 from numpy import array, any
 from ase.gxfile import gxread, gxwrite
 from ase.units import Bohr, Hartree
-
+import shlex, subprocess
 from general import Calculator
 
 def print_error (*args):
@@ -85,7 +85,12 @@ class ParaGauss:
         """
 
         self.input = input
+
+        # Command line is stored internally as list of arguments:
+        if type (cmdline) == type (""):
+            cmdline = shlex.split (cmdline)
         self.cmdline = cmdline
+
         self.silence = silence
         assert (copy_input in ["always", "never", "inexistent"])
         self.copy_input = copy_input
@@ -266,10 +271,17 @@ class ParaGauss:
             optifile.close()
 
         # The actual calcualtion
-        cmd = self.cmdline + ' ' + input
+        cmd = self.cmdline + [input]
+
         if self.silence:
-            cmd +=  ' > ParaGauss.out'
-        tty = os.system(cmd)
+            stdout = open ("./ParaGauss.out", "w")
+        else:
+            stdout = sys.stdout
+
+        subprocess.call (cmd, stdout=stdout)
+
+        if self.silence:
+            stdout.close()
         # Reads in new energy and forces
         self.read()
 
