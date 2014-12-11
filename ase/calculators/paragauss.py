@@ -90,6 +90,8 @@ class ParaGauss:
         if input.startswith("i."):
             # e.g. i.h2o:
             input_base_name = input[2:]
+        elif input.endswith(".scm") or input.endswith(".nml"):
+            input_base_name = input[:-4]
         else:
             # e.g. input, or anything else:
             input_base_name = input
