@@ -6,6 +6,7 @@ import os, sys
 from os.path import basename
 from os.path import isfile
 import numpy as np2
+from numpy import array, any
 from ase.gxfile import gxread, gxwrite
 from ase.units import Bohr, Hartree
 
@@ -182,22 +183,23 @@ class ParaGauss:
             raise NotImplementedError
 
 
-    def calculate(self, atoms):
+    def calculate (self, atoms):
         """
-         calculates the energy and forces with
-         ParaGauss
-         uses gxfile to comunicate with the rest of the system
+         Calculates the energy and forces with ParaGauss.  Uses gxfile
+         to comunicate with the rest of the system.
         """
         # read in actual positions and atomic numbers
         self.positions = atoms.get_positions().copy()
         atnums = atoms.get_atomic_numbers().copy()
         if (self.atnums == None):
             self.atnums = atnums
-        elif (atnums != self.atnums).any() :
-            print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
-            print >> sys.stderr, "ERROR: (ParaGauss) gxfile contains wrong atoms!"
-            print >> sys.stderr, "Please delete or change it before restart"
-            raise Exception("gxfile does not fit, delete or adjust!")
+
+        if len (atnums) != len (self.atnums) or any (array (atnums) != array (self.atnums)):
+            print >> sys.stderr, """
+            ERROR: (ParaGauss) gxfile does not fit!  Gxfile contains
+            wrong atoms!  Please delete or change it before restart.
+            """
+            raise Exception ("gxfile does not fit, delete or adjust!")
 
         n = len(self.atnums)
         loop = 1
