@@ -1,5 +1,6 @@
 from __future__ import with_statement
-"""This module defines an ASE interface to ParaGauss.
+"""
+This module defines an ASE interface to ParaGauss.
 
 """
 import os, sys
@@ -13,10 +14,11 @@ from ase.units import Bohr, Hartree
 from general import Calculator
 
 class ParaGauss:
-    """Class for doing ParaGauss calculations.
+    """
+    Class for doing ParaGauss calculations.
 
-    ParaGauss needs at least one input file, which gives to
-    it all the needed parameters
+    ParaGauss needs at least one input file, which gives to it all the
+    needed parameters
 
     """
     def __init__(self,
@@ -128,10 +130,9 @@ class ParaGauss:
 
     def update(self, atoms):
         """
-        decides whether and how to calculate energy and forces
-        if the stored positions have not changed nothing is done
-        if start or change in the settings, an initialization will
-        take place
+        Decides whether and how to  calculate energy and forces if the
+        stored positions have not changed  nothing is done if start or
+        change in the settings, an initialization will take place.
         """
         if (not self.converged or
             len(self.atnums) != len(atoms) or
@@ -147,8 +148,8 @@ class ParaGauss:
 
     def get_potential_energy(self, atoms, force_consistent=False):
         """
-        makes sure energy (and forces) are up to date and afterwards
-        gives energy back (energy is energy calculated with ParaGauss
+        Makes sure energy  (and forces) are up to  date and afterwards
+        gives energy back (energy  is energy calculated with ParaGauss
         in atomic units (energy transformed to ASE units))
         """
 
@@ -163,8 +164,8 @@ class ParaGauss:
 
     def get_forces(self, atoms):
         """
-        same as get_potential_energy but for forces
-        units are transformed
+        Same  as  get_potential_energy()  but  for  forces  units  are
+        transformed
         """
 
         self.update(atoms)
@@ -203,8 +204,8 @@ class ParaGauss:
 
         n = len(self.atnums)
         loop = 1
-        # there may be a gxfile from another source
-        # make sure it contains the same meta data than our source:
+        # There  may be  a gxfile  from  another source  make sure  it
+        # contains the same meta data than our source:
         t_gx = {}
         if os.path.exists('gxfile'):
             atnums, __, t_gx["isyms"], t_gx["inums"], t_gx["iconns"], t_gx["ivars"], t_gx["additional"], __, __, loop = gxread('gxfile')
@@ -221,7 +222,8 @@ class ParaGauss:
                 print >> sys.stderr, "Please delete or change it before restart"
                 raise Exception("gxfile does not fit, delete or adjust!")
 
-        # Needs not to know size of system at init, but soon they will be needed
+        # Needs not to know size of system at init, but soon they will
+        # be needed
         if "isyms" not in self.data:
             if "isyms" in t_gx:
                 self.data.update(t_gx)
@@ -237,8 +239,8 @@ class ParaGauss:
                 self.data["iconns"] = np2.zeros((n,3))
                 self.data["ivars"] = np2.zeros((n,3))
                 self.data["additional"] = None
-        # create gxfile with actual geometry for calculation
-        # units of positions should be Bohrs in here, so they are changed
+        # Create gxfile with actual  geometry for calculation units of
+        # positions should be Bohrs in here, so they are changed
         gxwrite(self.atnums, self.positions/Bohr, self.data["isyms"], self.data["inums"], self.data["iconns"],\
                      self.data["ivars"], self.data["additional"], None, None, loop, file='gxfile' )
         input = basename(self.input)
@@ -258,12 +260,12 @@ class ParaGauss:
             optifile.write(self.optimizer)
             optifile.close()
 
-        # the actual calcualtion
+        # The actual calcualtion
         cmd = self.cmdline + ' ' + input
         if self.silence:
             cmd +=  ' > ParaGauss.out'
         tty = os.system(cmd)
-        # reads in new energy and forces
+        # Reads in new energy and forces
         self.read()
 
         self.report(atoms, "ParaGauss.xyz")
@@ -286,18 +288,25 @@ class ParaGauss:
 
 
     def read(self):
-        # the interisting part to read in are the grads and energy, rest will be ignored afterwards
-        # FIXME: Somehow we need (sometimes) to pass some time here, before we can find the
-        # gxfile as output. This is especially valid when running several calculations in parallel.
-        #It's done this way and not with sleep as the problems seems to be related
-        # to a file that should but isn't there. So it makes sense to read all the files that are there,
-        # even if we don't need the output.
+        #
+        # The interisting  part to read  in are the grads  and energy,
+        # rest  will  be ignored  afterwards
+        #
+        # FIXME: Somehow  we need (sometimes) to pass  some time here,
+        # before we can find the gxfile as output.  This is especially
+        # valid when  running several calculations  in parallel.  It's
+        # done this way and not with sleep as the problems seems to be
+        # related to a  file that should but isn't  there. So it makes
+        # sense to read all the files that are there, even if we don't
+        # need the output.
+        #
         os.system("ls > /dev/null")
 
         if isfile('o.' + basename(self.input) + '/trace_output'):
-            # If there are some trace files keep content of them, as if several calcualtions
-            # have been performed after another, only for the last iteration the trace would
-            # be available
+            # If there are  some trace files keep content  of them, as
+            # if  several  calcualtions   have  been  performed  after
+            # another, only for the  last iteration the trace would be
+            # available
             f = open('o.' + basename(self.input) + '/trace_output', "r")
             keep = f.read()
             f.close()
@@ -331,17 +340,16 @@ class ParaGauss:
 
         pattern = re.compile(r'\s*e_sum\s*=\s*(\S+)')
 
-        # in case we dont find anything:
+        # In case we dont find anything:
         e_sum = None
 
         lines = open(output,'r')
         for line in lines:
             match = pattern.search(line)
             if match is not None:
-                # print line
                 e_sum = float(match.group(1))
-        # print 'e_sum=',e_sum
-        # FIXME: should we somehow close() the file? It happens that close() is not in scope.
+        # FIXME: should  we somehow close() the file?  It happens that
+        # close() is not in scope.
         return e_sum
 
 
