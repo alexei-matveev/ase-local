@@ -327,7 +327,7 @@ class ParaGauss:
 
         self.__energy = self.parse_output(self.output)
 
-    def parse_output(self, output): # not actually using |self|
+    def parse_output (self, output): # not actually using |self|
         """
         Currently only returns the SCF energy.
 
@@ -343,13 +343,12 @@ class ParaGauss:
         # In case we dont find anything:
         e_sum = None
 
-        lines = open(output,'r')
-        for line in lines:
-            match = pattern.search(line)
-            if match is not None:
-                e_sum = float(match.group(1))
-        # FIXME: should  we somehow close() the file?  It happens that
-        # close() is not in scope.
+        with open (output,'r') as lines:
+            for line in lines:
+                match = pattern.search (line)
+                if match is not None:
+                    e_sum = float (match.group (1))
+
         return e_sum
 
 
