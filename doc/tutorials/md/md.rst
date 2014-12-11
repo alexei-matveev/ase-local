@@ -42,11 +42,11 @@ Langevin, see the class below.
 The Langevin dynamics will then slowly adjust the total energy of the
 system so the temperature approaches the desired one.
 
-As a slightly less boring example, let us use this to melt a chunck of
+As a slightly less boring example, let us use this to melt a chunk of
 copper by starting the simulation without any momentum of the atoms
 (no kinetic energy), and with a desired temperature above the melting
 point.  We will also save information about the atoms in a trajectory
-file called moldyn3.traj.  
+file called moldyn3.traj.
 
 .. literalinclude:: moldyn3.py
 
@@ -55,7 +55,7 @@ command
 
 ::
 
-  ag moldyn3.traj
+  ase-gui moldyn3.traj
 
 Try plotting the kinetic energy.  You will *not* see a well-defined
 melting point due to finite size effects (including surface melting),
@@ -73,7 +73,7 @@ Isolated particle MD
 ====================
 
 When simulating isolated particles with MD, it is sometimes preferable
-to set random momenta corresponding to a spefic temperature and let the
+to set random momenta corresponding to a specific temperature and let the
 system evolve freely. With a relatively high temperature, the is however
 a risk that the collection of atoms will drift out of the simulation box
 because the randomized momenta gave the center of mass a small but
@@ -83,14 +83,14 @@ Let us see what happens when we propagate a nanoparticle for a long time:
 
 .. literalinclude:: moldyn4.py
 
-After running the simulation, use :program:`ag` to compare the results
+After running the simulation, use :program:`ase-gui` to compare the results
 with how it looks if you comment out either the line that says
 :epydoc:`ase.md.velocitydistribution.Stationary` (atoms),
 :epydoc:`ase.md.velocitydistribution.ZeroRotation` (atoms) or both.
 
 ::
 
-  ag moldyn4.traj
+  ase-gui moldyn4.traj
 
 Try playing the movie with a high frame rate and set frame skipping to a
 low number. Can you spot the subtle difference?
