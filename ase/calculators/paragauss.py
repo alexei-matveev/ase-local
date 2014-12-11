@@ -1,4 +1,5 @@
-from __future__ import with_statement
+from __future__ import with_statement, print_function
+__doc__ = \
 """
 This module defines an ASE interface to ParaGauss.
 
@@ -12,6 +13,9 @@ from ase.gxfile import gxread, gxwrite
 from ase.units import Bohr, Hartree
 
 from general import Calculator
+
+def print_error (*args):
+    print (*args, file=sys.stderr)
 
 class ParaGauss:
     """
@@ -156,8 +160,8 @@ class ParaGauss:
         self.update(atoms)
 
         if self.__energy == None:
-            print >> sys.stderr, "ERROR: (ParaGauss) no energy available"
-            print >> sys.stderr, "Aborting."
+            print_error ("ERROR: (ParaGauss) no energy available")
+            print_error ("Aborting.")
             raise Exception("ParaGauss: no energy available")
 
         return self.__energy * Hartree
@@ -171,10 +175,10 @@ class ParaGauss:
         self.update(atoms)
 
         if self.__grads == None :
-            print >> sys.stderr, "ERROR: (ParaGauss) no forces available!"
-            print >> sys.stderr, "Try enabling geometry optimization, by setting OPERATIONS_GEO_OPT = true"
-            print >> sys.stderr, "and setting MAX_GEO_ITERATION = 0"
-            print >> sys.stderr, "Aborting."
+            print_error ("ERROR: (ParaGauss) no forces available!")
+            print_error ("Try enabling geometry optimization, by setting OPERATIONS_GEO_OPT = true")
+            print_error ("and setting MAX_GEO_ITERATION = 0")
+            print_error ("Aborting.")
             raise Exception("ParaGauss: no forces available")
 
         # note that the forces are negative of the energy gradients:
@@ -196,10 +200,11 @@ class ParaGauss:
             self.atnums = atnums
 
         if len (atnums) != len (self.atnums) or any (array (atnums) != array (self.atnums)):
-            print >> sys.stderr, """
+            print_error
+            ("""
             ERROR: (ParaGauss) gxfile does not fit!  Gxfile contains
             wrong atoms!  Please delete or change it before restart.
-            """
+            """)
             raise Exception ("gxfile does not fit, delete or adjust!")
 
         n = len(self.atnums)
@@ -211,15 +216,15 @@ class ParaGauss:
             atnums, __, t_gx["isyms"], t_gx["inums"], t_gx["iconns"], t_gx["ivars"], t_gx["additional"], __, __, loop = gxread('gxfile')
             for dat in self.data.keys():
                 if (np2.asarray(self.data[dat]) != np2.array(t_gx[dat])).any():
-                    print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
-                    print >> sys.stderr, "ERROR: (ParaGauss) gxfile contains wrong " + dat +" !"
-                    print >> sys.stderr, "Please delete or change it before restart"
+                    print_error ("ERROR: (ParaGauss) gxfile does not fit!")
+                    print_error ("ERROR: (ParaGauss) gxfile contains wrong " + dat +" !")
+                    print_error ("Please delete or change it before restart")
                     raise Exception("gxfile does not fit, delete or adjust!")
 
             if (np2.array(atnums) != self.atnums).any():
-                print >> sys.stderr, "ERROR: (ParaGauss) gxfile does not fit!"
-                print >> sys.stderr, "ERROR: (ParaGauss) gxfile contains wrong atoms!"
-                print >> sys.stderr, "Please delete or change it before restart"
+                print_error ("ERROR: (ParaGauss) gxfile does not fit!")
+                print_error ("ERROR: (ParaGauss) gxfile contains wrong atoms!")
+                print_error ("Please delete or change it before restart")
                 raise Exception("gxfile does not fit, delete or adjust!")
 
         # Needs not to know size of system at init, but soon they will
@@ -319,10 +324,10 @@ class ParaGauss:
             if self.__energy is not None:
                 return
         else:
-            print "ParaGauss ERROR: Found no gxfile to read energy or forces from"
-            print "There should be at least the one I created"
-            print "Therefore something very strange happened"
-            print "ERROR: I quit!!"
+            print_error ("ParaGauss ERROR: Found no gxfile to read energy or forces from")
+            print_error ("There should be at least the one I created")
+            print_error ("Therefore something very strange happened")
+            print_error ("ERROR: I quit!!")
             sys.exit(1)
 
         self.__energy = self.parse_output(self.output)
@@ -477,16 +482,16 @@ class PG(Calculator):
     if self.__got_output:
       grads = zeros( (atoms.get_number_of_atoms(), 3) )
       i_run = 0
-      print >> sys.stdout, " "
-      print >> sys.stdout, " Retrieving Gradients from output: "
+      print (" ")
+      print (" Retrieving Gradients from output: ")
       for line in self.read( 'Equal Center:' ):
         grads[i_run,0] = line[2]
         grads[i_run,1] = line[3]
         grads[i_run,2] = line[4]
-        print >> sys.stdout, grads[i_run,0:2]
+        print (grads[i_run,0:2])
         i_run += 1
       self.__forces = - grads * Hartree / Bohr
-      print >> sys.stdout, " "
+      print (" ")
     else:
       self.__pg_error__( 'Failed while trying to retrieve forces from output' )
     return self.__forces
@@ -551,10 +556,10 @@ class PG(Calculator):
     #
   def __check__( self, entry, allowed=[True,False], entryname='abcdefg' ):
     if entry not in allowed:
-      print 'ERROR: only'
+      print ('ERROR: only')
       for x in allowed:
-	print str(x)
-      print '       allowed for '+str(entryname)
+	print (str(x))
+      print ('       allowed for '+str(entryname))
       sys.exit()
     return entry
     #
@@ -577,9 +582,9 @@ class PG(Calculator):
     #
   def __pg_error__( self, msg ):
     import sys
-    print
-    print ' #### ERROR: '+msg+' ####'
-    print
+    print ()
+    print (' #### ERROR: '+msg+' ####')
+    print ()
     sys.exit()
     #
   def __point_groups__( self ):
