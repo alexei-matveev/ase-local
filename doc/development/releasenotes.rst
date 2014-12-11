@@ -10,6 +10,21 @@ Development version in trunk
 
 :trac:`trunk <>`.
 
+* ASE's :mod:`gui <gui>` renamed from ``ag`` to ``ase-gui``.
+* New :ref:`STM <stm>` module.
+* Python 2.6 is now a requirement.
+* Old the old :func:`ase.structure.bulk` functions is now deprecated.
+  Use the new one instead (:func:`ase.lattice.bulk`).
+* We're now using BuildBot for continous integration:
+  https://ase-buildbot.fysik.dtu.dk/waterfall
+* New interface to the JDFTx code.
+
+
+Version 3.7.0
+=============
+
+13 May 2013: :trac:`tags/3.7.0 <../tags/3.7.0>`.
+
 * ASE's GUI can now be configured to be more friendly to visually
   impaired users: :ref:`high contrast`.
 
@@ -55,11 +70,11 @@ Version 3.6.0
 * New command line tool: :ref:`command line tool` and tests based on it:
   abinit, elk, fleur, nwchem.
 
-* New crystal builder for ag
+* New crystal builder for ase-gui
 
 * Van der Waals radii in ase.data
 
-* ASE GUI (ag) now supports velocities for both graphs and coloring
+* ASE's GUI (ase-gui) now supports velocities for both graphs and coloring
 
 * Cleaned up some name-spaces:
 
