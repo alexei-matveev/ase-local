@@ -118,13 +118,13 @@ class ParaGauss:
         self.data = {}
 
         if not self.copy_input == "never":
-            with open(self.input, "r") as file:
+            with open (self.input, "r") as file:
                 self.inputstring = file.read()
 
-        if optimizer == None:
+        if optimizer is None:
             self.optimizer = None
         else:
-            with open(optimizer, "r") as file:
+            with open (optimizer, "r") as file:
                 self.optimizer = file.read()
         # print self.inputstring
 
@@ -255,22 +255,36 @@ class ParaGauss:
                      self.data["ivars"], self.data["additional"], None, None, loop, file='gxfile' )
         input = basename(self.input)
 
-        copy_inp = (self.copy_input == "always")
-
-        if self.copy_input == "inexistent":
-            copy_inp = (not isfile(input))
+        # FIXME: when copy_inp is True, we will occasionally overwrite
+        # the  user  supplied  input  with  the version  we  saved  at
+        # construction  time over and  over again.  The danger  is the
+        # user may assume  he/she can edit the input  while the job is
+        # running:
+        copy_inp = (self.copy_input == "always") \
+            or ((self.copy_input == "inexistent") and not isfile (input))
 
         if copy_inp:
-            inputfile = open(input, "w")
-            inputfile.write(self.inputstring)
-            inputfile.close()
+            # This logic is to warn  the user if he/she edits the file
+            # we are supposed to overwrite. FIXME: race condition:
+            if isfile (input):
+                with open (input, "r") as inputfile:
+                    if inputfile.read() != self.inputstring:
+                        print_error ("WARNING: Changes in", input, "will be overwritten!")
+                        print_error ("         Consider copy_input=\"inexistent\" or \"never\".")
 
-        if not self.optimizer == None:
-            optifile = open("optimizer.input", "w")
-            optifile.write(self.optimizer)
-            optifile.close()
+            # (Over)writing input here. FIXME:  should we skip that if
+            # the content is already the same?
+            with open (input, "w") as inputfile:
+                inputfile.write (self.inputstring)
 
-        # The actual calcualtion
+        if self.optimizer is not None:
+            with open ("optimizer.input", "w") as optifile:
+                optifile.write (self.optimizer)
+
+        # The actual  calcualtion starts  about here. FIXME:  at least
+        # once I did a mistake  of specifying the input in the command
+        # line thus letting PG process the same input twice because it
+        # is already appended here:
         cmd = self.cmdline + [input]
 
         if self.silence:
