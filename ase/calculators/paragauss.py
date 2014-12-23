@@ -136,6 +136,9 @@ class ParaGauss:
             self.atnums, __, self.data["isyms"], self.data["inums"], self.data["iconns"], self.data["ivars"], \
                 self.data["additional"], __, __, loop = gxread('gxfile')
 
+        # We compare against None in self.report() and elsewhere:
+        self.__energy = None
+
 
     def update(self, atoms):
         """
@@ -164,7 +167,7 @@ class ParaGauss:
 
         self.update(atoms)
 
-        if self.__energy == None:
+        if self.__energy is None:
             print_error ("ERROR: (ParaGauss) no energy available")
             print_error ("Aborting.")
             raise Exception("ParaGauss: no energy available")
@@ -281,6 +284,13 @@ class ParaGauss:
             with open ("optimizer.input", "w") as optifile:
                 optifile.write (self.optimizer)
 
+        # The  geometry file  appears to  be used  for  monitoring the
+        # progress by the user.   Write it before starting potentially
+        # long-runnuing  process. FIXME: we  are supposed  to "report"
+        # also computed properties! Therefore  we call this once again
+        # after PG finishes:
+        self.report (atoms, "ParaGauss.xyz")
+
         # The actual  calcualtion starts  about here. FIXME:  at least
         # once I did a mistake  of specifying the input in the command
         # line thus letting PG process the same input twice because it
@@ -299,23 +309,26 @@ class ParaGauss:
         # Reads in new energy and forces
         self.read()
 
-        self.report(atoms, "ParaGauss.xyz")
+        # Do it once again, this time also with the valid energy:
+        self.report (atoms, "ParaGauss.xyz")
 
         self.converged = True
 
 
-    def report(self, atoms, file):
+    def report (self, atoms, file):
         #
         # Report the energy (and the geometry currently calculated on)
         # after a finshed calculation in ASE units
         #
         symbols = atoms.get_chemical_symbols()
-        natoms = len(symbols)
-        f = open(file, "w")
-        f.write('%d\nE = %22.15f eV\n' % (natoms, self.__energy * Hartree))
-        for s, (x, y, z) in zip(symbols, atoms.get_positions()):
-            f.write('%-2s %22.15f %22.15f %22.15f\n' % (s, x, y, z))
-        f.close()
+        natoms = len (symbols)
+        with open (file, "w") as f:
+            if self.__energy is not None:
+                f.write ('%d\nE = %22.15f eV\n' % (natoms, self.__energy * Hartree))
+            else:
+                f.write ('%d\nno energy\n' % (natoms,))
+            for s, (x, y, z) in zip (symbols, atoms.get_positions()):
+                f.write ('%-2s %22.15f %22.15f %22.15f\n' % (s, x, y, z))
 
 
     def read(self):
